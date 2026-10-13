@@ -602,7 +602,7 @@ class App {
     if (g && g.phase !== 'loading') {
       if (!(this.paused && g.single) && !this.cinemaPlaying) g.update(dt);
       else if (this.cinemaPlaying && g.net.online) g.update(dt); // keep the world in sync during cinematics
-      if (!this.cinemaPlaying || g.phase === 'intro') g.render();
+      if (!this.cinemaPlaying) g.render();
     }
     requestAnimationFrame(t => this.frame(t));
   }

@@ -25,8 +25,8 @@ void main(){
     img.b = texture2D(tex, uv - vec2(0.003 * (1.0 + glitch * 4.0), 0.0)).b;
     float g = dot(img, vec3(0.3, 0.59, 0.11));
     vec3 mono = mix(vec3(g), vec3(g * 0.8, g * 1.05, g * 0.85), tint);
-    col = mix(img, mono, 0.55 + tint * 0.35) * bright + (n - 0.5) * (0.14 + glitch * 0.6);
-    col = mix(col, vec3(n), glitch * 0.5);
+    col = mix(img, mono, 0.45 + tint * 0.4) * bright + (n - 0.5) * (0.07 + glitch * 0.3);
+    col = mix(col, vec3(n), glitch * 0.3);
   }
   float roll = smoothstep(0.0, 0.08, abs(fract(uv.y * 1.2 - time * 0.11) - 0.5));
   col *= 0.82 + 0.18 * roll;
@@ -39,7 +39,7 @@ void main(){
 function screenMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
-      tex: { value: null }, mode: { value: 0 }, time: { value: 0 }, glitch: { value: 0 }, tint: { value: 1 }, bright: { value: 1.6 },
+      tex: { value: null }, mode: { value: 0 }, time: { value: 0 }, glitch: { value: 0 }, tint: { value: 1 }, bright: { value: 2.6 },
     },
     vertexShader: SCREEN_VERT,
     fragmentShader: SCREEN_FRAG,
@@ -58,8 +58,8 @@ export class Screens {
       cam.position.set(...c.pos);
       cam.lookAt(...c.look);
       cam.layers.enable(1);
-      const rt = new THREE.WebGLRenderTarget(256, 192, { type: THREE.UnsignedByteType });
-      rt.texture.colorSpace = THREE.SRGBColorSpace;
+      // Render targets hold linear light (no tone mapping), so sample them as linear.
+      const rt = new THREE.WebGLRenderTarget(256, 192, { type: THREE.HalfFloatType });
       return { ...c, cam, rt, lastRender: -1 };
     });
     // Little camera housings so players can spot them
@@ -199,7 +199,7 @@ export class Screens {
       const u = m.mat.uniforms;
       u.time.value = time;
       this.monitorGlitch[m.i] = Math.max(0, this.monitorGlitch[m.i] - dt * 1.5);
-      if (Math.random() < dt * 0.08) this.monitorGlitch[m.i] = 0.7;
+      if (Math.random() < dt * 0.06) this.monitorGlitch[m.i] = 0.6;
       u.glitch.value = this.monitorGlitch[m.i];
       if (!this.house.power) u.mode.value = 0;
       else { u.mode.value = 2; u.tex.value = this.cams[this.monitorSel[m.i]].rt.texture; }
@@ -208,7 +208,7 @@ export class Screens {
     if (this.labelT <= 0 && nearSec) { this.labelT = 0.5; this.drawLabels(timeStr); }
     const tu = this.tvMat.uniforms;
     tu.time.value = time;
-    tu.glitch.value = this.tv.mode === 'image' ? 0.25 + Math.max(0, Math.sin(time * 3)) * 0.4 : this.tv.mode === 'cam' ? 0.2 + (Math.random() < 0.03 ? 0.8 : 0) : 0.1;
+    tu.glitch.value = this.tv.mode === 'image' ? 0.08 + Math.max(0, Math.sin(time * 2.3)) * 0.3 : this.tv.mode === 'cam' ? 0.08 + (Math.random() < 0.03 ? 0.7 : 0) : 0.1;
     this.tvLight.intensity = this.tv.mode === 'off' ? 0 : 1.2 + Math.random() * 0.8;
   }
 }

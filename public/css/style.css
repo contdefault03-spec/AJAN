@@ -185,8 +185,9 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 #micState.muted::after { content: ''; position: absolute; width: 26px; height: 2px; background: var(--red2); transform: rotate(-45deg); }
 #hideOverlay { position: absolute; inset: 0; opacity: 0; transition: opacity 0.5s; }
 #hideOverlay.show { opacity: 1; }
-#hideOverlay .slats { position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.92) 0 46px, rgba(0, 0, 0, 0.15) 46px 60px), radial-gradient(ellipse at center, transparent 20%, #000 75%); }
-#hideOverlay p { position: absolute; bottom: 60px; width: 100%; text-align: center; font-size: 22px; color: #aaa; }
+#hideOverlay .slats { position: absolute; inset: 0; background: repeating-linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0 30px, rgba(0, 0, 0, 0) 30px 52px), radial-gradient(ellipse at center, transparent 35%, rgba(0, 0, 0, 0.9) 85%); }
+#hideOverlay p { position: absolute; bottom: 60px; width: 100%; text-align: center; font-size: 22px; color: #aaa; text-shadow: 1px 1px 0 #000; }
+#hud:has(#hideOverlay.show) #prompt, #hud:has(#hideOverlay.show) #crosshair { display: none; }
 #hud.dying #objective, #hud.dying #inventory, #hud.dying #crosshair, #hud.dying #prompt, #hud.dying #message, #hud.dying #stamina { display: none; }
 #spectateHud { position: absolute; bottom: 40px; left: 50%; transform: translateX(-50%); text-align: center; display: none; }
 #spectateHud.show { display: block; }

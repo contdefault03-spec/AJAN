@@ -1,0 +1,15 @@
+# Render Blueprint: deploys AJAN as a single Node web service.
+# Render dashboard → New → Blueprint → pick this repo/branch, or create a
+# "Web Service" manually with the same build/start commands.
+services:
+  - type: web
+    name: ajan
+    runtime: node
+    plan: free
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeploy: true
+    envVars:
+      - key: NODE_VERSION
+        value: "20"

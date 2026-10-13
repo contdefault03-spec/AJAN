@@ -131,6 +131,7 @@ export class Game {
     scene.add(this.ajan.group);
     this.ajanVis = { pos: V(17, -50, 4), ry: 0, st: 'dormant', m: 'move', mt: 0, sp: 0, hy: 0 };
     this.fx = new DissolveFX(scene);
+    this.buildDust();
 
     if (this.isHost) this.brain = new AjanBrain(this, mulberry32(this.seed ^ 0x9e3779b9));
 
@@ -151,6 +152,34 @@ export class Game {
     progress(1, 'Ready');
     this.phase = 'intro';
     this.updateHUD();
+  }
+
+  /** Floating dust motes around the viewer (wrapped into a box that follows the camera). */
+  buildDust() {
+    const n = settings.quality === 'low' ? 150 : 400;
+    const g = new THREE.BufferGeometry();
+    const pos = new Float32Array(n * 3);
+    for (let i = 0; i < n * 3; i++) pos[i] = (Math.random() - 0.5) * 10;
+    g.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    this.dust = new THREE.Points(g, new THREE.PointsMaterial({ color: 0xd8ccb0, size: 0.018, transparent: true, opacity: 0.32, depthWrite: false, fog: true }));
+    this.dust.frustumCulled = false;
+    this.dustVel = Float32Array.from({ length: n * 3 }, () => (Math.random() - 0.5) * 0.04);
+    this.scene.add(this.dust);
+  }
+
+  updateDust(dt) {
+    const a = this.dust.geometry.attributes.position.array;
+    const c = this.camera.position;
+    for (let i = 0; i < a.length; i += 3) {
+      a[i] += this.dustVel[i] * dt;
+      a[i + 1] += (this.dustVel[i + 1] - 0.006) * dt;
+      a[i + 2] += this.dustVel[i + 2] * dt;
+      for (let k = 0; k < 3; k++) {
+        const d = a[i + k] - (k === 0 ? c.x : k === 1 ? c.y : c.z);
+        if (d > 5) a[i + k] -= 10; else if (d < -5) a[i + k] += 10;
+      }
+    }
+    this.dust.geometry.attributes.position.needsUpdate = true;
   }
 
   applyGraphics() {
@@ -208,6 +237,7 @@ export class Game {
   bindInput() {
     this.onKeyDown = e => {
       if (this.phase !== 'play') return;
+      if (e.code === 'Escape' && $('noteView').classList.contains('show')) { this.closeNote(); return; }
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if (e.code === 'KeyM' && !e.repeat) { mic.setMuted(!settings.micMuted); this.updateHUD(); }
       if (this.isSpectating()) {
@@ -412,7 +442,7 @@ export class Game {
     const d = this.house.doors.get(id);
     if (!d || d.locked) return;
     this.broadcast({ k: 'door', id, open, by });
-    this.hostNoise(d.center, by === 'ajan' ? 14 : 8, 'door');
+    this.hostNoise(d.center, by === 'ajan' ? 14 : 8, 'door', by === 'ajan' ? 'ajan' : by);
   }
 
   hostNoise(pos, radius, kind, pid = null) {
@@ -620,7 +650,7 @@ export class Game {
       p.hideId = e.id;
       h.occupant = e.pid;
       h.target = 1;
-      setTimeout(() => { if (h.occupant === e.pid) h.target = 0.1; }, 650);
+      setTimeout(() => { if (h.occupant === e.pid) h.target = 0.22; }, 650);
       audio.play('creak', { pos: h.inside, vol: 0.35, rate: 1.4 });
       if (p.isLocal) {
         this.local.hidden = h;
@@ -1136,8 +1166,14 @@ export class Game {
     const H = this.house;
     const me = this.me;
 
-    if (this.phase === 'play' || this.phase === 'ended') {
+    // The first-person controller owns the camera only while we're alive and in the house.
+    const inBody = !this.localDead && !this.localEscaped && !(me && me.dying);
+    if ((this.phase === 'play' || this.phase === 'ended') && inBody) {
       if (!this.app.paused || this.net.online) L.update(this.app.paused ? 0 : dt);
+    } else if (!inBody) {
+      L.light.intensity = 0;
+      L.fill.intensity = 0;
+      L.hands.visible = false;
     }
 
     // Local player record (for authority + replication)
@@ -1201,6 +1237,7 @@ export class Game {
     this.updateAjanVisual(dt);
     this.updateKills(dt);
     this.fx.update(dt);
+    this.updateDust(dt);
     H.update(dt, this.time, this.camera.position);
 
     // Lightning flash

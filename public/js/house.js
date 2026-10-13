@@ -501,7 +501,7 @@ export class House {
     this.hideSpot('h_bed2', 13.85, 0.62, 1.2, 0.8, 2.15, '+z', 'wood');
     this.furnitureBox(19.95, 0, 3.9, 20.88, 0.76, 5.5, 'wood');
     this.container('c_desk2', 'drawer', 20.16, 0.52, 4.7, 0.55, 0.16, 0.42, '-x', 'woodPale', 'Desk');
-    this.chair(19.4, 4.7);
+    this.chair(19.35, 5.65);
     G.box(14, 0.002, 3.5, 17.5, 0.008, 6, 'fabricGreen');
     this.furnitureBox(15.2, 0, 6.6, 15.9, 0.5, 7.3, 'woodPale');
     this.painting(13.12, 1.7, 4.6, '+x');

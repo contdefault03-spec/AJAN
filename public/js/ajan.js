@@ -110,7 +110,10 @@ export class AjanBrain {
     const path = findPath(this.house.nav, from.id, to.id, id => !this.house.doors.get(id)?.locked);
     if (!path) { this.path = null; return false; }
     this.path = path.map(id => { const n = this.house.nav.byId[id]; return { x: n.x, y: n.y, z: n.z, id }; });
-    this.path.push({ x: p.x, y: p.y, z: p.z, id: null });
+    // Only walk the last stretch off-graph if it's actually clear.
+    const last = this.path[this.path.length - 1];
+    const clear = segmentBlockers(last.x, last.z, p.x, p.z, last.y + 0.6, cols, { pad: AJAN.radius, occludeOnly: false, max: 1 }) === 0;
+    if (clear && Math.abs(p.y - last.y) < 1.2) this.path.push({ x: p.x, y: p.y, z: p.z, id: null });
     this.pathIdx = 0;
     // Skip the first node if we're already past it
     if (this.path.length > 2) {
@@ -228,8 +231,13 @@ export class AjanBrain {
       this.lastPos.copy(this.pos);
       this.stuckT = 0;
       if (moved < 0.15 && this.pauseT <= 0 && this.state !== 'chase' && this.state !== 'drag') {
-        if (this.state === 'patrol') this.pickPatrol(); else if (this.goal) this.moveTo(this.goal);
-      }
+        this.stuckCount = (this.stuckCount || 0) + 1;
+        if (this.state === 'patrol' || this.stuckCount > 2) {
+          this.stuckCount = 0;
+          this.setState('patrol');
+          this.pickPatrol();
+        } else if (this.goal) this.moveTo(this.goal);
+      } else if (moved >= 0.15) this.stuckCount = 0;
     }
   }
 
@@ -335,10 +343,19 @@ export class AjanBrain {
   }
 
   pickPatrol() {
-    const nodes = this.house.patrolNodes.filter(id => {
+    const cols = this.house.colliders;
+    const here = nearestNode(this.house.nav, this.pos, cols);
+    const passable = id => !this.house.doors.get(id)?.locked;
+    this.recent = this.recent || [];
+    let nodes = this.house.patrolNodes.filter(id => {
       const n = this.house.nav.byId[id];
-      return id !== this.lastPatrol && Math.hypot(n.x - this.pos.x, n.z - this.pos.z) > 3;
+      if (id === this.lastPatrol || Math.hypot(n.x - this.pos.x, n.z - this.pos.z) < 3) return false;
+      return !here || !!findPath(this.house.nav, here.id, id, passable);
     });
+    // Prefer rooms he hasn't checked recently so the whole house gets covered.
+    const fresh = nodes.filter(id => !this.recent.includes(this.house.nav.byId[id].room));
+    if (fresh.length) nodes = fresh;
+    if (!nodes.length) { this.pauseT = 2; return; }
     let choice = null;
     // Mild "director": sometimes wander toward a region where somebody is,
     // without knowing anyone's exact position.
@@ -354,6 +371,8 @@ export class AjanBrain {
     if (!choice) choice = nodes[Math.floor(this.rnd() * nodes.length)];
     this.lastPatrol = choice;
     const n = this.house.nav.byId[choice];
+    this.recent.push(n.room);
+    if (this.recent.length > 4) this.recent.shift();
     if (!this.moveTo(tmp.set(n.x, n.y, n.z).clone())) this.path = null;
   }
 
