@@ -1,0 +1,20 @@
+{
+  "name": "ajan",
+  "version": "1.0.0",
+  "description": "AJAN - first-person VHS horror game with co-op multiplayer and proximity voice chat",
+  "main": "server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "UNLICENSED",
+  "private": true,
+  "dependencies": {
+    "express": "^4.22.3",
+    "socket.io": "^4.8.4",
+    "three": "^0.169.0"
+  }
+}

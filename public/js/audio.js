@@ -1,0 +1,357 @@
+// Web Audio engine: buses, music state machine, positional SFX and a set of
+// procedurally synthesised sounds (footsteps, creaks, thunder, static, growls...).
+import { settings, onSettingChange } from './settings.js';
+import { loadAudioBuffer } from './assets.js';
+
+class AudioEngine {
+  constructor() {
+    this.ctx = null;
+    this.buffers = {};
+    this.music = { mode: 'off', current: null, nextIdx: 0, timer: null };
+  }
+
+  init() {
+    if (this.ctx) return this.ctx;
+    const AC = window.AudioContext || window.webkitAudioContext;
+    this.ctx = new AC({ latencyHint: 'interactive' });
+    const c = this.ctx;
+    this.master = c.createGain();
+    this.master.connect(c.destination);
+    this.musicBus = c.createGain();
+    this.musicBus.connect(this.master);
+    this.sfxBus = c.createGain();
+    this.sfxBus.connect(this.master);
+    this.voiceBus = c.createGain();
+    this.voiceBus.connect(this.master);
+    this.applyVolumes();
+    onSettingChange(() => this.applyVolumes());
+    this.synthesize();
+    return c;
+  }
+
+  resume() { if (this.ctx && this.ctx.state !== 'running') this.ctx.resume().catch(() => {}); }
+
+  applyVolumes() {
+    if (!this.ctx) return;
+    const t = this.ctx.currentTime;
+    this.master.gain.setTargetAtTime(settings.master, t, 0.05);
+    this.musicBus.gain.setTargetAtTime(settings.music * 0.55, t, 0.05);
+    this.sfxBus.gain.setTargetAtTime(settings.sfx, t, 0.05);
+    this.voiceBus.gain.setTargetAtTime(settings.voice * 1.6, t, 0.05);
+  }
+
+  async loadAll(keys) {
+    await Promise.all(keys.map(async k => { this.buffers[k] = await loadAudioBuffer(this.ctx, k); }));
+  }
+
+  duration(key) { return this.buffers[key]?.duration || 0; }
+
+  setListener(pos, fwd, up = { x: 0, y: 1, z: 0 }) {
+    if (!this.ctx) return;
+    const l = this.ctx.listener;
+    const t = this.ctx.currentTime;
+    if (l.positionX) {
+      l.positionX.setTargetAtTime(pos.x, t, 0.02);
+      l.positionY.setTargetAtTime(pos.y, t, 0.02);
+      l.positionZ.setTargetAtTime(pos.z, t, 0.02);
+      l.forwardX.setTargetAtTime(fwd.x, t, 0.02);
+      l.forwardY.setTargetAtTime(fwd.y, t, 0.02);
+      l.forwardZ.setTargetAtTime(fwd.z, t, 0.02);
+      l.upX.value = up.x; l.upY.value = up.y; l.upZ.value = up.z;
+    } else {
+      l.setPosition(pos.x, pos.y, pos.z);
+      l.setOrientation(fwd.x, fwd.y, fwd.z, up.x, up.y, up.z);
+    }
+  }
+
+  makePanner(pos, ref = 1.5, max = 30, rolloff = 1.2) {
+    const p = this.ctx.createPanner();
+    p.panningModel = 'HRTF';
+    p.distanceModel = 'inverse';
+    p.refDistance = ref;
+    p.maxDistance = max;
+    p.rolloffFactor = rolloff;
+    this.setPannerPos(p, pos);
+    return p;
+  }
+  setPannerPos(p, pos) {
+    if (p.positionX) { p.positionX.value = pos.x; p.positionY.value = pos.y; p.positionZ.value = pos.z; }
+    else p.setPosition(pos.x, pos.y, pos.z);
+  }
+
+  /**
+   * Play a buffer. opts: { pos, vol, rate, loop, bus, ref, muffle (0..1), offset }
+   * Returns a handle with stop(), setPos(), setVol().
+   */
+  play(keyOrBuf, opts = {}) {
+    if (!this.ctx) return null;
+    const buf = typeof keyOrBuf === 'string' ? this.buffers[keyOrBuf] : keyOrBuf;
+    if (!buf) return null;
+    const c = this.ctx;
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    src.loop = !!opts.loop;
+    src.playbackRate.value = opts.rate ?? 1;
+    const gain = c.createGain();
+    gain.gain.value = opts.vol ?? 1;
+    let node = src;
+    let filter = null;
+    if (opts.muffle) {
+      filter = c.createBiquadFilter();
+      filter.type = 'lowpass';
+      filter.frequency.value = 20000 * Math.pow(1 - opts.muffle, 2) + 350;
+      node.connect(filter);
+      node = filter;
+    }
+    node.connect(gain);
+    let panner = null;
+    if (opts.pos) {
+      panner = this.makePanner(opts.pos, opts.ref ?? 1.5, opts.max ?? 40, opts.rolloff ?? 1.2);
+      gain.connect(panner);
+      panner.connect(opts.bus || this.sfxBus);
+    } else gain.connect(opts.bus || this.sfxBus);
+    src.start(0, opts.offset || 0);
+    const h = {
+      src, gain, panner, filter, ended: false,
+      stop: (fade = 0.05) => {
+        if (h.ended) return;
+        h.ended = true;
+        const t = c.currentTime;
+        gain.gain.cancelScheduledValues(t);
+        gain.gain.setValueAtTime(gain.gain.value, t);
+        gain.gain.linearRampToValueAtTime(0, t + fade);
+        try { src.stop(t + fade + 0.02); } catch { /* already stopped */ }
+      },
+      setPos: p => panner && this.setPannerPos(panner, p),
+      setVol: v => gain.gain.setTargetAtTime(v, c.currentTime, 0.05),
+      setMuffle: m => filter && filter.frequency.setTargetAtTime(20000 * Math.pow(1 - m, 2) + 350, c.currentTime, 0.05),
+    };
+    src.onended = () => { h.ended = true; };
+    return h;
+  }
+
+  // ---------------------------------------------------------------- music
+  /** mode: 'off' | 'ambient' | 'chase' */
+  setMusic(mode) {
+    if (!this.ctx || this.music.mode === mode) return;
+    this.music.mode = mode;
+    clearTimeout(this.music.timer);
+    const old = this.music.current;
+    if (old) old.stop(mode === 'chase' ? 0.6 : 2.5);
+    this.music.current = null;
+    if (mode === 'chase') {
+      this.music.current = this.play('musicchase', { loop: true, vol: 0, bus: this.musicBus });
+      this.music.current?.gain.gain.setTargetAtTime(0.85, this.ctx.currentTime, 0.25);
+    } else if (mode === 'ambient') {
+      this.music.timer = setTimeout(() => this.nextAmbient(), mode === 'ambient' && old ? 2500 : 200);
+    }
+  }
+
+  nextAmbient() {
+    if (this.music.mode !== 'ambient') return;
+    const order = ['music1', 'music2'];
+    let key = order[this.music.nextIdx % 2];
+    if (!this.buffers[key]) key = order[(this.music.nextIdx + 1) % 2];
+    this.music.nextIdx++;
+    const buf = this.buffers[key];
+    if (!buf) return; // no ambient tracks available
+    const h = this.play(buf, { vol: 0, bus: this.musicBus });
+    h.gain.gain.setTargetAtTime(0.7, this.ctx.currentTime, 1.2);
+    this.music.current = h;
+    // Crossfade into the other track a few seconds before this one ends.
+    const fadeAt = Math.max(1, buf.duration - 4);
+    this.music.timer = setTimeout(() => {
+      if (this.music.current !== h) return;
+      h.stop(4);
+      this.nextAmbient();
+    }, fadeAt * 1000);
+  }
+
+  // --------------------------------------------------------- synthesis
+  synthesize() {
+    const c = this.ctx;
+    const sr = c.sampleRate;
+    const mk = (secs, fn, ch = 1) => {
+      const b = c.createBuffer(ch, Math.max(1, Math.floor(secs * sr)), sr);
+      for (let k = 0; k < ch; k++) {
+        const d = b.getChannelData(k);
+        fn(d, sr, k);
+      }
+      return b;
+    };
+    const rnd = () => Math.random() * 2 - 1;
+
+    // Footstep on old wood: short thump + creak-ish click.
+    this.buffers.step = mk(0.22, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.12;
+        const env = Math.exp(-t * 38);
+        d[i] = (lp * 1.6 + Math.sin(t * 2 * Math.PI * 85) * 0.5) * env;
+      }
+    });
+    this.buffers.stepHeavy = mk(0.5, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.05;
+        const env = Math.exp(-t * 11);
+        d[i] = (lp * 2.2 + Math.sin(t * 2 * Math.PI * 48) * 0.9) * env;
+      }
+    });
+    // Door creak: modulated sawtooth through resonances.
+    this.buffers.creak = mk(1.1, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = 180 + Math.sin(t * 7) * 60 + Math.sin(t * 31) * 25 + t * 90;
+        ph += f / sr;
+        const saw = (ph % 1) * 2 - 1;
+        const stick = (Math.sin(t * 2 * Math.PI * 23) > 0.2 ? 1 : 0.25);
+        const env = Math.min(1, t * 10) * Math.exp(-t * 1.6);
+        d[i] = saw * stick * env * 0.35;
+      }
+    });
+    this.buffers.slam = mk(0.7, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.2;
+        d[i] = (lp * 1.4 + Math.sin(t * 2 * Math.PI * 70) * 0.8) * Math.exp(-t * 9);
+      }
+    });
+    this.buffers.rattle = mk(0.5, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const burst = Math.max(0, Math.sin(t * 2 * Math.PI * 14));
+        d[i] = rnd() * burst * burst * Math.exp(-t * 4) * 0.6 + Math.sin(t * 2 * Math.PI * 900) * burst * 0.08 * Math.exp(-t * 6);
+      }
+    });
+    this.buffers.pickup = mk(0.25, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = (Math.sin(t * 2 * Math.PI * 1300) * 0.3 + rnd() * 0.25) * Math.exp(-t * 30);
+      }
+    });
+    this.buffers.clunk = mk(0.6, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.3;
+        d[i] = (lp + Math.sin(t * 2 * Math.PI * 140) * 0.6) * Math.exp(-t * 14) + Math.sin(t * 2 * Math.PI * 60) * 0.4 * Math.exp(-t * 5);
+      }
+    });
+    this.buffers.hum = mk(2, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = (Math.sin(t * 2 * Math.PI * 50) * 0.5 + Math.sin(t * 2 * Math.PI * 100) * 0.25 + Math.sin(t * 2 * Math.PI * 150) * 0.1) * 0.3;
+      }
+    });
+    this.buffers.powerUp = mk(2.2, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        ph += (30 + t * 40) / sr;
+        d[i] = (Math.sin(ph * 2 * Math.PI) * 0.6 + rnd() * 0.15 * Math.exp(-t * 3)) * Math.min(1, t * 3) * Math.exp(-Math.max(0, t - 1.5) * 4);
+      }
+    });
+    // TV static: band-limited noise, loops.
+    this.buffers.static = mk(2, (d) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        lp += (rnd() - lp) * 0.6;
+        d[i] = (rnd() - lp) * 0.35;
+      }
+    });
+    // Thunder: long low rumble with crackle.
+    this.buffers.thunder = mk(5, (d, sr, ch) => {
+      let lp = 0, lp2 = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.02;
+        lp2 += (rnd() - lp2) * 0.15;
+        const env = Math.min(1, t * 6) * Math.exp(-t * 0.8);
+        const crack = t < 0.4 ? lp2 * Math.exp(-t * 8) : 0;
+        d[i] = (lp * 5 * (0.7 + 0.3 * Math.sin(t * 3 + ch))) * env + crack;
+      }
+    }, 2);
+    // Ajan growl/roar: low saw + formant-ish noise.
+    this.buffers.growl = mk(1.8, (d, sr) => {
+      let ph = 0, lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = 62 + Math.sin(t * 9) * 8 + Math.sin(t * 2.3) * 12;
+        ph += f / sr;
+        lp += (rnd() - lp) * 0.08;
+        const saw = (ph % 1) * 2 - 1;
+        const env = Math.min(1, t * 4) * Math.exp(-Math.max(0, t - 1.1) * 5);
+        d[i] = (saw * 0.45 + lp * 1.4) * env * (0.8 + 0.2 * Math.sin(t * 40));
+      }
+    });
+    this.buffers.roar = mk(2.4, (d, sr) => {
+      let ph = 0, lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = 95 + Math.sin(t * 13) * 15 - t * 15;
+        ph += f / sr;
+        lp += (rnd() - lp) * 0.25;
+        const saw = (ph % 1) * 2 - 1;
+        const env = Math.min(1, t * 8) * Math.exp(-Math.max(0, t - 1.4) * 3);
+        d[i] = (saw * 0.5 + lp * 0.9) * env;
+      }
+    });
+    this.buffers.chew = mk(0.35, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.4;
+        d[i] = lp * Math.exp(-t * 14) * (Math.sin(t * 2 * Math.PI * 30) > 0 ? 1 : 0.4);
+      }
+    });
+    this.buffers.knock = mk(1.4, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.15;
+        const hits = [0, 0.35, 0.7];
+        let v = 0;
+        for (const h of hits) if (t >= h) v += Math.exp(-(t - h) * 28);
+        d[i] = (lp + Math.sin(t * 2 * Math.PI * 110) * 0.6) * v * 0.8;
+      }
+    });
+    this.buffers.wind = mk(6, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const k = 0.01 + 0.02 * (0.5 + 0.5 * Math.sin(t * 0.9));
+        lp += (rnd() - lp) * k;
+        d[i] = lp * 2.2 * Math.min(1, t, 6 - t);
+      }
+    });
+    this.buffers.heartbeat = mk(0.9, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const b = (x) => (t > x ? Math.sin((t - x) * 2 * Math.PI * 45) * Math.exp(-(t - x) * 22) : 0);
+        d[i] = b(0) * 0.9 + b(0.22) * 0.6;
+      }
+    });
+    this.buffers.sting = mk(2.5, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const env = Math.min(1, t * 30) * Math.exp(-t * 1.5);
+        d[i] = (Math.sin(t * 2 * Math.PI * 233) + Math.sin(t * 2 * Math.PI * 247) + Math.sin(t * 2 * Math.PI * 311) * 0.7 + rnd() * 0.3) * env * 0.25;
+      }
+    });
+    this.buffers.drawer = mk(0.5, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.35;
+        d[i] = lp * (0.4 + 0.6 * Math.abs(Math.sin(t * 2 * Math.PI * 18))) * Math.min(1, t * 20) * Math.exp(-t * 5) * 0.8;
+      }
+    });
+  }
+}
+
+export const audio = new AudioEngine();

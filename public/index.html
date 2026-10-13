@@ -1,0 +1,239 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AJAN</title>
+<meta name="description" content="AJAN — a first-person VHS survival horror game. Escape the house before he eats you.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Creepster&family=Special+Elite&family=VT323&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/style.css">
+<script type="importmap">
+{ "imports": { "three": "/vendor/three/build/three.module.js", "three/addons/": "/vendor/three/examples/jsm/" } }
+</script>
+</head>
+<body>
+<div id="gameRoot"></div>
+
+<!-- ============ SPLASH ============ -->
+<section id="splash" class="screen show">
+  <div class="splashInner">
+    <h1 class="logo" data-text="AJAN">AJAN</h1>
+    <p class="tag">headphones recommended · microphone optional</p>
+    <button id="splashBtn" class="pulse">CLICK TO ENTER</button>
+    <p id="splashStatus" class="small"></p>
+  </div>
+</section>
+
+<!-- ============ MAIN MENU ============ -->
+<section id="menu" class="screen">
+  <video id="menuVideo" class="bgVideo" loop playsinline preload="auto"></video>
+  <div class="menuShade"></div>
+  <div class="grain"></div>
+  <div class="menuLeft">
+    <h1 class="logo small" data-text="AJAN">AJAN</h1>
+    <nav class="menuButtons">
+      <button class="mbtn" data-act="play"><span>PLAY</span></button>
+      <button class="mbtn" data-act="multiplayer"><span>MULTIPLAYER</span></button>
+      <button class="mbtn" data-act="settings"><span>SETTINGS</span></button>
+      <button class="mbtn" data-act="quit"><span>QUIT</span></button>
+    </nav>
+    <div class="whoami">PLAYING AS <b id="menuName"></b> · <a href="#" id="changeChar">change</a></div>
+  </div>
+  <div class="osd vt">PLAY ▶<br><span id="menuClock">00:00:00</span></div>
+</section>
+
+<!-- ============ MIC SETUP ============ -->
+<section id="micSetup" class="screen panelScreen">
+  <div class="panel">
+    <h2>MICROPHONE</h2>
+    <p class="hint">Other players hear you through proximity voice chat — and so does <b>he</b>.</p>
+    <div id="micNeedPerm">
+      <button id="micAllow" class="btn">ENABLE MICROPHONE</button>
+    </div>
+    <div id="micControls" class="hidden">
+      <label>Input device<select id="micSelect"></select></label>
+      <div class="meterWrap">
+        <div class="meter"><div id="micMeter"></div><div id="micThreshold"></div></div>
+        <span id="micSpeaking" class="speakDot">SPEAKING</span>
+      </div>
+      <label>Sensitivity <input type="range" id="micSens" min="0" max="1" step="0.01"></label>
+      <label class="check"><input type="checkbox" id="micMonitor"> Hear myself (use headphones)</label>
+    </div>
+    <p id="micError" class="error"></p>
+    <div class="row">
+      <button id="micSkip" class="btn ghost">CONTINUE WITHOUT MIC</button>
+      <button id="micConfirm" class="btn" disabled>CONFIRM</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CHARACTER SELECT ============ -->
+<section id="charSelect" class="screen panelScreen">
+  <div class="charLayout">
+    <div class="charLeft">
+      <h2 class="who">WHO ARE YOU?</h2>
+      <div id="charGrid" class="charGrid"></div>
+      <div id="nameBox" class="hidden">
+        <label class="bigLabel">WHAT'S YOUR NAME?</label>
+        <input id="nameInput" maxlength="16" autocomplete="off" spellcheck="false" placeholder="type a name…">
+        <p id="nameError" class="error"></p>
+      </div>
+      <div class="row">
+        <button id="randomColors" class="btn ghost">RANDOMIZE COLORS</button>
+        <button id="charConfirm" class="btn" disabled>THIS IS ME</button>
+      </div>
+    </div>
+    <div class="charRight">
+      <canvas id="charPreview"></canvas>
+      <div class="swatches"><span>SHIRT <i id="swShirt"></i></span><span>PANTS <i id="swPants"></i></span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ MULTIPLAYER ============ -->
+<section id="mpScreen" class="screen panelScreen">
+  <div class="panel wide">
+    <h2>MULTIPLAYER</h2>
+    <div id="mpConnect">
+      <div class="row">
+        <button id="mpCreate" class="btn">CREATE ROOM</button>
+      </div>
+      <div class="row joinRow">
+        <input id="mpCode" maxlength="5" placeholder="ROOM CODE" autocomplete="off" spellcheck="false">
+        <button id="mpJoin" class="btn">JOIN</button>
+      </div>
+    </div>
+    <div id="mpLobby" class="hidden">
+      <p class="hint">Room code: <b id="mpRoomCode" class="code"></b> <button id="mpCopy" class="btn tiny ghost">COPY</button></p>
+      <ul id="mpPlayers" class="playerList"></ul>
+      <p id="mpWaiting" class="hint"></p>
+      <div class="row">
+        <button id="mpLeave" class="btn ghost">LEAVE</button>
+        <button id="mpStart" class="btn">START</button>
+      </div>
+    </div>
+    <p id="mpError" class="error"></p>
+    <div class="row"><button id="mpBack" class="btn ghost">BACK</button></div>
+  </div>
+</section>
+
+<!-- ============ SETTINGS ============ -->
+<section id="settingsScreen" class="screen panelScreen">
+  <div class="panel wide">
+    <h2>SETTINGS</h2>
+    <div class="settingsGrid">
+      <div class="col">
+        <h3>AUDIO</h3>
+        <label>Master volume <input type="range" data-set="master" min="0" max="1" step="0.01"></label>
+        <label>Music volume <input type="range" data-set="music" min="0" max="1" step="0.01"></label>
+        <label>Sound effects <input type="range" data-set="sfx" min="0" max="1" step="0.01"></label>
+        <label>Voice chat volume <input type="range" data-set="voice" min="0" max="1" step="0.01"></label>
+        <h3>MICROPHONE</h3>
+        <label>Device <select id="setMic"></select></label>
+        <div class="meterWrap">
+          <div class="meter"><div id="setMeter"></div><div id="setThreshold"></div></div>
+          <span id="setSpeaking" class="speakDot">SPEAKING</span>
+        </div>
+        <label>Sensitivity <input type="range" data-set="micSensitivity" min="0" max="1" step="0.01"></label>
+        <label class="check"><input type="checkbox" data-set="micMuted"> Mute microphone (M in game)</label>
+        <label class="check"><input type="checkbox" id="setMonitor"> Hear myself (test)</label>
+      </div>
+      <div class="col">
+        <h3>CONTROLS</h3>
+        <label>Mouse sensitivity <input type="range" data-set="mouse" min="0.2" max="3" step="0.05"></label>
+        <label class="check"><input type="checkbox" data-set="invertY"> Invert mouse Y</label>
+        <h3>GRAPHICS</h3>
+        <label>Quality <select data-set="quality"><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></label>
+        <label>VHS effects <select data-set="vhs"><option value="off">Off</option><option value="low">Subtle</option><option value="full">Full</option></select></label>
+        <label class="check"><input type="checkbox" id="setFullscreen"> Fullscreen</label>
+        <h3>PROFILE</h3>
+        <button id="setChangeChar" class="btn ghost">WHO ARE YOU? (change character)</button>
+        <div class="keys">
+          <b>WASD</b> move · <b>SHIFT</b> run · <b>C</b> crouch · <b>F</b> flashlight · <b>E</b> interact · <b>M</b> mute · <b>ESC</b> pause
+        </div>
+      </div>
+    </div>
+    <div class="row"><button id="settingsBack" class="btn">DONE</button></div>
+  </div>
+</section>
+
+<!-- ============ QUIT ============ -->
+<section id="quitScreen" class="screen panelScreen">
+  <div class="panel">
+    <h2>GOODBYE</h2>
+    <p class="hint">He'll be waiting. You can close this tab now.</p>
+    <div class="row"><button id="quitBack" class="btn ghost">GO BACK</button></div>
+  </div>
+</section>
+
+<!-- ============ LOADING ============ -->
+<section id="loading" class="screen panelScreen">
+  <div class="loadBox vt">
+    <div id="loadText">LOADING…</div>
+    <div class="bar"><div id="loadBar"></div></div>
+  </div>
+</section>
+
+<!-- ============ CINEMA ============ -->
+<section id="cinema" class="screen">
+  <video id="cinemaVideo" playsinline preload="auto"></video>
+  <div id="cinemaFallback" class="cinemaFallback vt"></div>
+  <div class="grain"></div>
+</section>
+
+<!-- ============ HUD ============ -->
+<div id="hud">
+  <div id="labels"></div>
+  <div id="crosshair"></div>
+  <div id="objective" class="vt"></div>
+  <div class="osd vt game">PLAY ▶ <span id="osdTime"></span><br><span id="osdRoom"></span></div>
+  <div id="inventory"></div>
+  <div id="prompt" class="vt"></div>
+  <div id="message"></div>
+  <div id="stamina"><div></div></div>
+  <div id="crouchState" class="vt">CROUCHED</div>
+  <div id="micState" title="Microphone"><svg viewBox="0 0 24 24"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg></div>
+  <div id="hideOverlay"><div class="slats"></div><p class="vt">HIDING — hold still. Talking can give you away. [E] leave</p></div>
+  <div id="spectateHud" class="vt">
+    <div class="specTitle">SPECTATING</div>
+    <div id="spectateName"></div>
+    <div class="specKeys">◀ A / CLICK / D ▶ switch player</div>
+  </div>
+  <div id="deathOverlay"><h1 class="logo red" data-text="EATEN">EATEN</h1></div>
+  <div id="noteView"><div class="paper"><pre id="noteText"></pre><p class="small">[E] close</p></div></div>
+</div>
+
+<!-- ============ PAUSE ============ -->
+<section id="pause" class="screen panelScreen">
+  <div class="panel">
+    <h2>PAUSED</h2>
+    <p id="pauseHint" class="hint"></p>
+    <div class="col">
+      <button id="pauseResume" class="btn">RESUME</button>
+      <button id="pauseSettings" class="btn ghost">SETTINGS</button>
+      <button id="pauseLeave" class="btn ghost">LEAVE TO MENU</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ END ============ -->
+<section id="endScreen" class="screen panelScreen">
+  <div class="panel">
+    <h1 id="endTitle" class="logo" data-text="">—</h1>
+    <ul id="endResults" class="playerList"></ul>
+    <p id="endHint" class="hint"></p>
+    <div class="row">
+      <button id="endMenu" class="btn ghost">MAIN MENU</button>
+      <button id="endRestart" class="btn">RESTART</button>
+    </div>
+  </div>
+</section>
+
+<div id="toasts"></div>
+<div id="assetWarn" class="hidden"></div>
+
+<script type="module" src="/js/main.js"></script>
+</body>
+</html>
