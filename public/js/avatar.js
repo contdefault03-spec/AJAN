@@ -226,11 +226,12 @@ export class Avatar {
     const mode = st.mode || 'move';
     const mt = st.modeT || 0;
 
-    if (mode === 'sleep' || mode === 'sit') {
+    if (mode === 'sleep' || mode === 'sit' || mode === 'stun') {
       // Seated: thighs forward, hips lowered onto the seat. Asleep he leans back
       // against the headboard with legs out and breathes slowly.
       const kk = 1 - Math.exp(-4 * dt);
-      const sleep = mode === 'sleep';
+      const sleep = mode === 'sleep' || mode === 'stun';
+      const stun = mode === 'stun';
       const br = Math.sin(t * (sleep ? 1.15 : 1.6));
       this._set('thighL', -1.5, 0, 0.12, kk);
       this._set('thighR', -1.5, 0, -0.12, kk);
@@ -244,7 +245,8 @@ export class Avatar {
       this._set('upperR', -0.55, 0.15, 0.85 + br * 0.03, kk);
       this._set('foreL', 0, -1.15, 0, kk);
       this._set('foreR', 0, 1.15, 0, kk);
-      this.body.position.y = damp(this.body.position.y, -0.42 + (sleep ? br * 0.012 : 0), 6, dt);
+      if (stun) { this._set('spine', 0.45, 0.2, 0.15, kk); this._set('head', 0.7, -0.4, 0.3, kk); }
+      this.body.position.y = damp(this.body.position.y, (stun ? -0.95 : -0.42) + (sleep ? br * 0.012 : 0), stun ? 9 : 6, dt);
       this.body.scale.set(1 + br * (sleep ? 0.012 : 0.005), 1, 1 + br * (sleep ? 0.018 : 0.006));
       return;
     }

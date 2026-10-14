@@ -12,6 +12,7 @@ export const DEFAULTS = {
   micSensitivity: 0.55, // 0..1, higher = picks up quieter speech (voice detection)
   micVolume: 1.0, // 0..2, gain applied to the voice other players hear
   micMuted: false,
+  difficulty: 'medium', // solo games, and the room's difficulty when you host
   micConfigured: false,
   mouse: 1.0,
   quality: 'medium', // low | medium | high

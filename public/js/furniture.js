@@ -15,9 +15,17 @@ export function buildFurniture(h) {
   const spots = [
     { room: 'bed2', pos: new THREE.Vector3(17.0, 0, 4.6) },
     { room: 'guest', pos: new THREE.Vector3(18.8, U, 4.4) },
-    { room: 'nursery', pos: new THREE.Vector3(5.0, U, 16.0) },
   ];
   h.jellySpot = spots[Math.floor(h.rnd() * spots.length)];
+  // The weapon safe stands in one of three places each session.
+  const safes = [
+    { x: 9.5, y: U, z: 6.6, f: '-x', room: 'master' },
+    { x: 2.45, y: BY, z: 22.6, f: '+x', room: 'base' },
+    { x: 32.4, y: U, z: 11.45, f: '+z', room: 'music' },
+  ];
+  const sp = safes[Math.floor(h.rnd() * safes.length)];
+  h.safe('c_safe', sp.x, sp.y, sp.z, sp.f);
+  h.safeSpot = sp;
   const p = h.jellySpot.pos;
   h.collider(p.x - 0.5, p.z - 0.36, p.x + 0.5, p.z + 0.36, p.y, p.y + 2.6, { furniture: true });
 }
@@ -241,13 +249,13 @@ function buildUpstairs(h) {
   h.painting(24.0, U + 1.75, 10.88, '-z', 0.5, 0.7);
   h.painting(31.5, U + 1.7, 8.12, '+z');
 
-  // Nursery
-  h.furnitureBox(0.5, U, 18.8, 1.9, U + 1.0, 20.6, 'woodPale');
-  h.hideSpot('h_nursery', 9.48, 19.5, 1.2, 0.8, 2.15, '-x', 'woodPale', U);
+  // Nursery: the spider's room. The storage key lies on the crib (south-west
+  // corner); the spider waits in the south-east corner (spider.js). No hiding
+  // places in here, and the floor along the south wall is kept clear.
+  h.crib(0.5, 18.8, 1.9, 20.6, U);
   h.furnitureBox(0.12, U, 13.0, 0.62, U + 0.9, 14.6, 'woodPale');
   h.container('c_nursery', 'drawer', 0.41, U + 0.6, 13.8, 0.6, 0.16, 0.42, '+x', 'wood', 'Dresser');
-  h.chair(3.0, 19.5, U, 'woodPale');
-  for (const [x, z] of [[6.5, 19.8], [7.2, 20.3], [2.5, 12.2]]) h.furnitureBox(x - 0.15, U, z - 0.15, x + 0.15, U + 0.3, z + 0.15, 'fabricRed', false);
+  h.furnitureBox(2.35, U, 12.05, 2.65, U + 0.3, 12.35, 'fabricRed', false);
   h.painting(9.88, U + 1.7, 14.0, '-x', 0.5, 0.7);
 
   // Library
@@ -363,15 +371,18 @@ function buildNotes(h) {
   h.note('note_start', 12.4, 0.22, 16.0, 0.3,
     'Day 41.\n\nHe came back again last night. I could hear him BREATHING behind the walls.\n\nHe follows noise. Walk slowly. Crouch. Don\'t talk.\n\nThe front door is CHAINED and LOCKED. The key is in the security room (electric lock - no power), and the chain needs cutting.');
   h.note('note_living', 2.3, 0.45, 15.0, -0.4,
-    'The breaker blew when the storm hit.\n\nI locked the basement key in my OFFICE so he couldn\'t get down there. Lost the office key somewhere on this floor.\n\nThe spare FUSE is in the storage room upstairs.');
+    'The breaker blew when the storm hit.\n\nI locked the basement key in my OFFICE so he couldn\'t get down there. Lost the office key somewhere on this floor.\n\nThe spare FUSE is in the storage room upstairs.\n\nDad\'s REVOLVER is locked in his SAFE. The weapon key is hidden somewhere in the house. One round, and it takes forever to load another. It won\'t kill him, but it puts him on the floor.');
   h.note('note_kitchen', 23.0, 0.76, 15.6, 0.8,
     'If he sees you, break line of sight and HIDE.\n\nWardrobes. Under the beds. Under the big tables.\n\nHe forgets fast. He doesn\'t forget if he watches you climb in.\n\nSome floorboards SCREAM. He always comes to check.');
   h.note('note_office', 36.6, 0.78, 2.1, 0.2,
-    'Basement key - desk drawer.\n\nStorage room key: I left it in one of the bedrooms upstairs.\n\nThe old elevator still runs on its own line, but it needs its key. Kitchen? Bathroom? I keep forgetting where I put things.');
+    'Basement key - desk drawer.\n\nStorage room key: it\'s on the crib in the NURSERY. I couldn\'t get it back. Something lives in there.\n\nThe old elevator still runs on its own line, but it needs its key. Kitchen? Bathroom? I keep forgetting where I put things.');
   h.note('note_base', 15.4, BY + 0.9, 26.3, 0.2,
     'Fuse goes in the left slot. Then pull the lever.\n\nThe security door and the cameras run on the same circuit.');
   h.note('note_workshop', 37.0, BY + 0.9, 26.1, -0.3,
     'Took the BOLT CUTTERS back down here.\n\nIf you need to get through that chain on the front door, this is what you want.');
+  h.furnitureBox(2.6, U, 8.12, 3.8, U + 0.8, 8.55, 'woodDark');
+  h.note('note_nursery', 3.2, U + 0.8, 8.33, 0,
+    'DO NOT GO IN THE NURSERY\n\nIt sits in the far corner and waits. It feels you RUNNING.\n\nThe moment you reach for the key on the crib it comes for you. It is FAST.\n\nGrab it and RUN for the door. It never leaves that room.');
   h.note('note_library', 15.6, U + 0.76, 15.6, 0.5,
     'He goes wherever the radio plays.\n\nTurn it on and run the other way. He switches it off when he gets there.');
   h.note('note_ajan', 31.0, U + 0.8, 7.2, 1.2,

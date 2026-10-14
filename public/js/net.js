@@ -92,7 +92,8 @@ export class SocketNet extends Emitter {
   }
   updateProfile(p) { this.socket?.emit('room:profile', p); }
   leaveRoom() { this.socket?.emit('room:leave'); this.room = null; this.isHost = false; }
-  startGame() { this.socket?.emit('room:start'); }
+  startGame(difficulty) { this.socket?.emit('room:start', difficulty); }
+  setDifficulty(d) { this.socket?.emit('room:difficulty', d); }
   backToLobby() { this.socket?.emit('room:lobby'); }
 
   send(t, d, to) { this.socket?.emit('relay', { t, d, to }); }

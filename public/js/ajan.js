@@ -70,7 +70,7 @@ export class AjanBrain {
 
   canSee(p) {
     if (p.hidden || isSafeZone(p.pos)) return false;
-    if (this.state === 'sleep' || this.state === 'dormant') return false;
+    if (this.state === 'sleep' || this.state === 'dormant' || this.state === 'stun') return false;
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
     const d = Math.hypot(dx, dz) + Math.abs(p.pos.y - this.pos.y) * 0.5;
     let range = 13;
@@ -89,12 +89,13 @@ export class AjanBrain {
    * for "exact" sources like a creaking floorboard or a radio.
    */
   hear(n) {
-    if (this.state === 'dormant' || this.state === 'kill' || this.state === 'drag') return;
+    if (this.state === 'dormant' || this.state === 'kill' || this.state === 'drag' || this.state === 'stun') return;
     if (isSafeZone(n.pos)) return;
     const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z) + Math.abs(n.pos.y - this.pos.y) * 0.5;
     // Low, booming sources (radio, elevator) carry through walls better than footsteps.
-    const tr = soundTransmission(n.pos, this.pos, this.house.colliders, n.kind === 'radio' || n.kind === 'elevator' ? 0.75 : 0.55);
+    const tr = soundTransmission(n.pos, this.pos, this.house.colliders, n.kind === 'radio' || n.kind === 'elevator' || n.kind === 'gunshot' ? 0.75 : 0.55);
     let r = n.radius * tr.k;
+    r *= this.game.hearMul ?? 1; // difficulty
     if (this.state === 'sleep') r *= 0.4; // dozing: only loud, close noises wake him
     if (d > r) return;
     // A hider making noise right in front of him gives themselves away.
@@ -202,6 +203,19 @@ export class AjanBrain {
       return;
     }
     if (this.state === 'kill') return;
+    if (this.state === 'stun') {
+      // Shot: down on the floor, blind and deaf, then back up and furious.
+      this.anim = 'stun';
+      this.stunLeft -= dt;
+      if (this.stunLeft <= 0) {
+        this.anim = 'move';
+        this.setState('patrol');
+        this.pauseT = 1.2;
+        this.game.ajanSound('roar');
+        this.pickPatrol();
+      }
+      return;
+    }
 
     this.sleepTimer -= dt;
     this.sitTimer -= dt;
@@ -471,6 +485,21 @@ export class AjanBrain {
       if (this.visionT <= 0) { this.visionT = 0.2; this.look(0.2); if (this.state === 'chase') { this.standUp(); return; } }
     }
     if (this.restLeft <= 0) this.wakeUp();
+  }
+
+  /** Hit by the revolver: knocked down for `sec` seconds. Returns false if it can't take effect. */
+  stun(sec) {
+    if (['dormant', 'kill', 'drag'].includes(this.state)) return false;
+    this.standUp();
+    this.target = null;
+    this.path = null;
+    this.inspecting = null;
+    this.stunLeft = sec;
+    this.anim = 'stun';
+    this.animT = 0;
+    this.speed = 0;
+    this.setState('stun');
+    return true;
   }
 
   standUp() {

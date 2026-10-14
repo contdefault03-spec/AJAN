@@ -11,6 +11,7 @@ import {
   roomAt, rampHeight, levelIndex, SPAWN_POINTS,
 } from './layout.js';
 import { buildFurniture } from './furniture.js';
+import { buildDecor } from './decor.js';
 
 export { roomAt, SPAWN_POINTS };
 
@@ -20,6 +21,8 @@ const TEX_SCALE = {
   wallA: 2.4, wallB: 2.4, wallC: 2.4, wallTile: 1.6, wallBase: 3, floorWood: 3, floorWoodDark: 3, floorTile: 2.4,
   floorBath: 2, floorConcrete: 4, carpet: 2, carpetB: 2, ceiling: 3, wood: 1.2, woodDark: 1.2, woodPale: 1.2,
   fabricRed: 1, fabricGreen: 1, fabricBed: 1.2, metal: 1, frame: 0.6, boardCreak: 1,
+  wallRose: 2.4, wallKids: 2.4, wallStripe: 2.4, wallGreenStripe: 2.4, wallDiamond: 2.4, wallPlain: 2.4, wallPanel: 2.4, wallFilth: 2.4,
+  safeSteel: 1, sheet: 1.5, brick: 1.2,
 };
 
 // ---------------------------------------------------------------------------
@@ -148,6 +151,33 @@ export class House {
     return m;
   }
 
+  /**
+   * Skirting, chair rail and wood wainscoting along one wall segment, on each
+   * side according to the room there (rooms carry `trim`). Segments already
+   * stop at doorways, so trim never runs across a door.
+   */
+  addTrim(line, c, p, q, y) {
+    const G = this.geo;
+    for (const side of [-1, 1]) {
+      const mid = (p + q) / 2;
+      const r = line === 'x' ? roomAt(mid, c + side * 0.35, y + 0.5) : roomAt(c + side * 0.35, mid, y + 0.5);
+      if (!r || r.L === 0 || r.L === 3 || !r.trim || r.trim === 'none') continue;
+      const face = c + side * T / 2;
+      const strip = (h0, h1, th, mat) => {
+        const a = face, b = face + side * th;
+        if (line === 'x') G.box(p, y + h0, Math.min(a, b), q, y + h1, Math.max(a, b), mat);
+        else G.box(Math.min(a, b), y + h0, p, Math.max(a, b), y + h1, q, mat);
+      };
+      const pale = r.trim === 'wainscotPale';
+      const wood = pale ? 'woodPale' : 'woodDark';
+      if (r.trim.startsWith('wainscot')) {
+        strip(0, 0.95, 0.014, pale ? 'woodPale' : 'wood');
+        strip(0.95, 1.01, 0.04, wood);
+      } else if (r.trim === 'rail') strip(0.9, 0.95, 0.03, wood);
+      strip(0, 0.15, 0.03, wood);
+    }
+  }
+
   wallMat(axis, sign, c) {
     if (axis === 'y') return 'wallBase';
     const off = 0.35;
@@ -186,6 +216,7 @@ export class House {
         segs.push([s, a1 + T / 2, ba, bb]);
         for (const [p, q, yA, yB] of segs) {
           if (q - p < 0.01 || yB - yA < 0.01) continue;
+          if (Math.abs(yA - ba) < 1e-6 && LEVELS.some(L => Math.abs(L.y - ba) < 1e-6)) this.addTrim(line, c, p, q, ba);
           if (line === 'x') {
             G.box(p, yA, c - T / 2, q, yB, c + T / 2, (ax, sg, ce) => this.wallMat(ax, sg, ce));
             this.collider(p, c - T / 2, q, c + T / 2, yA, yB, { occlude: true, wall: true });
@@ -218,10 +249,6 @@ export class House {
         G.plane(r.floor, x0, z0, x1, z1, L.y, true);
         if (r.L !== 3) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
       }
-      if (r.L === 0) continue;
-      const bb = 0.12, y = L.y;
-      G.box(r.x0 + T / 2, y, r.z0 + T / 2, r.x1 - T / 2, y + bb, r.z0 + T / 2 + 0.02, 'woodDark', { skip: ['y-'] });
-      G.box(r.x0 + T / 2, y, r.z1 - T / 2 - 0.02, r.x1 - T / 2, y + bb, r.z1 - T / 2, 'woodDark');
     }
     // Shaft landings and ceilings
     G.plane('floorWoodDark', 16, 17, 17, 21, 0, true);
@@ -240,6 +267,7 @@ export class House {
     this.collider(ELEVATOR.x0, ELEVATOR.z0 - 0.4, ELEVATOR.x1, ELEVATOR.z1 + 0.4, -4, 10, { ajanOnly: true });
 
     buildFurniture(this);
+    buildDecor(this);
     this.buildDoors();
     this.buildLights();
     this.buildWindows();
@@ -319,11 +347,17 @@ export class House {
     this.collider(x0, z0, x1, z1, y, y + h);
   }
 
+  /** Old spindle-back chair with a worn cushion (back toward −z). */
   chair(x, z, y = 0, mat = 'wood') {
     const G = this.geo, s = 0.22;
     G.box(x - s, y + 0.42, z - s, x + s, y + 0.47, z + s, mat, { bottom: true });
+    G.box(x - s + 0.04, y + 0.47, z - s + 0.06, x + s - 0.04, y + 0.5, z + s - 0.03, 'fabricRed');
     for (const [dx, dz] of [[-s, -s], [s - 0.04, -s], [-s, s - 0.04], [s - 0.04, s - 0.04]]) G.box(x + dx, y, z + dz, x + dx + 0.04, y + 0.42, z + dz + 0.04, mat);
-    G.box(x - s, y + 0.47, z - s, x + s, y + 0.95, z - s + 0.04, mat);
+    G.box(x - s, y + 0.16, z + s - 0.04, x + s, y + 0.2, z + s, mat);
+    G.box(x - s, y + 0.47, z - s, x - s + 0.04, y + 1.08, z - s + 0.04, mat);
+    G.box(x + s - 0.04, y + 0.47, z - s, x + s, y + 1.08, z - s + 0.04, mat);
+    G.box(x - s - 0.02, y + 1.0, z - s - 0.01, x + s + 0.02, y + 1.1, z - s + 0.05, mat);
+    for (const dx of [-0.1, -0.015, 0.07]) G.box(x + dx, y + 0.5, z - s + 0.005, x + dx + 0.03, y + 1.0, z - s + 0.03, mat);
     this.collider(x - s, z - s, x + s, z + s, y, y + 0.9);
   }
 
@@ -361,6 +395,23 @@ export class House {
     G.box((x0 + x1) / 2 - 0.35, y + 0.58, z0 + 0.1, (x0 + x1) / 2 + 0.35, y + 0.7, z0 + 0.45, 'fabricBed');
     G.box(x0 + 0.04, y + 0.58, z0 + 0.9, x1 - 0.04, y + 0.63, z1 - 0.1, 'fabricRed');
     this.collider(x0, z0 - 0.06, x1, z1, y, y + 0.62);
+  }
+
+  /** Old baby crib: low slatted sides (you can reach over them), thin mattress. */
+  crib(x0, z0, x1, z1, y = 0) {
+    const G = this.geo, top = 0.78;
+    for (const [x, z] of [[x0, z0], [x1 - 0.06, z0], [x0, z1 - 0.06], [x1 - 0.06, z1 - 0.06]]) G.box(x, y, z, x + 0.06, y + top + 0.08, z + 0.06, 'woodPale');
+    G.box(x0 + 0.04, y + 0.38, z0 + 0.04, x1 - 0.04, y + 0.5, z1 - 0.04, 'woodPale');
+    G.box(x0 + 0.06, y + 0.5, z0 + 0.06, x1 - 0.06, y + 0.56, z1 - 0.06, 'fabricBed');
+    for (const [a0, a1, zz, along] of [[x0, x1, z0, 'x'], [x0, x1, z1 - 0.03, 'x'], [z0, z1, x0, 'z'], [z0, z1, x1 - 0.03, 'z']]) {
+      if (along === 'x') G.box(a0, y + top, zz, a1, y + top + 0.04, zz + 0.03, 'woodPale');
+      else G.box(zz, y + top, a0, zz + 0.03, y + top + 0.04, a1, 'woodPale');
+      for (let a = a0 + 0.12; a < a1 - 0.08; a += 0.12) {
+        if (along === 'x') G.box(a, y + 0.5, zz, a + 0.025, y + top, zz + 0.025, 'woodPale');
+        else G.box(zz, y + 0.5, a, zz + 0.025, y + top, a + 0.025, 'woodPale');
+      }
+    }
+    this.collider(x0, z0, x1, z1, y, y + top);
   }
 
   shelf(x0, z0, x1, z1, h, mat = 'woodDark', y = 0, boxes = true) {
@@ -496,6 +547,33 @@ export class House {
     const c = { id, type, group: g, part, open: 0, target: 0, d, w, h, name, facing, slot: new THREE.Vector3(0, type === 'drawer' ? 0.05 : 0.08, type === 'drawer' ? 0 : -d / 2 + 0.12) };
     this.containers.set(id, c);
     this.register(id, 'container', [part], new THREE.Vector3(cx + fx * d / 2, y + h / 2, cz + fz * d / 2), { container: c, name });
+    return c;
+  }
+
+  /** Heavy steel safe (a locked cabinet). Opening it needs the weapon key. */
+  safe(id, cx, y, cz, facing) {
+    const w = 0.8, h = 0.95, d = 0.65;
+    const c = this.container(id, 'cabinet', cx, y, cz, w, h, d, facing, 'safeSteel', 'Safe');
+    const M = this.M;
+    const dial = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.08, 0.035, 20), M.brass);
+    dial.rotation.x = Math.PI / 2;
+    dial.position.set(w / 2, h * 0.58, 0.06);
+    const handle = bx(0.03, 0.18, 0.04, M.brass);
+    handle.position.set(w - 0.12, h * 0.42, 0.06);
+    const plate = bx(0.22, 0.06, 0.01, M.brass);
+    plate.position.set(w / 2, h * 0.85, 0.04);
+    c.part.add(dial, handle, plate);
+    c.part.traverse(o => { if (o.isMesh) { o.userData.iid = id; if (!this.pickMeshes.includes(o)) this.pickMeshes.push(o); } });
+    const feet = bx(w, 0.06, d, M.black);
+    feet.position.set(0, -0.03, 0);
+    c.group.add(feet);
+    c.group.position.y += 0.06;
+    c.lock = 'weapon_key';
+    c.locked = true;
+    const [fx, fz] = DIR[facing];
+    const ww = facing === '+x' || facing === '-x' ? d : w, dd = facing === '+x' || facing === '-x' ? w : d;
+    this.collider(cx - ww / 2, cz - dd / 2, cx + ww / 2, cz + dd / 2, y, y + h + 0.06, { furniture: true });
+    void fx; void fz;
     return c;
   }
 
@@ -801,12 +879,32 @@ export class House {
     }
     for (const [a, b, d] of portals) link(a, b, d);
     for (const chain of [s1, s2]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
-    this.nav = { nodes: N, byId };
-    this.patrolNodes = ROOMS.filter(r => !r.safe && this.roomNodes[r.id]?.length).map(r => this.roomNodes[r.id][0].id);
+    // Keep only the main connected graph (all links, locked doors included): a node
+    // boxed in by furniture would otherwise be a patrol target he can never reach.
+    const comp = new Map();
+    let best = null, bestN = 0;
+    for (const n of N) {
+      if (comp.has(n.id)) continue;
+      const stack = [n.id], members = [n.id];
+      comp.set(n.id, n.id);
+      while (stack.length) for (const e of byId[stack.pop()].edges) if (!comp.has(e.to)) { comp.set(e.to, n.id); stack.push(e.to); members.push(e.to); }
+      if (members.length > bestN) { bestN = members.length; best = n.id; }
+    }
+    const main = N.filter(n => comp.get(n.id) === best);
+    const mainById = Object.fromEntries(main.map(n => [n.id, n]));
+    this.nav = { nodes: main, byId: mainById };
+    this.navDropped = N.length - main.length;
+    for (const id of Object.keys(this.roomNodes)) this.roomNodes[id] = this.roomNodes[id].filter(n => mainById[n.id]);
+    // one patrol point per room: the reachable node nearest the room's middle
+    this.patrolNodes = ROOMS.filter(r => !r.safe && this.roomNodes[r.id]?.length).map(r => {
+      const cx = (r.x0 + r.x1) / 2, cz = (r.z0 + r.z1) / 2;
+      return this.roomNodes[r.id].reduce((a, n) => (Math.hypot(n.x - cx, n.z - cz) < Math.hypot(a.x - cx, a.z - cz) ? n : a)).id;
+    });
   }
 
   // ------------------------------------------------------------- per frame
   update(dt, time, viewer) {
+    if (this.decorAnims) for (const f of this.decorAnims) f(dt, time);
     for (const d of this.doors.values()) {
       if (Math.abs(d.angle - d.target) > 0.001) {
         d.angle += (d.target - d.angle) * Math.min(1, dt * 6);
@@ -865,8 +963,11 @@ export function makeItemMesh(type, M) {
       jaw.position.set(0.15, 0.014, s * 0.012);
       g.add(h, jaw);
     }
+  } else if (type === 'revolver') {
+    // object.glb is fitted in later (game.js) once the model has loaded
+    g.userData.revolver = true;
   } else {
-    const tint = { exit_key: 0x301008, office_key: 0x102030, storage_key: 0x103010, elevator_key: 0x202020 }[type] ?? 0x201505;
+    const tint = { exit_key: 0x301008, office_key: 0x102030, storage_key: 0x103010, elevator_key: 0x202020, weapon_key: 0x200820 }[type] ?? 0x201505;
     const mat = M.brass.clone();
     mat.emissive = new THREE.Color(tint);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.009, 8, 16), mat);
@@ -878,7 +979,7 @@ export function makeItemMesh(type, M) {
     const t2 = t1.clone();
     t2.position.x = 0.1;
     g.add(ring, shaft, t1, t2);
-    const tagColor = { exit_key: 0xaa1515, office_key: 0x2050a0, storage_key: 0x2a8a2a, elevator_key: 0xd0b020 }[type];
+    const tagColor = { exit_key: 0xaa1515, office_key: 0x2050a0, storage_key: 0x2a8a2a, elevator_key: 0xd0b020, weapon_key: 0x7a1aa0 }[type];
     if (tagColor) {
       const tag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.004, 0.04), new THREE.MeshStandardMaterial({ color: tagColor, emissive: new THREE.Color(tagColor).multiplyScalar(0.25) }));
       tag.position.set(-0.055, 0, 0.0);
@@ -895,11 +996,14 @@ export function makeItemMesh(type, M) {
 export const ITEM_SPAWNS = {
   office_key: [{ pos: [8.5, 1.36, 11.33] }, { pos: [19.6, 0.8, 8.33] }, { container: 'c_side' }],
   basement_key: [{ container: 'c_office' }],
-  storage_key: [{ container: 'c_ns_m' }, { container: 'c_guest' }, { container: 'c_nursery' }],
+  storage_key: [{ pos: [1.2, 3.97, 19.7] }], // on the crib, guarded by the nursery spider
   fuse: [{ container: 'c_storage' }],
   bolt_cutters: [{ pos: [37.2, -2.3, 26.3] }, { pos: [26.0, -2.4, 26.3] }],
   exit_key: [{ pos: [23.75, 0.78, 0.95] }, { pos: [28.3, 0.78, 0.9] }],
   elevator_key: [{ container: 'c_kit1' }, { container: 'c_kit2' }, { container: 'c_desk2' }, { container: 'c_bath' }, { container: 'c_ns1' }],
+  // Opens the safe with the revolver; anywhere in the house.
+  weapon_key: [{ container: 'c_nursery' }, { container: 'c_ns_m' }, { container: 'c_guest' }, { pos: [16.2, 4.16, 16.6] }, { pos: [33.0, -2.29, 20.0] }, { pos: [19.2, 7.71, 20.2] }, { pos: [2.5, 0.45, 15.6] }],
+  revolver: [{ container: 'c_safe' }],
 };
 
 export const CAMERAS = [

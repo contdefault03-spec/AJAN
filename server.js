@@ -86,11 +86,13 @@ function makeCode() {
   do { c = Array.from({ length: 5 }, () => A[Math.floor(Math.random() * A.length)]).join(''); } while (rooms.has(c));
   return c;
 }
+const DIFFICULTIES = ['easy', 'medium', 'hard'];
 function roomInfo(room) {
   return {
     code: room.code,
     hostId: room.hostId,
     started: room.started,
+    difficulty: room.difficulty || 'medium',
     players: [...room.players.values()].sort((a, b) => a.joinedAt - b.joinedAt).map(p => ({ id: p.id, ...p.profile })),
   };
 }
@@ -160,12 +162,21 @@ io.on('connection', socket => {
 
   // Host starts (or restarts) the session. Everyone gets the same seed and a
   // shared start time so the intro cinematic begins simultaneously.
-  socket.on('room:start', () => {
+  socket.on('room:start', difficulty => {
     const room = rooms.get(socket.data.room);
     if (!room || room.hostId !== socket.id) return;
+    if (DIFFICULTIES.includes(difficulty)) room.difficulty = difficulty;
     room.started = true;
     room.seed = Math.floor(Math.random() * 2 ** 31);
-    io.to(room.code).emit('game:start', { seed: room.seed, startAt: Date.now() + 2500, room: roomInfo(room) });
+    io.to(room.code).emit('game:start', { seed: room.seed, difficulty: room.difficulty || 'medium', startAt: Date.now() + 2500, room: roomInfo(room) });
+  });
+
+  // The host picks the difficulty in the lobby; everyone sees it.
+  socket.on('room:difficulty', difficulty => {
+    const room = rooms.get(socket.data.room);
+    if (!room || room.hostId !== socket.id || !DIFFICULTIES.includes(difficulty)) return;
+    room.difficulty = difficulty;
+    broadcastRoom(room);
   });
 
   socket.on('room:lobby', () => {

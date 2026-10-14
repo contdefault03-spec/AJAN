@@ -56,30 +56,77 @@ function toTexture(c, repeat = 1, srgb = true) {
   return t;
 }
 
-function wallpaper(seed, base, ink) {
+function wallpaper(seed, base, ink, style = 'damask', dirt = 1) {
   const S = 512, rnd = mulberry32(seed);
   const [c, x] = canvas(S);
   x.fillStyle = base;
   x.fillRect(0, 0, S, S);
-  // Vertical stripes + damask-ish motifs
-  x.globalAlpha = 0.22;
   x.fillStyle = ink;
-  for (let i = 0; i < 8; i++) x.fillRect(i * 64 + 28, 0, 8, S);
-  x.globalAlpha = 0.18;
-  for (let row = 0; row < 8; row++) {
-    for (let col = 0; col < 4; col++) {
-      const cx = col * 128 + (row % 2) * 64 + 64, cy = row * 64 + 32;
-      x.beginPath();
-      x.moveTo(cx, cy - 22);
-      x.bezierCurveTo(cx + 18, cy - 10, cx + 18, cy + 10, cx, cy + 22);
-      x.bezierCurveTo(cx - 18, cy + 10, cx - 18, cy - 10, cx, cy - 22);
-      x.fill();
-      x.fillRect(cx - 2, cy - 30, 4, 60);
+  x.strokeStyle = ink;
+  if (style === 'damask') {
+    // Vertical stripes + damask-ish motifs
+    x.globalAlpha = 0.22;
+    for (let i = 0; i < 8; i++) x.fillRect(i * 64 + 28, 0, 8, S);
+    x.globalAlpha = 0.18;
+    for (let row = 0; row < 8; row++) {
+      for (let col = 0; col < 4; col++) {
+        const cx = col * 128 + (row % 2) * 64 + 64, cy = row * 64 + 32;
+        x.beginPath();
+        x.moveTo(cx, cy - 22);
+        x.bezierCurveTo(cx + 18, cy - 10, cx + 18, cy + 10, cx, cy + 22);
+        x.bezierCurveTo(cx - 18, cy + 10, cx - 18, cy - 10, cx, cy - 22);
+        x.fill();
+        x.fillRect(cx - 2, cy - 30, 4, 60);
+      }
+    }
+  } else if (style === 'floral') {
+    // little roses and leaves on a diagonal grid
+    for (let row = 0; row < 10; row++) for (let col = 0; col < 8; col++) {
+      const cx = col * 64 + (row % 2) * 32 + 16, cy = row * 52 + 20;
+      x.globalAlpha = 0.32;
+      for (let k = 0; k < 5; k++) { const a = k / 5 * Math.PI * 2; x.beginPath(); x.arc(cx + Math.cos(a) * 6, cy + Math.sin(a) * 6, 5, 0, Math.PI * 2); x.fill(); }
+      x.globalAlpha = 0.2;
+      x.beginPath(); x.ellipse(cx + 12, cy + 12, 8, 3, 0.7, 0, Math.PI * 2); x.fill();
+      x.beginPath(); x.ellipse(cx - 12, cy + 10, 8, 3, -0.7, 0, Math.PI * 2); x.fill();
+    }
+  } else if (style === 'stripe') {
+    // broad regency stripes with pin lines
+    for (let i = 0; i < 8; i++) {
+      x.globalAlpha = 0.24; x.fillRect(i * 64, 0, 30, S);
+      x.globalAlpha = 0.35; x.fillRect(i * 64 + 40, 0, 3, S); x.fillRect(i * 64 + 50, 0, 3, S);
+    }
+  } else if (style === 'diamond') {
+    // lattice of thin diagonal lines with dots
+    x.globalAlpha = 0.25; x.lineWidth = 2;
+    for (let i = -8; i < 16; i++) {
+      x.beginPath(); x.moveTo(i * 64, 0); x.lineTo(i * 64 + S, S); x.stroke();
+      x.beginPath(); x.moveTo(i * 64 + S, 0); x.lineTo(i * 64, S); x.stroke();
+    }
+    x.globalAlpha = 0.35;
+    for (let r = 0; r < 8; r++) for (let q = 0; q < 8; q++) { x.beginPath(); x.arc(q * 64 + 32, r * 64 + 32, 4, 0, Math.PI * 2); x.fill(); }
+  } else if (style === 'kids') {
+    // faded nursery print: stars, moons and little ducks
+    for (let row = 0; row < 8; row++) for (let col = 0; col < 6; col++) {
+      const cx = col * 86 + (row % 2) * 43 + 20, cy = row * 64 + 30;
+      x.globalAlpha = 0.3;
+      const kind = (row * 7 + col * 3) % 3;
+      if (kind === 0) { x.beginPath(); for (let k = 0; k < 10; k++) { const a = k / 10 * Math.PI * 2 - Math.PI / 2, rr = k % 2 ? 4 : 10; x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } x.fill(); }
+      else if (kind === 1) { x.beginPath(); x.arc(cx, cy, 10, 0.6, Math.PI * 2 - 0.6); x.arc(cx + 5, cy, 8, Math.PI * 2 - 0.9, 0.9, true); x.fill(); }
+      else { x.beginPath(); x.ellipse(cx, cy + 3, 11, 7, 0, 0, Math.PI * 2); x.fill(); x.beginPath(); x.arc(cx + 9, cy - 6, 5, 0, Math.PI * 2); x.fill(); }
+    }
+  } else if (style === 'panel') {
+    // dark wood boards (library / office)
+    for (let i = 0; i < 8; i++) {
+      x.globalAlpha = 0.2 + rnd() * 0.2; x.fillRect(i * 64, 0, 64, S);
+      x.globalAlpha = 0.6; x.fillRect(i * 64, 0, 2, S);
+      x.globalAlpha = 0.12;
+      for (let k = 0; k < 6; k++) { x.lineWidth = 1; x.beginPath(); const xx = i * 64 + 6 + rnd() * 52; x.moveTo(xx, 0); x.bezierCurveTo(xx + 6, S * 0.3, xx - 6, S * 0.6, xx + 3, S); x.stroke(); }
     }
   }
+  // plain: nothing but the base colour and the grime below
   x.globalAlpha = 1;
-  stains(x, S, rnd, 14, '60,45,20', 90, 0.22);
-  drips(x, S, rnd, 18, '50,35,15');
+  stains(x, S, rnd, Math.round(14 * dirt), '60,45,20', 90, 0.22);
+  drips(x, S, rnd, Math.round(18 * dirt), '50,35,15');
   // Grime toward the bottom
   const g = x.createLinearGradient(0, S * 0.55, 0, S);
   g.addColorStop(0, 'rgba(30,20,10,0)');
@@ -234,6 +281,22 @@ function rust(seed) {
   return toTexture(c);
 }
 
+function brick(seed) {
+  const S = 512, rnd = mulberry32(seed);
+  const [c, x] = canvas(S);
+  x.fillStyle = '#2a1a14'; x.fillRect(0, 0, S, S);
+  const bh = 32, bw = 96;
+  for (let r = 0; r < S / bh; r++) for (let k = -1; k < S / bw + 1; k++) {
+    const xo = k * bw + (r % 2) * bw / 2;
+    const sh = 0.7 + rnd() * 0.45;
+    x.fillStyle = `rgb(${110 * sh | 0},${52 * sh | 0},${38 * sh | 0})`;
+    x.fillRect(xo + 3, r * bh + 3, bw - 6, bh - 6);
+  }
+  stains(x, S, rnd, 16, '10,5,0', 90, 0.35);
+  noiseLayer(x, S, rnd, 26);
+  return toTexture(c);
+}
+
 function plaster(seed) {
   const S = 256, rnd = mulberry32(seed);
   const [c, x] = canvas(S);
@@ -251,6 +314,14 @@ export function buildMaterials() {
   M.wallA = std(wallpaper(11, '#6f6a4e', '#2f2a18'));
   M.wallB = std(wallpaper(23, '#5d4a4a', '#2a1515'));
   M.wallC = std(wallpaper(37, '#4f5a54', '#18241e'));
+  M.wallRose = std(wallpaper(201, '#7a5552', '#3a1818', 'floral'));
+  M.wallKids = std(wallpaper(203, '#7d8a90', '#2c3a44', 'kids', 1.6));
+  M.wallStripe = std(wallpaper(205, '#4a2a2c', '#1a0808', 'stripe'));
+  M.wallGreenStripe = std(wallpaper(207, '#3e4a3c', '#121a10', 'stripe'));
+  M.wallDiamond = std(wallpaper(209, '#857a56', '#3a301a', 'diamond'));
+  M.wallPlain = std(wallpaper(211, '#6e6a60', '#000000', 'plain', 1.4));
+  M.wallPanel = std(wallpaper(213, '#3b2717', '#120a04', 'panel', 0.6));
+  M.wallFilth = std(wallpaper(215, '#4a3a30', '#1a0e08', 'plain', 3.0));
   M.wallTile = std(tiles(41, [150, 156, 146], [128, 136, 126], 'rgba(40,40,30,0.8)', 10), { roughness: 0.55 });
   M.wallBase = std(concrete(51, [80, 78, 72]));
   M.floorWood = std(planks(61, [92, 62, 38]));
@@ -274,6 +345,9 @@ export function buildMaterials() {
   M.dark = new THREE.MeshStandardMaterial({ color: 0x141210, roughness: 0.9 });
   M.black = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.6 });
   M.paper = new THREE.MeshStandardMaterial({ color: 0xcfc6a8, roughness: 1 });
+  M.safeSteel = std(rust(139), { metalness: 0.65, roughness: 0.45, color: 0x55605a });
+  M.sheet = std(fabric(217, [170, 164, 148], 'rgba(60,50,30,0.15)'));
+  M.brick = std(brick(219));
   M.brass = new THREE.MeshStandardMaterial({ color: 0xb08a3a, metalness: 0.8, roughness: 0.35 });
   M.red = new THREE.MeshStandardMaterial({ color: 0x8a1010, roughness: 0.5, emissive: 0x200000 });
   M.frame = std(woodFurniture(131, [70, 46, 22]), { roughness: 0.6 });

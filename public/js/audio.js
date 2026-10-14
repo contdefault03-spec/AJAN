@@ -288,6 +288,63 @@ class AudioEngine {
         d[i] = (rnd() - lp) * 0.12 + drop * rnd() * 0.5;
       }
     });
+    // Spider: a long breathy hiss with a rattling edge
+    this.buffers.hiss = mk(1.4, (d, sr) => {
+      let hp = 0, lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const n = rnd();
+        lp += (n - lp) * 0.6; hp = n - lp;
+        const rattle = 0.6 + 0.4 * Math.sin(t * 2 * Math.PI * 38);
+        const env = Math.min(1, t * 12) * Math.exp(-Math.max(0, t - 0.5) * 3);
+        d[i] = hp * rattle * env * 0.9;
+      }
+    });
+    // Spider legs on floorboards: fast irregular clicks
+    this.buffers.skitter = mk(0.6, (d, sr) => {
+      for (let k = 0; k < 14; k++) {
+        const at = Math.floor((k / 14 + Math.random() * 0.03) * d.length);
+        for (let j = 0; j < 260 && at + j < d.length; j++) d[at + j] += rnd() * Math.exp(-j / 40) * (0.5 + Math.random() * 0.5);
+      }
+    });
+    // Revolver: sharp crack + boomy tail
+    this.buffers.gunshot = mk(1.6, (d, sr) => {
+      let lp = 0, ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * (t < 0.01 ? 0.9 : 0.12);
+        ph += (55 + 40 * Math.exp(-t * 18)) / sr;
+        const crack = rnd() * Math.exp(-t * 90);
+        const boom = Math.sin(ph * 2 * Math.PI) * Math.exp(-t * 7) * 0.8;
+        const tail = lp * Math.exp(-t * 2.6) * 0.7;
+        d[i] = Math.max(-1, Math.min(1, crack + boom + tail));
+      }
+    });
+    // Cylinder click / reload
+    this.buffers.click = mk(0.35, (d, sr) => {
+      for (const [at, f] of [[0.0, 2400], [0.12, 1700], [0.22, 3100]]) {
+        const s0 = Math.floor(at * sr);
+        for (let j = 0; j < 900 && s0 + j < d.length; j++) d[s0 + j] += Math.sin(j / sr * 2 * Math.PI * f) * Math.exp(-j / 160) * 0.7 + rnd() * Math.exp(-j / 60) * 0.3;
+      }
+    });
+    // Heavy safe door: clunk of the bolts + long metal groan
+    this.buffers.safeOpen = mk(1.8, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const bolt = (t < 0.08 ? rnd() * Math.exp(-t * 60) : 0) + (t > 0.25 && t < 0.33 ? rnd() * Math.exp(-(t - 0.25) * 60) : 0);
+        ph += (70 + 30 * Math.sin(t * 3)) / sr;
+        const groan = t > 0.4 ? ((ph % 1) * 2 - 1) * 0.25 * Math.sin(Math.min(1, (t - 0.4) * 2) * Math.PI) : 0;
+        d[i] = bolt * 0.9 + groan;
+      }
+    });
+    // Old clock tick-tock (2 s loop)
+    this.buffers.tick = mk(2, (d, sr) => {
+      for (const [at, f] of [[0.0, 2100], [1.0, 1500]]) {
+        const s0 = Math.floor(at * sr);
+        for (let j = 0; j < 1400; j++) d[s0 + j] += (Math.sin(j / sr * 2 * Math.PI * f) * 0.6 + rnd() * 0.4) * Math.exp(-j / 220) * 0.6;
+      }
+    });
   }
 
   // --------------------------------------------------------- synthesis

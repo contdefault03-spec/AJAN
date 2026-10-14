@@ -110,6 +110,7 @@
     <div id="mpLobby" class="hidden">
       <p class="hint">Room code: <b id="mpRoomCode" class="code"></b> <button id="mpCopy" class="btn tiny ghost">COPY</button></p>
       <ul id="mpPlayers" class="playerList"></ul>
+      <p class="hint">Difficulty: <select id="mpDiff"><option value="easy">Easy — he hears less</option><option value="medium">Medium</option><option value="hard">Hard — he hears much better</option></select><b id="mpDiffText"></b></p>
       <p id="mpWaiting" class="hint"></p>
       <div class="row">
         <button id="mpLeave" class="btn ghost">LEAVE</button>
@@ -145,6 +146,8 @@
         <label class="check"><input type="checkbox" id="setMonitor"> Hear myself (test)</label>
       </div>
       <div class="col">
+        <h3>GAMEPLAY</h3>
+        <label>Difficulty <span class="dim">(solo games, and rooms you host)</span><select data-set="difficulty"><option value="easy">Easy — he hears less</option><option value="medium">Medium</option><option value="hard">Hard — he hears much better</option></select></label>
         <h3>CONTROLS</h3>
         <label>Mouse sensitivity <input type="range" data-set="mouse" min="0.2" max="3" step="0.05"></label>
         <label class="check"><input type="checkbox" data-set="invertY"> Invert mouse Y</label>

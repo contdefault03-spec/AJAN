@@ -48,11 +48,21 @@ export const ITEM_INFO = {
   bolt_cutters: { name: 'Bolt Cutters' },
   exit_key: { name: 'Front Door Key' },
   elevator_key: { name: 'Elevator Key' },
+  weapon_key: { name: 'Weapon Key' },
+  revolver: { name: 'Revolver' },
 };
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a
 // limiter so they get louder without clipping.
 // MASKED's clip ("Xhiko") is mastered much quieter than the others, so it is doubled.
+// How well Ajan hears: every noise radius is multiplied by `hear`.
+export const DIFFICULTY = {
+  easy: { label: 'EASY', hear: 0.6 },
+  medium: { label: 'MEDIUM', hear: 1.0 },
+  hard: { label: 'HARD', hear: 1.45 },
+};
+export const difficultyOf = d => (DIFFICULTY[d] ? d : 'medium');
+
 export const DEATH_GAIN = { MASKED: 2 };
 
 export const PLAYER = {

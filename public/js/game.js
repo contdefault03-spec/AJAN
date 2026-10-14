@@ -12,8 +12,11 @@ import { VoiceChat, mic } from './voice.js';
 import { audio } from './audio.js';
 import { loadGLTF, loadTexture } from './assets.js';
 import { settings } from './settings.js';
-import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN } from './config.js';
+import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf } from './config.js';
+
+const GUN_RELOAD_MS = 180000; // the revolver reloads one round every 3 minutes
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
+import { Spider } from './spider.js';
 import { isSafeZone, levelIndex, LEVELS, inElevator } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
 import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission } from './physics.js';
@@ -25,7 +28,7 @@ const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const EAT_START = 1.6;
 
 export class Game {
-  constructor(app, { net, seed, players, startAt, freePlay = false }) {
+  constructor(app, { net, seed, players, startAt, freePlay = false, difficulty = 'medium' }) {
     this.app = app;
     this.net = net;
     this.seed = seed;
@@ -35,6 +38,8 @@ export class Game {
     this.single = !net.online;
     // Free play: the normal house and puzzles, but Ajan never comes out (single-player only).
     this.freePlay = freePlay && this.single;
+    this.difficulty = difficultyOf(difficulty);
+    this.hearMul = DIFFICULTY[this.difficulty].hear;
     this.startAt = startAt;
     this.players = new Map();
     this.items = new Map();
@@ -81,6 +86,8 @@ export class Game {
     // While hiding, the room you look out into is lit up so you can actually watch it.
     this.hideLight = new THREE.PointLight(0xffe4c0, 0, 16, 1.0);
     scene.add(this.hideLight);
+    this.muzzle = new THREE.PointLight(0xffc070, 0, 14, 1.4);
+    scene.add(this.muzzle);
     this.hideK = 0;
 
     progress(0.1, 'Building the house...');
@@ -99,6 +106,8 @@ export class Game {
     this.screens = new Screens(this.house, tex);
     this.props = new Props(this);
     await this.props.init();
+    this.spider = new Spider(this);
+    await this.fitRevolver();
 
     progress(0.7, 'Waking him up...');
     this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 70);
@@ -268,7 +277,8 @@ export class Game {
         if (!this.app.paused && !$('noteView').classList.contains('show')) this.lockPointer();
         return;
       }
-      if (this.isSpectating()) this.cycleSpectate(e.button === 2 ? -1 : 1);
+      if (this.isSpectating()) { this.cycleSpectate(e.button === 2 ? -1 : 1); return; }
+      if (e.button === 0) this.tryShoot();
     };
     this.onMouseMove = e => {
       if (!this.isSpectating() || document.pointerLockElement !== this.canvas) return;
@@ -323,6 +333,7 @@ export class Game {
   onRelay(from, t, d) {
     if (t === 'p') this.onPlayerState(from, d);
     else if (t === 'a') { if (!this.isHost) this.ajanSnap = d; }
+    else if (t === 's') { if (!this.isHost) this.spider.snap = d; }
     else if (t === 'rq') { if (this.isHost) this.handleRequest(from, d); }
     else if (t === 'ev') this.applyEvent(d);
     else if (t === 'spk') { const p = this.players.get(from); if (p) p.speaking = !!d; }
@@ -419,6 +430,10 @@ export class Game {
       case 'container': {
         const c = H.containers.get(r.id);
         if (!c) return;
+        if (c.locked) {
+          if (!this.playerHas(pid, c.lock)) { this.broadcast({ k: 'need', what: c.lock }, pid); return; }
+          this.broadcast({ k: 'unlockCont', id: r.id, by: pid, item: c.lock });
+        }
         this.broadcast({ k: 'cont', id: r.id, open: c.target < 0.5 });
         this.hostNoise(c.group.position, 3.5, 'drawer');
         return;
@@ -528,6 +543,7 @@ export class Game {
         this.broadcast({ k: 'cinema', ...next });
         return;
       }
+      case 'shoot': this.hostShoot(pid, r); return;
       case 'jelly': {
         if ((this.jellyHostT || 0) > this.time - 0.25) return;
         this.jellyHostT = this.time;
@@ -582,6 +598,153 @@ export class Game {
       b.finishKill();
       this.checkEnd();
     }, dur * 1000);
+  }
+
+  // ============================================================ revolver
+  /** object.glb shrunk to pistol size: placed in the safe and used as the in-hand model. */
+  async fitRevolver() {
+    this.gunReadyAt = 0;
+    const gltf = await loadGLTF('objectModel');
+    let src = null;
+    gltf?.scene.traverse(o => { if (!src && o.isMesh) src = o; });
+    const inner = src
+      ? new THREE.Mesh(src.geometry, src.material.clone())
+      : new THREE.Mesh(new THREE.BoxGeometry(0.05, 0.1, 0.24), new THREE.MeshStandardMaterial({ color: 0x333333, metalness: 0.7, roughness: 0.4 }));
+    inner.geometry.computeBoundingBox();
+    const bb = inner.geometry.boundingBox, size = bb.getSize(V()), ctr = bb.getCenter(V());
+    // longest axis → forward (−z), about 0.28 m long: fits in the hand
+    const k = 0.28 / Math.max(size.x, size.y, size.z, 1e-3);
+    inner.scale.setScalar(k);
+    inner.position.copy(ctr).multiplyScalar(-k);
+    const holder = new THREE.Group();
+    const pivot = new THREE.Group();
+    pivot.add(inner);
+    if (size.y >= size.x && size.y >= size.z) pivot.rotation.x = -Math.PI / 2;
+    else if (size.x >= size.z) pivot.rotation.y = Math.PI / 2;
+    holder.add(pivot);
+    holder.traverse(o => { if (o.isMesh) { o.castShadow = true; o.material.metalness = Math.max(o.material.metalness || 0, 0.35); } });
+    this.revolverModel = holder;
+    const it = this.items.get('revolver');
+    if (it) { const m = holder.clone(); m.position.y = 0.06; it.mesh.add(m); }
+  }
+
+  gunStatus() {
+    const left = (this.gunReadyAt || 0) - this.net.serverNow();
+    if (left <= 0) return 'LOADED';
+    const sec = Math.ceil(left / 1000);
+    return `RELOADING ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  }
+
+  tryShoot() {
+    const L = this.local;
+    if (!this.playerHas(this.localId, 'revolver') || this.localDead || this.localEscaped || L.hidden || L.frozen || this.me?.dying) return false;
+    if (this.net.serverNow() < (this.gunReadyAt || 0)) {
+      audio.play('click', { vol: 0.35, rate: 1.5 });
+      this.message(`Revolver: ${this.gunStatus().toLowerCase()}.`, 2);
+      return true;
+    }
+    this.camera.updateMatrixWorld();
+    const o = this.camera.getWorldPosition(V()), d = this.camera.getWorldDirection(V());
+    this.request({ k: 'shoot', o: [o.x, o.y, o.z], d: [d.x, d.y, d.z] });
+    return true;
+  }
+
+  /** Host: resolve a shot. One round, then three minutes to reload. */
+  hostShoot(pid, r) {
+    const now = this.net.serverNow();
+    const p = this.players.get(pid);
+    if (!p || !p.alive || p.dying || !this.playerHas(pid, 'revolver') || now < (this.gunReadyAt || 0)) return;
+    const o = V(...r.o), d = V(...r.d);
+    if (!(d.lengthSq() > 0.5) || o.distanceTo(p.pos) > 2.6) return;
+    d.normalize();
+    const b = this.brain;
+    let hit = null;
+    if (b && b.state !== 'dormant') {
+      for (let t = 0.3; t < 40; t += 0.06) {
+        const q = o.clone().addScaledVector(d, t);
+        if (Math.hypot(q.x - b.pos.x, q.z - b.pos.z) < 0.55 && q.y > b.pos.y + 0.15 && q.y < b.pos.y + 2.4) { hit = q; break; }
+      }
+      if (hit) {
+        const sameFloor = levelOf(o.y - 1.4) === levelOf(b.pos.y) || (inStairs(o) && inStairs(b.pos));
+        if (!sameFloor || segmentBlockers(o.x, o.z, hit.x, hit.z, (o.y + hit.y) / 2, this.house.colliders, { max: 1 }) > 0) hit = null;
+      }
+    }
+    const stunned = hit ? b.stun(25) : false;
+    this.broadcast({ k: 'shot', by: pid, at: now, ox: o.x, oy: o.y, oz: o.z, hit: !!hit, stunned, hx: hit?.x, hy: hit?.y, hz: hit?.z });
+    // A gunshot is the loudest thing in the house. If he's still up, he comes.
+    if (!stunned) this.hostNoise(p.pos, 45, 'gunshot', pid, true);
+  }
+
+  applyShot(e) {
+    this.gunReadyAt = e.at + GUN_RELOAD_MS;
+    const local = e.by === this.localId;
+    const at = V(e.ox, e.oy, e.oz);
+    audio.play('gunshot', local ? { vol: 1.0, limit: true } : { pos: at, vol: 1.0, ref: 6, rolloff: 0.8 });
+    this.muzzle.position.copy(at);
+    this.muzzle.intensity = 40;
+    if (local) { this.local.recoil = 1; this.post.glitch(0.25); }
+    if (e.hit) {
+      const hp = V(e.hx, e.hy, e.hz);
+      this.fx.emit(hp, 0.2, 0.4, 14);
+      audio.play('roar', { pos: hp, vol: 1.0, ref: 3, rate: 0.8 });
+    }
+    const who = this.players.get(e.by)?.name || 'Someone';
+    if (local) this.message(e.stunned ? 'Hit! He goes down — you have about 25 seconds.' : e.hit ? 'Hit… but it didn\'t stop him.' : 'Missed. He heard that.', 4);
+    else this.message(e.stunned ? `${who} shot Ajan! He's down.` : `${who} fired a gun.`, 3);
+    this.updateHUD();
+  }
+
+  /** The nursery spider caught someone: a fast, brutal death (no eating sequence). */
+  hostSpiderKill(pid) {
+    const p = this.players.get(pid);
+    if (!p || !p.alive || p.dying || this.kills.has(pid) || this.freePlay) return;
+    p.dying = true;
+    const sp = this.spider.pos;
+    this.broadcast({ k: 'spiderkill', pid, x: sp.x, z: sp.z });
+    setTimeout(() => {
+      if (this.disposed) return;
+      this.broadcast({ k: 'dead', pid, x: p.pos.x, y: p.pos.y, z: p.pos.z });
+      this.dropItems(pid, p.pos);
+      this.checkEnd();
+    }, 1800);
+  }
+
+  applySpiderKill(e) {
+    const p = this.players.get(e.pid);
+    if (!p) return;
+    p.dying = true;
+    this.spider.hiss();
+    const c = charById(p.character);
+    const snd = c.id === 'AJAN' ? 'ajandie' : c.sound;
+    const gain = DEATH_GAIN[c.id] ?? 1;
+    if (snd) audio.play(snd, p.isLocal ? { vol: gain, limit: gain > 1 } : { pos: p.pos.clone().add(V(0, 1.4, 0)), vol: gain, ref: 3, limit: gain > 1 });
+    if (p.label) p.label.style.opacity = 0;
+    if (p.isLocal) {
+      this.local.frozen = true;
+      if (this.local.hidden) { this.local.hidden = null; $('hideOverlay').classList.remove('show'); }
+      this.post.vhs.uniforms.redFlash.value = 0.6;
+      this.post.glitch(1.8);
+      $('hud').classList.add('dying');
+      this.spiderDeath = { t: 0, from: this.camera.position.clone() };
+    } else {
+      p.avatar.state = { mode: 'grabbed', speed: 0 };
+    }
+  }
+
+  updateSpiderDeath(dt) {
+    const s = this.spiderDeath;
+    if (!s || s.done) return;
+    s.t += dt;
+    const cam = this.camera;
+    const head = this.spider.pos.clone().add(V(0, 0.55, 0));
+    // dragged down to the floor, face to face with it
+    cam.position.lerp(V(head.x + Math.sin(this.spider.ry) * 1.25, this.spider.pos.y + 0.45, head.z + Math.cos(this.spider.ry) * 1.25), Math.min(1, dt * 6));
+    cam.position.x += (Math.random() - 0.5) * 0.06;
+    cam.position.y += (Math.random() - 0.5) * 0.06;
+    cam.lookAt(head);
+    this.local.hands.visible = false;
+    this.post.vhs.uniforms.redFlash.value = Math.min(0.8, this.post.vhs.uniforms.redFlash.value + dt * 0.4);
+    if (s.t > 1.8) { s.done = true; this.onLocalDeath(); }
   }
 
   hostDragOut(pid) {
@@ -655,6 +818,18 @@ export class Game {
         this.updateHUD();
         break;
       }
+      case 'unlockCont': {
+        const c = H.containers.get(e.id);
+        if (!c) break;
+        c.locked = false;
+        const it = this.items.get(e.item);
+        if (it) it.used = true;
+        audio.play('safeOpen', { pos: c.group.position, vol: 0.9, ref: 2.5 });
+        if (e.by === this.localId) this.message('The weapon key turns. The safe swings open.');
+        this.updateHUD();
+        break;
+      }
+      case 'shot': this.applyShot(e); break;
       case 'cont': {
         H.setContainer(e.id, e.open);
         const c = H.containers.get(e.id);
@@ -715,9 +890,13 @@ export class Game {
         break;
       case 'hide': this.applyHide(e); break;
       case 'kill': this.startKillSeq(e); break;
+      case 'spiderkill': this.applySpiderKill(e); break;
+      case 'spider': if (e.s === 'hiss') this.spider.hiss(); break;
       case 'dead': {
         const p = this.players.get(e.pid);
         if (p) { p.alive = false; p.dying = false; p.avatar.group.visible = false; }
+        // (our own death sequence, if one is still playing, calls onLocalDeath when it ends)
+        if (p?.isLocal && !this.localDead && !this.kills.has(e.pid) && !(this.spiderDeath && !this.spiderDeath.done)) this.onLocalDeath();
         if (p?.label) p.label.style.opacity = 0;
         if (this.spectate.target === e.pid) this.cycleSpectate(1);
         this.updateHUD();
@@ -1082,8 +1261,9 @@ export class Game {
     $('hud').classList.add('show');
     this.updateMusic();
     this.lockPointer();
-    this.message(this.freePlay ? 'FREE PLAY — he isn\'t home. Explore freely.' : 'Find a way out. Stay quiet.', 6);
+    this.message(this.freePlay ? 'FREE PLAY — he isn\'t home. Explore freely.' : `Find a way out. Stay quiet.  [${DIFFICULTY[this.difficulty].label}]`, 6);
     this.wind = audio.play('wind', { loop: true, vol: 0.12 });
+    if (this.house.clockSound) this.clockTick = audio.play('tick', { pos: this.house.clockSound, loop: true, vol: 0.5, ref: 1.6, rolloff: 1.5 });
     this.amb = {};
     for (const k of ['ambBase', 'ambHouse', 'ambUp', 'ambAttic']) this.amb[k] = audio.play(k, { loop: true, vol: 0 });
   }
@@ -1124,7 +1304,9 @@ export class Game {
         this.request({ k: 'door', id: d.id });
         break;
       }
-      case 'container': L.act(); this.request({ k: 'container', id: it.id }); break;
+      case 'container':
+        if (it.container.locked && !this.playerHas(me, it.container.lock)) { this.message(this.needText(it.container.lock)); audio.play('rattle', { pos: it.container.group.position, vol: 0.4, rate: 1.6 }); return; }
+        L.act(); this.request({ k: 'container', id: it.id }); break;
       case 'item': L.act(); this.request({ k: 'pickup', id: it.item.id }); break;
       case 'hide':
         if (it.spot.occupant) { this.message('Someone is already hiding in there.'); return; }
@@ -1184,7 +1366,7 @@ export class Game {
         if (d.exit && d.open) return 'GET OUT!';
         return d.open ? 'E — CLOSE' : 'E — OPEN';
       }
-      case 'container': return it.container.target > 0.5 ? `E — CLOSE ${it.name.toUpperCase()}` : `E — OPEN ${it.name.toUpperCase()}`;
+      case 'container': return it.container.locked ? `E — OPEN ${it.name.toUpperCase()}${this.playerHas(this.localId, it.container.lock) ? '  <span class="dim">[USE ' + ITEM_INFO[it.container.lock].name.toUpperCase() + ']</span>' : '  <span class="dim">[LOCKED — ' + ITEM_INFO[it.container.lock].name.toUpperCase() + ']</span>'}` : it.container.target > 0.5 ? `E — CLOSE ${it.name.toUpperCase()}` : `E — OPEN ${it.name.toUpperCase()}`;
       case 'item': return `E — PICK UP ${ITEM_INFO[it.item.type].name.toUpperCase()}`;
       case 'hide': return it.spot.occupant ? '<span class="dim">OCCUPIED</span>' : `E — ${it.spot.label}`;
       case 'fusebox': return this.house.power ? '<span class="dim">POWER RESTORED</span>' : this.playerHas(me, 'fuse') ? 'E — USE FUSE' : 'E — USE';
@@ -1276,7 +1458,7 @@ export class Game {
     if (!H.power) {
       if (has('fuse')) return 'Put the fuse in the fuse box in the basement.';
       if (holderName('fuse')) return `${holderName('fuse')} has the fuse. Restore the power in the basement.`;
-      if (storage.locked) return step('storage_key', 'Unlock the storage room upstairs.', 'Find the storage room key in an upstairs bedroom.', 'has the storage room key.');
+      if (storage.locked) return step('storage_key', 'Unlock the storage room upstairs.', 'Get the storage room key from the nursery crib. Beware what waits in the corner.', 'has the storage room key.');
       return 'Find the spare fuse in the storage room upstairs.';
     }
     if (front.locked && !has('exit_key')) return step('exit_key', '', 'Find the front door key in the security room.', 'has the front door key.');
@@ -1290,7 +1472,7 @@ export class Game {
     $('objective').textContent = this.localDead ? 'You were eaten.' : this.localEscaped ? 'You escaped.' : this.objective();
     const inv = [...this.items.values()].filter(i => i.holder === this.localId && !i.used);
     $('inventory').innerHTML = inv.length
-      ? inv.map(i => `<div class="slot"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}</div>`).join('')
+      ? inv.map(i => `<div class="slot"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('')
       : '<div class="slot empty">— empty —</div>';
     $('micState').classList.toggle('muted', settings.micMuted || !mic.stream);
     $('micState').title = !mic.stream ? 'No microphone' : settings.micMuted ? 'Muted (M)' : 'Mic on (M to mute)';
@@ -1393,7 +1575,7 @@ export class Game {
     const me = this.me;
 
     // The first-person controller owns the camera only while we're alive and in the house.
-    const inBody = !this.localDead && !this.localEscaped && !(me && me.dying);
+    const inBody = !this.localDead && !this.localEscaped && !(me && me.dying) && !this.kills.has(this.localId) && !(this.spiderDeath && !this.spiderDeath.done);
     if ((this.phase === 'play' || this.phase === 'ended') && inBody) {
       if (!this.app.paused || this.net.online) L.update(this.app.paused ? 0 : dt);
     } else if (!inBody) {
@@ -1445,6 +1627,7 @@ export class Game {
         this.ajanSendT = 0.1;
         this.ajanSnap = this.brain.snapshot();
         if (this.net.online) this.net.vsend('a', this.ajanSnap);
+        if (this.net.online) this.net.vsend('s', this.spider.snapshot());
       }
       // Ajan uses the escape route? No: but escaping players on the threshold.
     }
@@ -1465,6 +1648,21 @@ export class Game {
     this.fx.update(dt);
     this.updateDust(dt);
     this.props.update(dt, this.net.serverNow());
+    this.spider.update(dt);
+    const hasGun = !!this.revolverModel && this.playerHas(this.localId, 'revolver');
+    if (hasGun !== !!this.gunShown) { this.local.setWeapon(hasGun ? this.revolverModel.clone() : null); this.gunShown = hasGun; if (hasGun) this.message('Revolver: one round. LEFT CLICK to shoot. Reloading takes 3 minutes.', 6); }
+    this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 400);
+    if (hasGun) {
+      this.gunHudT = (this.gunHudT || 0) - dt;
+      const ready = this.net.serverNow() >= (this.gunReadyAt || 0);
+      if (this.gunHudT <= 0 || ready !== this.gunWasReady) {
+        if (ready && this.gunWasReady === false) { audio.play('click', { vol: 0.5 }); this.message('Revolver reloaded.', 3); }
+        this.gunWasReady = ready;
+        this.gunHudT = 1;
+        this.updateHUD();
+      }
+    }
+    this.updateSpiderDeath(dt);
     this.updateFloorboards(dt);
     this.updateJellyTouch(dt);
     this.updateSleepAudio();
@@ -1490,11 +1688,15 @@ export class Game {
       if (seeThrough) for (const d of seeThrough.doors) d.pivot.visible = false;
       this.seeThroughHide = seeThrough;
     }
-    this.hideLight.intensity = hk * 18;
-    this.app.renderer.toneMappingExposure = 1.15 + hk * 0.45;
-    this.hemi.intensity = 1.0 + lk * 4 + hk * 1.6;
+    // Dead or spectating: everything is easier to see too.
+    const sk = this.specK = damp(this.specK || 0, (this.localDead || this.localEscaped) && this.phase === 'play' ? 1 : 0, 2, dt);
+    if (!L.hidden && sk > 0.01) this.hideLight.position.copy(this.camera.position).add(V(0, 0.6, 0));
+    const bk = Math.max(hk, sk);
+    this.hideLight.intensity = Math.max(hk * 18, sk * 16);
+    this.app.renderer.toneMappingExposure = 1.15 + Math.max(hk * 0.45, sk * 0.55);
+    this.hemi.intensity = 1.0 + lk * 4 + bk * 1.6;
     H.M.glassWin.emissiveIntensity = 1 + lk * 25;
-    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + hk * 2.0;
+    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + Math.max(hk * 2.0, sk * 2.4);
 
     // Local avatar mirrors us (for cameras and the death cam)
     if (me && !me.dying) {
@@ -1579,7 +1781,7 @@ export class Game {
     aj.group.visible = v.st !== 'dormant';
     aj.group.position.copy(v.pos);
     aj.group.rotation.y = v.ry;
-    const ajMode = ['search', 'sleep', 'sit', 'inspect'].includes(v.m) ? v.m : 'move';
+    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun'].includes(v.m) ? v.m : 'move';
     aj.state = { speed: v.sp, mode: ajMode, modeT: v.mt, headYaw: v.m === 'search' ? undefined : v.hy };
     aj.update(dt);
     // Heavy footsteps
@@ -1684,7 +1886,7 @@ export class Game {
     const sleeping = this.ajanVis.st === 'sleep';
     if (sleeping && !this.sleepSound) {
       const pos = this.ajanVis.pos.clone().add(V(0, 1.2, 0));
-      this.sleepSound = audio.play('sleep', { pos, loop: true, vol: 0.85, ref: 2.2, rolloff: 1.2 });
+      this.sleepSound = audio.play('sleep', { pos, loop: true, vol: 1.7, ref: 3.5, rolloff: 1.0, limit: true });
     } else if (!sleeping && this.sleepSound) {
       this.sleepSound.stop(0.6);
       this.sleepSound = null;
@@ -1702,6 +1904,11 @@ export class Game {
 
   ambience(dt, cp) {
     if (this.phase !== 'play') return;
+    // Things in the house that make their own little noises (rocking chairs).
+    for (const s of this.house.periodic || []) {
+      s.t = (s.t ?? Math.random() * s.every) - dt;
+      if (s.t <= 0) { s.t += s.every; if (s.pos.distanceTo(cp) < s.range) audio.play(s.key, { pos: s.pos, vol: s.vol, rate: s.rate * (0.95 + Math.random() * 0.1), ref: 1.2, muffle: this.muffleFor(s.pos) }); }
+    }
     this.updateAreaAmbience(cp);
     this.ambientT -= dt;
     if (this.ambientT <= 0) {
@@ -1763,6 +1970,7 @@ export class Game {
     this.voice?.stop();
     this.tvSound?.stop();
     this.wind?.stop();
+    this.clockTick?.stop();
     this.sleepSound?.stop();
     if (this.amb) Object.values(this.amb).forEach(h => h?.stop());
     this.props?.dispose();

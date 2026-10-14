@@ -165,6 +165,17 @@ export class LocalPlayer {
     this.camera.remove(this.light, this.light.target, this.fill, this.hands);
   }
 
+  /** Put an object (the revolver) in the right hand, or null to empty it. */
+  setWeapon(obj) {
+    if (this.weapon) this.rightArm.remove(this.weapon);
+    this.weapon = obj;
+    if (obj) {
+      obj.position.set(0, 0.035, -0.24);
+      obj.traverse(o => { o.layers.set(2); o.castShadow = false; });
+      this.rightArm.add(obj);
+    }
+  }
+
   toggleFlash() {
     this.flash = !this.flash;
     audio.play('pickup', { vol: 0.25, rate: 2.2 });
@@ -248,9 +259,17 @@ export class LocalPlayer {
     this.leftArm.visible = this.flash || this.actT < 0.6;
     // Right hand only comes up to interact (doors, items, switches, TV, monitors)
     const reach = Math.sin(clamp(this.actT / 0.55, 0, 1) * Math.PI);
-    this.rightArm.position.set(0.2 - reach * 0.05, -0.38 + reach * 0.2 + hb * 0.8, -0.28 - reach * 0.18);
-    this.rightArm.rotation.set(0.15 + reach * 0.25, -0.1, -0.1);
-    this.rightArm.visible = reach > 0.02;
+    this.recoil = damp(this.recoil || 0, 0, 9, dt);
+    if (this.weapon) {
+      // Holding the revolver: the right hand stays up, pointing where you look.
+      this.rightArm.position.set(0.15 - reach * 0.05, -0.16 + hb * 0.8 + this.recoil * 0.03, -0.32 + this.recoil * 0.06);
+      this.rightArm.rotation.set(0.04 + this.recoil * 0.45, -0.04, -0.02);
+      this.rightArm.visible = true;
+    } else {
+      this.rightArm.position.set(0.2 - reach * 0.05, -0.38 + reach * 0.2 + hb * 0.8, -0.28 - reach * 0.18);
+      this.rightArm.rotation.set(0.15 + reach * 0.25, -0.1, -0.1);
+      this.rightArm.visible = reach > 0.02;
+    }
   }
 
   footstep() {

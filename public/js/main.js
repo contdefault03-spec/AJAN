@@ -5,7 +5,7 @@ import { discoverAssets, assetState, assetUrl, loadGLTF } from './assets.js';
 import { audio } from './audio.js';
 import { settings, setSetting, profile, saveProfile, onSettingChange } from './settings.js';
 import { mic } from './voice.js';
-import { CHARACTERS, charById } from './config.js';
+import { CHARACTERS, charById, DIFFICULTY } from './config.js';
 import { LocalNet, SocketNet } from './net.js';
 import { Game } from './game.js';
 import { Avatar } from './avatar.js';
@@ -331,7 +331,8 @@ class App {
     $('mpCode').onkeydown = e => { if (e.key === 'Enter') $('mpJoin').click(); };
     $('mpLeave').onclick = () => { this.mpNet?.leaveRoom(); this.showConnect(); };
     $('mpBack').onclick = () => { this.mpNet?.leaveRoom(); this.openMenu(); };
-    $('mpStart').onclick = () => this.mpNet?.startGame();
+    $('mpStart').onclick = () => this.mpNet?.startGame(settings.difficulty);
+    $('mpDiff').onchange = e => { setSetting('difficulty', e.target.value); this.mpNet?.setDifficulty(e.target.value); };
     $('mpCopy').onclick = () => { navigator.clipboard?.writeText(this.mpNet?.room?.code || ''); this.toast('Room code copied.'); };
   }
 
@@ -370,17 +371,21 @@ class App {
     const host = room.hostId === this.mpNet.id;
     $('mpStart').disabled = !host;
     $('mpStart').classList.toggle('hidden', !host);
+    $('mpDiff').value = settings.difficulty;
+    if (host && room.difficulty !== settings.difficulty) this.mpNet.setDifficulty(settings.difficulty);
+    $('mpDiff').classList.toggle('hidden', !host);
+    $('mpDiffText').textContent = host ? '' : (DIFFICULTY[room.difficulty]?.label || 'MEDIUM');
     $('mpWaiting').textContent = host ? 'Share the code. Start when everyone is in — the game is also fully playable alone.' : 'Waiting for the host to start…';
   }
 
   // ---------------------------------------------------------- game start
   startSingle(freePlay = false) {
     const net = new LocalNet();
-    this.launchGame({ net, seed: Math.floor(Math.random() * 2 ** 31), players: [{ id: 'local', ...this.netProfile() }], startAt: Date.now(), freePlay });
+    this.launchGame({ net, seed: Math.floor(Math.random() * 2 ** 31), players: [{ id: 'local', ...this.netProfile() }], startAt: Date.now(), freePlay, difficulty: settings.difficulty });
   }
 
   launchMultiplayer(m) {
-    this.launchGame({ net: this.mpNet, seed: m.seed, players: m.room.players, startAt: m.startAt });
+    this.launchGame({ net: this.mpNet, seed: m.seed, players: m.room.players, startAt: m.startAt, difficulty: m.difficulty });
   }
 
   async launchGame(opts) {
