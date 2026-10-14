@@ -80,6 +80,7 @@ export class Props {
     this.buildMirror();
     this.buildBlood();
     this.buildAjanRoom();
+    this.group.updateMatrixWorld(true); // interaction raycasts can run before the first frame
   }
 
   async init() {
@@ -99,25 +100,30 @@ export class Props {
     lamp.rotation.x = Math.PI / 2; lamp.position.y = 2.42;
     const rail = bx(0.04, 0.05, d - 0.2, M.brass); rail.position.set(w / 2 - 0.05, 0.95, 0);
     car.add(floor, ceil, lamp, rail);
-    // Button panel on the west wall inside the car
-    const panel = bx(0.03, 0.75, 0.32, M.dark);
-    panel.position.set(-w / 2 + 0.03, 1.25, 0.3);
+    // Button panel on the west wall inside the car: four big labelled buttons.
+    // (the shaft wall's inner face is ~0.1 m inside the car footprint)
+    const panel = bx(0.04, 1.0, 0.5, M.brass);
+    panel.position.set(-w / 2 + 0.13, 1.3, 0);
     car.add(panel);
-    const cv = document.createElement('canvas');
-    cv.width = 64; cv.height = 160;
-    const g = cv.getContext('2d');
-    g.fillStyle = '#ddd';
-    g.font = 'bold 26px monospace';
-    ['A', '2', '1', 'B'].forEach((t, i) => g.fillText(t, 8, 30 + i * 38));
-    const lbl = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.25), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
-    lbl.rotation.y = Math.PI / 2;
-    lbl.position.set(-w / 2 + 0.05, 1.27, 0.37);
-    car.add(lbl);
+    const NAMES = [['B', 'BASEMENT'], ['1', 'GROUND'], ['2', 'UPSTAIRS'], ['A', 'ATTIC']];
     this.carButtons = [];
     for (let L = 0; L < 4; L++) {
-      const b = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.02, 12), new THREE.MeshStandardMaterial({ color: 0x777777, emissive: 0x000000 }));
-      b.rotation.z = Math.PI / 2;
-      b.position.set(-w / 2 + 0.05, 1.07 + L * 0.095, 0.23);
+      const cv = document.createElement('canvas');
+      cv.width = 256; cv.height = 96;
+      const g = cv.getContext('2d');
+      g.fillStyle = '#1b1712'; g.fillRect(0, 0, 256, 96);
+      g.strokeStyle = '#b08d4a'; g.lineWidth = 6; g.strokeRect(3, 3, 250, 90);
+      g.fillStyle = '#f2e6c8';
+      g.font = 'bold 64px monospace'; g.textBaseline = 'middle';
+      g.fillText(NAMES[L][0], 18, 50);
+      g.font = 'bold 30px monospace';
+      g.fillText(NAMES[L][1], 80, 52);
+      const tex = new THREE.CanvasTexture(cv);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.MeshStandardMaterial({ map: tex, emissiveMap: tex, emissive: 0x333333, roughness: 0.6 });
+      const b = new THREE.Mesh(new THREE.PlaneGeometry(0.4, 0.15), mat);
+      b.rotation.y = Math.PI / 2; // faces into the car (+x)
+      b.position.set(-w / 2 + 0.156, 0.98 + L * 0.21, 0);
       car.add(b);
       this.carButtons.push(b);
       H.register('elevbtn' + L, 'elevbtn', [b], V(cx, 0, cz), { level: L });
@@ -135,8 +141,8 @@ export class Props {
         return p;
       });
       const col = H.collider(e.a0, e.c - 0.08, e.a0 + e.w, e.c + 0.08, y, y + 2.3, { occlude: true });
-      const call = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.16, 0.03), new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0x220000 }));
-      call.position.set(e.a0 - 0.32, y + 1.2, e.c + e.out * 0.12);
+      const call = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.28, 0.04), new THREE.MeshStandardMaterial({ color: 0x333333, emissive: 0x220000 }));
+      call.position.set(e.a0 - 0.32, y + 1.2, e.c + e.out * 0.14);
       this.group.add(call);
       H.register('elevcall' + e.L, 'elevcall', [call], call.position.clone(), { level: e.L });
       // floor indicator above the door
@@ -185,7 +191,7 @@ export class Props {
       ld.col.off = ld.open > 0.85;
       ld.call.material.emissive.setHex(st.unlocked ? (atStop ? 0x003300 : 0x332200) : 0x220000);
     }
-    this.carButtons.forEach((b, L) => b.material.emissive.setHex(L === st.level ? (moving ? 0xaa6600 : 0x00aa22) : 0x000000));
+    this.carButtons.forEach((b, L) => b.material.emissive.setHex(L === st.level ? (moving ? 0xffaa44 : 0x66ff88) : st.unlocked ? 0x777777 : 0x333333));
     const pos = V((ELEVATOR.x0 + ELEVATOR.x1) / 2, y + 1.2, (ELEVATOR.z0 + ELEVATOR.z1) / 2);
     if (moving && !this.elevHum) this.elevHum = audio.play('elevHum', { pos, loop: true, vol: 0.55, ref: 2.5 });
     if (this.elevHum) this.elevHum.setPos(pos);

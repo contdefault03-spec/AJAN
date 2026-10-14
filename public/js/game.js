@@ -14,7 +14,7 @@ import { loadGLTF, loadTexture } from './assets.js';
 import { settings } from './settings.js';
 import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN } from './config.js';
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
-import { isSafeZone, levelIndex, LEVELS } from './layout.js';
+import { isSafeZone, levelIndex, LEVELS, inElevator } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
 import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission } from './physics.js';
 import { roomAt } from './house.js';
@@ -254,6 +254,9 @@ export class Game {
       if (e.code === 'Escape' && $('noteView').classList.contains('show')) { this.closeNote(); return; }
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if (e.code === 'KeyM' && !e.repeat) { mic.setMuted(!settings.micMuted); this.updateHUD(); }
+      // Inside the elevator car, 1–4 pick a floor (B, ground, upstairs, attic).
+      const fl = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
+      if (fl >= 0 && !e.repeat && this.inElevatorCar()) this.pressElevator(fl);
       if (this.isSpectating()) {
         if (e.code === 'ArrowRight' || e.code === 'KeyD') this.cycleSpectate(1);
         if (e.code === 'ArrowLeft' || e.code === 'KeyA') this.cycleSpectate(-1);
@@ -290,6 +293,21 @@ export class Game {
       const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
       p?.catch?.(() => { try { this.canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* not allowed yet */ } });
     } catch { try { this.canvas.requestPointerLock(); } catch { /* not allowed yet */ } }
+  }
+
+  inElevatorCar() {
+    const p = this.local.pos;
+    return inElevator(p.x, p.z) && Math.abs(p.y - elevatorState.y) < 0.4;
+  }
+
+  pressElevator(level) {
+    const L = this.local;
+    if (!this.me || this.localDead || this.localEscaped || L.hidden || L.frozen) return;
+    const st = this.props.elev;
+    if (!st.unlocked && !this.playerHas(this.localId, 'elevator_key')) { this.message(this.needText('elevator_key')); audio.play('rattle', { vol: 0.3, rate: 2 }); return; }
+    L.act();
+    audio.play('pickup', { vol: 0.4, rate: 0.7 });
+    this.request({ k: 'elev', to: level });
   }
 
   isSpectating() { return !!((this.localDead || this.localEscaped) && this.spectate.active); }
@@ -1127,14 +1145,7 @@ export class Game {
         break;
       case 'note': L.act(); this.openNote(it.text); break;
       case 'elevbtn':
-      case 'elevcall': {
-        const st = this.props.elev;
-        if (!st.unlocked && !this.playerHas(me, 'elevator_key')) { this.message(this.needText('elevator_key')); audio.play('rattle', { vol: 0.3, rate: 2 }); return; }
-        L.act();
-        audio.play('pickup', { vol: 0.4, rate: 0.7 });
-        this.request({ k: 'elev', to: it.level });
-        break;
-      }
+      case 'elevcall': this.pressElevator(it.level); break;
       case 'radio': L.act(); this.request({ k: 'radio', id: it.id }); break;
       case 'boombox': L.act(); this.request({ k: 'boom' }); break;
       case 'cinema': L.act(); this.request({ k: 'cinema', a: 'toggle' }); break;
@@ -1180,8 +1191,8 @@ export class Game {
       case 'tv': return this.screens.tv.mode === 'off' ? 'E — TURN ON' : 'E — TURN OFF';
       case 'monitor': return 'E — SWITCH CAMERA';
       case 'note': return 'E — READ';
-      case 'elevbtn': return `E — FLOOR ${['B', '1', '2', 'A'][it.level]}${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS KEY]</span>'}`;
-      case 'elevcall': return `E — CALL ELEVATOR${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS KEY]</span>'}`;
+      case 'elevbtn': return `E — GO TO ${['BASEMENT', 'GROUND FLOOR', 'UPSTAIRS', 'ATTIC'][it.level]}${!this.props.elev.unlocked ? '  <span class="dim">[NEEDS ELEVATOR KEY]</span>' : it.level === 0 && this.house.doors.get('d_basement').locked && !this.playerHas(this.localId, 'basement_key') ? '  <span class="dim">[NEEDS BASEMENT KEY]</span>' : ''}`;
+      case 'elevcall': return `E — CALL ELEVATOR${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS ELEVATOR KEY]</span>'}`;
       case 'radio': return it.radio.on ? 'E — TURN OFF RADIO' : 'E — TURN ON RADIO';
       case 'boombox': return 'E — PRESS PLAY';
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
@@ -1221,7 +1232,7 @@ export class Game {
       break;
     }
     this.focus = found;
-    this.setPrompt(found ? this.promptFor(found.it) : '');
+    this.setPrompt(found ? this.promptFor(found.it) : this.inElevatorCar() ? '1 B · 2 GROUND · 3 UPSTAIRS · 4 ATTIC <span class="dim">— or press a button</span>' : '');
   }
 
   setPrompt(html) {
