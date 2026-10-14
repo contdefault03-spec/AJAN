@@ -169,6 +169,14 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 #inventory .ico.exit_key { background: #d03020; box-shadow: 0 0 6px #d03020; }
 #inventory .ico.weapon_key { background: #9a3ad0; box-shadow: 0 0 6px #9a3ad0; }
 #inventory .ico.revolver { border-radius: 2px; background: #8a8f96; box-shadow: 0 0 6px #b0b6bd; }
+#inventory .ico.engine, #inventory .ico.battery { border-radius: 2px; background: #5a5f66; box-shadow: 0 0 6px #9aa0a8; }
+#inventory .ico.wrench { border-radius: 2px; background: #c0c6cc; box-shadow: 0 0 6px #e0e6ec; }
+#inventory .ico.oil { border-radius: 2px; background: #d0a010; box-shadow: 0 0 6px #f0c030; }
+#hideOverlay.car .slats { display: none; }
+#hud.cine > *:not(#escapeTitle) { visibility: hidden; }
+#escapeTitle { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; opacity: 0; transition: opacity 0.8s; pointer-events: none; }
+#escapeTitle.show { opacity: 1; }
+
 #prompt { position: absolute; left: 50%; top: calc(50% + 34px); transform: translateX(-50%); font-size: 26px; color: #fff; text-shadow: 2px 2px 0 #000; opacity: 0; transition: opacity 0.12s; letter-spacing: 0.06em; }
 #prompt.show { opacity: 1; }
 #message { position: absolute; left: 50%; bottom: 18%; transform: translateX(-50%); font-size: 22px; color: #f2e6d0; background: rgba(0, 0, 0, 0.55); padding: 8px 18px; border-left: 3px solid var(--red2); opacity: 0; transition: opacity 0.3s; text-align: center; }

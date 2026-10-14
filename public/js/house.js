@@ -8,8 +8,7 @@ import { segmentBlockers } from './physics.js';
 import { shuffle } from './util.js';
 import {
   LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
-  roomAt, rampHeight, levelIndex, SPAWN_POINTS,
-} from './layout.js';
+  roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway } from './layout.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
 
@@ -290,6 +289,7 @@ export class House {
   buildStairs() {
     const G = this.geo;
     for (const r of RAMPS) {
+      if (r.outside) { this.buildDriveway(r); continue; }
       const len = Math.abs(r.b - r.a);
       const steps = Math.round(len / 0.28);
       const lo = Math.min(r.ya, r.yb);
@@ -310,6 +310,34 @@ export class House {
         const y = rampHeight(r, x, z);
         G.box(x - 0.03, y, z - 0.03, x + 0.03, y + 0.95, z + 0.03, 'woodDark');
       }
+    }
+  }
+
+  /** Concrete driveway from the garage door up to the yard, with retaining walls. */
+  buildDriveway(r) {
+    const G = this.geo;
+    G.box(r.x0, r.ya - 0.2, r.z0, r.a, r.ya, r.z1, 'floorConcrete', { skip: ['x-'] });
+    const n = 24;
+    for (let i = 0; i < n; i++) {
+      const c0 = r.a + (r.b - r.a) * i / n, c1 = r.a + (r.b - r.a) * (i + 1) / n;
+      const y0 = rampHeight(r, c0, r.z0), y1 = rampHeight(r, c1, r.z0);
+      const nl = Math.hypot(y1 - y0, c1 - c0);
+      G.quad('floorConcrete', [[c0, y0, r.z1], [c1, y1, r.z1], [c1, y1, r.z0], [c0, y0, r.z0]], [-(y1 - y0) / nl, (c1 - c0) / nl, 0], p => [p[0] / 3, p[2] / 3]);
+    }
+    for (const z of [r.z0 - 0.25, r.z1]) {
+      G.box(40.1, r.ya, z, r.b, 0.4, z + 0.25, 'wallBase');
+      this.collider(40.1, z, r.b, z + 0.25, r.ya, 0.4, { occlude: true, wall: true });
+    }
+    // the yard: dark ground, a fence, a few dead trees
+    G.plane('floorConcrete', 49, 12, 64, 30, 0, true);
+    for (const z of [12, 30]) G.box(49, 0, z - 0.05, 64, 1.2, z + 0.05, 'woodDark');
+    G.box(64, 0, 12, 64.1, 1.2, 30, 'woodDark');
+    const trunk = this.M.woodDark;
+    for (const [x, z, h] of [[53, 15, 4], [58, 26, 5], [61, 17, 3.5], [55, 27.5, 4.5]]) {
+      const t = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.22, h, 6), trunk);
+      t.position.set(x, h / 2, z);
+      this.group.add(t);
+      for (let k = 0; k < 4; k++) { const br = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.07, 1.6, 4), trunk); br.position.set(x, h * (0.55 + k * 0.1), z); br.rotation.set(0.9 * Math.cos(k * 1.7), k * 1.6, 0.9 * Math.sin(k * 1.7)); this.group.add(br); }
     }
   }
 
@@ -588,6 +616,7 @@ export class House {
   }
 
   painting(x, y, z, facing, w = 0.62, h = 0.86) {
+    if (onDoorway(x, z, y, w / 2 + 0.06)) { console.warn('painting over a doorway skipped', x, z); return null; }
     const [fx, fz] = DIR[facing];
     const g = new THREE.Group();
     g.position.set(x, y, z);
@@ -703,18 +732,25 @@ export class House {
       return L;
     };
     const G = 2.55, U = 5.95, B = -0.6;
-    add('bed1', 4, G, 4); add('bath', 10.5, G, 4, 0xe8f0ff, 5); add('bed2', 17, G, 4); add('sec', 25.5, G, 4, 0xd8e8ff, 6);
-    add('office', 35, G, 4, 0xffd8a0, 6, 9, { flicker: 0.3 });
+    add('bed1', 2.8, G, 4); add('wardrobe', 6.8, G, 4, 0xffd8b0, 3, 6, { flicker: 0.4 });
+    add('bath', 10.5, G, 2.3, 0xe8f0ff, 5, 7); add('laundry', 10.5, G, 6.3, 0xe8f0e0, 3, 6, { flicker: 0.6 });
+    add('bed2', 17, G, 2.5); add('playroom', 17, G, 6.5, 0xffd8c0, 4, 8);
+    add('sec', 24, G, 4, 0xd8e8ff, 6); add('archive', 28.5, G, 4, 0xe0e8ff, 3, 7, { flicker: 0.7 });
+    add('office', 35, G, 2.3, 0xffd8a0, 6, 8, { flicker: 0.3 }); add('frontoffice', 35, G, 6.3, 0xffd8a0, 4, 8);
     add('hall', 7, G, 9.5, 0xffc98a, 6, 10); add('hall', 22, G, 9.5, 0xffc98a, 6, 10, { flicker: 0.5 }); add('hall', 33, G, 9.5, 0xffc98a, 5, 9);
-    add('living', 5.5, G, 16, 0xffc98a, 8, 11); add('start', 14, G, 14, 0xffc98a, 6);
-    add('kitchen', 23.5, G, 16, 0xf0ffe0, 8, 11, { flicker: 0.35 }); add('dining', 32.5, G, 17, 0xffc080, 6, 9);
+    add('living', 3.5, G, 16, 0xffc98a, 7, 9); add('parlor', 9, G, 16, 0xffb878, 5, 8, { flicker: 0.25 }); add('start', 14, G, 14, 0xffc98a, 6);
+    add('kitchen', 23.5, G, 14, 0xf0ffe0, 7, 10, { flicker: 0.35 }); add('mudroom', 23.5, G, 19, 0xe8e0c8, 4, 8, { flicker: 0.5 });
+    add('dining', 32.5, G, 17, 0xffc080, 6, 9);
     add('stairB', 16.5, 2.6, 19.2, 0xffc98a, 4, 8); add('stairU', 38, 5.9, 16, 0xffc98a, 6, 11, { flicker: 0.3 });
-    add('master', 5, U, 4); add('ubath', 12.5, U, 4, 0xe8f0ff, 4, 7, { flicker: 0.7 }); add('guest', 19, U, 4);
+    add('master', 3.3, U, 4); add('dressing', 8.3, U, 4, 0xffd8b0, 3, 6);
+    add('ubath', 12.5, U, 2.3, 0xe8f0ff, 4, 7, { flicker: 0.7 }); add('linen', 12.5, U, 6.3, 0xfff0e0, 2.5, 6, { flicker: 0.5 });
+    add('guest', 19, U, 4);
     add('storage', 26.5, U, 4, 0xffffff, 3, 7, { flicker: 0.6 }); add('ajanroom', 35, U, 4, 0xff5030, 3, 8, { flicker: 0.2 });
     add('uhall', 6, U, 9.5, 0xffc98a, 5, 10); add('uhall', 18, U, 9.5, 0xffc98a, 5, 10, { flicker: 0.4 }); add('uhall', 30, U, 9.5, 0xffc98a, 5, 10);
-    add('nursery', 5, U, 16, 0xffd0d0, 4, 9, { flicker: 0.3 }); add('library', 15, U, 16, 0xffc98a, 6, 10); add('music', 29, U, 16, 0xffc98a, 6, 11);
+    add('nursery', 5, U, 16, 0xffd0d0, 4, 9, { flicker: 0.3 }); add('library', 15, U, 16, 0xffc98a, 6, 10);
+    add('music', 27, U, 16, 0xffc98a, 5, 9); add('sitting', 33, U, 17, 0xffc080, 5, 9, { flicker: 0.2 });
     add('base', 6, B, 22, 0xffb070, 6, 10, { flicker: 0.4 }); add('base', 13, B, 24, 0xffb070, 6, 10);
-    add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('workshop', 35, B, 20, 0xfff0d0, 6, 11);
+    add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('garage', 33, B, 18, 0xfff0d0, 6, 10); add('garage', 35, B, 24.5, 0xfff0d0, 5, 9, { flicker: 0.3 });
     // Always-on: candles in the back room, emergency light, Ajan's red lamp, attic lamps.
     const cl = add('start', 16.25, 1.0, 11.6, 0xff9a40, 4, 7, { always: true, noFixture: true, flicker: 1 });
     cl.candle = true;
@@ -728,6 +764,8 @@ export class House {
     add('base', 3.0, -1.0, 18.5, 0xff3020, 1.4, 7, { always: true, noFixture: true, flicker: 0.2 });
     add('ajanroom', 37.5, 4.2, 6.5, 0xff2010, 1.6, 6, { always: true, noFixture: true, flicker: 0.4 });
     add('attic', 30, 8.7, 15, 0xffb070, 4, 10, { always: true });
+    // a lamp over the yard at the top of the driveway
+    add('yard', 51, 3.2, 18.5, 0xb8c8ff, 7, 16, { always: true, flicker: 0.3 });
     add('attic', 22, 8.7, 10, 0xffb070, 3, 8, { always: true, flicker: 0.2 });
     add('attic', 37, 8.7, 18, 0xffb070, 3, 8, { always: true });
     add('stairA', 22, 8.4, 17, 0xffb070, 2.5, 7, { always: true });
@@ -855,7 +893,7 @@ export class House {
       portals.push([a, b, doorId]);
     };
     for (const d of DOORS) if (!d.exit && !d.ajanBlocked) addPortal(d, d.y, d.id);
-    for (const o of OPENINGS) addPortal(o, o.y0, null);
+    for (const o of OPENINGS) if (!o.noNav) addPortal(o, o.y0, null);
     const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
 
@@ -963,6 +1001,40 @@ export function makeItemMesh(type, M) {
       jaw.position.set(0.15, 0.014, s * 0.012);
       g.add(h, jaw);
     }
+  } else if (type === 'engine') {
+    const blk = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.38, 0.45), M.metal);
+    blk.position.y = 0.19;
+    const head = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.1, 0.34), new THREE.MeshStandardMaterial({ color: 0x7a1010, metalness: 0.5, roughness: 0.5 }));
+    head.position.y = 0.43;
+    g.add(blk, head);
+    for (let i = 0; i < 4; i++) { const c = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.08, 8), M.brass); c.position.set(-0.18 + i * 0.12, 0.51, 0); g.add(c); }
+    const pulley = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.09, 0.04, 14), M.black); pulley.rotation.z = Math.PI / 2; pulley.position.set(0.3, 0.2, 0); g.add(pulley);
+  } else if (type === 'wrench') {
+    const steel = new THREE.MeshStandardMaterial({ color: 0xaab0b6, metalness: 0.9, roughness: 0.25 });
+    const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.3, 0.015, 0.03), steel);
+    const jaw = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.012, 6, 12, Math.PI * 1.4), steel);
+    jaw.rotation.x = Math.PI / 2; jaw.position.x = 0.17;
+    g.add(shaft, jaw);
+    g.position.y = 0.01;
+  } else if (type === 'oil') {
+    const can = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.26, 0.1), new THREE.MeshStandardMaterial({ color: 0xc89a10, metalness: 0.3, roughness: 0.5 }));
+    can.position.y = 0.13;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.04, 10), new THREE.MeshStandardMaterial({ color: 0x101010 }));
+    cap.position.set(0.05, 0.28, 0);
+    const label = new THREE.Mesh(new THREE.BoxGeometry(0.182, 0.1, 0.102), new THREE.MeshStandardMaterial({ color: 0x1a1a1a }));
+    label.position.y = 0.12;
+    g.add(can, cap, label);
+  } else if (type === 'battery') {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.28, 0.2, 0.18), new THREE.MeshStandardMaterial({ color: 0x151515, roughness: 0.6 }));
+    box.position.y = 0.1;
+    g.add(box);
+    for (const [x, c] of [[-0.09, 0xb01010], [0.09, 0x202020]]) { const t = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.04, 8), new THREE.MeshStandardMaterial({ color: c, metalness: 0.5 })); t.position.set(x, 0.22, 0); g.add(t); }
+  } else if (type === 'bullet') {
+    const shell = new THREE.Mesh(new THREE.CylinderGeometry(0.011, 0.011, 0.045, 10), M.brass);
+    const tip = new THREE.Mesh(new THREE.ConeGeometry(0.011, 0.022, 10), new THREE.MeshStandardMaterial({ color: 0x8a6a4a, metalness: 0.8, roughness: 0.3 }));
+    tip.position.y = 0.033;
+    g.add(shell, tip);
+    g.position.y = 0.023;
   } else if (type === 'revolver') {
     // object.glb is fitted in later (game.js) once the model has loaded
     g.userData.revolver = true;
@@ -999,20 +1071,33 @@ export const ITEM_SPAWNS = {
   storage_key: [{ pos: [1.2, 3.97, 19.7] }], // on the crib, guarded by the nursery spider
   fuse: [{ container: 'c_storage' }],
   bolt_cutters: [{ pos: [37.2, -2.3, 26.3] }, { pos: [26.0, -2.4, 26.3] }],
-  exit_key: [{ pos: [23.75, 0.78, 0.95] }, { pos: [28.3, 0.78, 0.9] }],
+  exit_key: [{ pos: [23.75, 0.78, 0.95] }, { pos: [21.9, 0.78, 0.95] }],
   elevator_key: [{ container: 'c_kit1' }, { container: 'c_kit2' }, { container: 'c_desk2' }, { container: 'c_bath' }, { container: 'c_ns1' }],
   // Opens the safe with the revolver; anywhere in the house.
-  weapon_key: [{ container: 'c_nursery' }, { container: 'c_ns_m' }, { container: 'c_guest' }, { pos: [16.2, 4.16, 16.6] }, { pos: [33.0, -2.29, 20.0] }, { pos: [19.2, 7.71, 20.2] }, { pos: [2.5, 0.45, 15.6] }],
+  weapon_key: [{ container: 'c_nursery' }, { container: 'c_ns_m' }, { container: 'c_guest' }, { pos: [16.2, 4.16, 16.6] }, { pos: [32.2, -2.29, 26.4] }, { pos: [19.2, 7.71, 20.2] }, { pos: [2.5, 0.45, 15.6] }],
   revolver: [{ container: 'c_safe' }],
+  // car parts for the garage escape (car.js)
+  engine: [{ pos: [22.0, -3.2, 21.5] }, { pos: [26.3, 3.4, 3.0] }, { pos: [37.5, 6.8, 17.0] }, { pos: [28.6, 0, 4.6] }],
+  wrench: [{ pos: [38.2, -2.3, 26.2] }, { pos: [29.6, 0.97, 18.3] }, { pos: [8.5, 0.85, 7.55] }],
+  oil: [{ pos: [15.0, -2.3, 26.2] }, { pos: [28.0, 0, 20.3] }, { pos: [25.3, 0.97, 11.45] }],
+  battery: [{ pos: [23.0, 0, 6.6] }, { pos: [31.2, 0, 3.6] }, { pos: [31.5, -3.2, 23.2] }],
 };
+
+// Three loose revolver bullets are scattered on every floor (picked from these spots).
+export const BULLET_SPOTS = [
+  [[16.3, -2.3, 26.4], [10.25, -2.5, 22.0], [6.8, -2.35, 26.3], [26.8, -2.4, 26.3], [27.8, -2.5, 18.2], [32.8, -2.29, 26.2], [36.2, -2.29, 26.4]],
+  [[8.2, 0.8, 10.6], [37.15, 0.8, 8.3], [22.2, 0.76, 16.4], [32.6, 0.78, 15.2], [26.2, 0.78, 1.0], [35.3, 0.78, 1.8], [2.75, 0.6, 0.35], [29.6, 0.97, 19.5]],
+  [[13.8, 4.16, 16.6], [15.5, 4.16, 3.6], [3.4, 4.0, 0.3], [24.0, 4.24, 6.6], [16.4, 4.2, 8.3], [3.6, 4.2, 8.3], [33.55, 3.85, 17.6], [30.6, 4.2, 7.6]],
+  [[19.0, 7.6, 9.0], [38.8, 7.7, 9.2], [38.6, 7.6, 20.0], [34.8, 7.42, 19.8], [39.0, 7.5, 15.0], [28.9, 7.35, 20.55]],
+];
 
 export const CAMERAS = [
   { label: 'CAM 01  HALLWAY W', pos: [0.4, 2.75, 8.4], look: [9, 0.8, 10] },
   { label: 'CAM 02  HALLWAY E', pos: [39.6, 2.75, 10.6], look: [28, 0.8, 9] },
-  { label: 'CAM 03  KITCHEN', pos: [29.6, 2.75, 20.6], look: [21, 0.6, 14] },
-  { label: 'CAM 04  LIVING RM', pos: [10.6, 2.75, 20.6], look: [2.5, 0.6, 13.5] },
+  { label: 'CAM 03  KITCHEN', pos: [29.6, 2.75, 16.6], look: [21, 0.6, 12.5] },
+  { label: 'CAM 04  LIVING RM', pos: [6.6, 2.75, 20.6], look: [1.5, 0.6, 13.5] },
   { label: 'CAM 05  BASEMENT', pos: [16.6, -0.55, 26.6], look: [6, -2.9, 19.5] },
   { label: 'CAM 06  BACK ROOM', pos: [16.7, 2.75, 11.3], look: [12.5, 0.4, 16] },
   { label: 'CAM 07  UPSTAIRS', pos: [0.4, 6.15, 8.4], look: [12, 3.6, 10] },
-  { label: 'CAM 08  WORKSHOP', pos: [39.6, -0.55, 26.6], look: [32, -2.9, 16] },
+  { label: 'CAM 08  GARAGE', pos: [39.6, -0.55, 26.6], look: [33, -2.9, 18] },
 ];

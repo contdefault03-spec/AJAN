@@ -4,7 +4,7 @@
 // drawings, family portraits with the faces scratched out, sheets over the
 // furniture... Mostly merged boxes (cheap), plus a few small animated meshes.
 import * as THREE from 'three';
-import { ROOMS, LEVELS } from './layout.js';
+import { ROOMS, LEVELS, onDoorway } from './layout.js';
 import { mulberry32 } from './util.js';
 
 const BY = -3.2, U = 3.4, AY = 6.8;
@@ -134,6 +134,7 @@ export function buildDecor(h) {
 
   /** Flat picture on a wall. facing = direction the picture faces (into the room). */
   const decal = (tex, x, y, z, w, hh, facing, extra = {}) => {
+    if (onDoorway(x, z, y, w / 2)) { console.warn('decal over a doorway skipped', x, z); return null; }
     const m = new THREE.Mesh(new THREE.PlaneGeometry(w, hh), mat(tex, extra));
     const [fx, fz] = FWD[facing];
     m.position.set(x + fx * 0.006, y, z + fz * 0.006);
@@ -242,6 +243,7 @@ export function buildDecor(h) {
   const book = (x, y, z, w, hh, d) => G.box(x, y, z, x + w, y + hh, z + d, ['fabricRed', 'fabricGreen', 'woodDark', 'fabricBed'][Math.floor(rnd() * 4)]);
   const bookStack = (x, y, z, n = 4) => { let yy = y; for (let i = 0; i < n; i++) { const w = 0.18 + rnd() * 0.08, d = 0.24 + rnd() * 0.06, hh = 0.03 + rnd() * 0.03; book(x - w / 2 + (rnd() - 0.5) * 0.03, yy, z - d / 2, w, hh, d); yy += hh; } };
   const portrait = (x, y, z, f, w = 0.55, hh = 0.7, tilt = 0) => {
+    if (onDoorway(x, z, y, w / 2 + 0.04)) { console.warn('portrait over a doorway skipped', x, z); return; }
     const [fx, fz] = FWD[f];
     const fr = new THREE.Mesh(new THREE.BoxGeometry(w + 0.08, hh + 0.08, 0.04), M.frame);
     fr.position.set(x + fx * 0.02, y, z + fz * 0.02); fr.rotation.y = Math.atan2(fx, fz); fr.rotation.z = tilt; add(fr);
@@ -276,12 +278,12 @@ export function buildDecor(h) {
 
   // ======================================================== ground floor
   // Bedroom: armchair by the window, vanity mirror, portrait
-  wingChair(6.9, 0, 4.6, '-x', 'fabricRed');
+  wingChair(4.6, 0, 2.2, '-x', 'fabricRed');
   G.box(0.14, 1.2, 4.55, 0.18, 2.0, 5.85, 'frame');
   const vm = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.7), new THREE.MeshStandardMaterial({ color: 0x5a6466, metalness: 0.85, roughness: 0.3 }));
   vm.position.set(0.185, 1.6, 5.2); vm.rotation.y = Math.PI / 2; add(vm);
   candle(0.4, 0.95, 4.6); candle(0.45, 0.95, 5.9, 0.1);
-  portrait(4.3, 1.75, 7.88, '-z', 0.5, 0.62, 0.06);
+  portrait(1.6, 1.75, 7.88, '-z', 0.5, 0.62, 0.06);
   // Bathroom: stained shower curtain over the tub, bloody handprint
   G.box(8.12, 2.05, 1.95, 9.9, 2.08, 1.98, 'metal');
   const cur = new THREE.Mesh(new THREE.PlaneGeometry(1.1, 1.5, 8, 1), new THREE.MeshStandardMaterial({ color: 0xb8b8a0, roughness: 0.9, side: THREE.DoubleSide, transparent: true, opacity: 0.85 }));
@@ -291,7 +293,7 @@ export function buildDecor(h) {
   // Child's room: crayon drawings, teddy, rocking horse, toy blocks, doll facing the wall
   decal(tx.drawing, 13.11, 1.35, 3.0, 0.6, 0.45, '+x', { rz: 0.04 });
   decal(tx.drawing, 20.89, 1.45, 3.2, 0.5, 0.38, '-x', { rz: -0.06 });
-  for (let i = 0; i < 7; i++) { const bx0 = 14.5 + rnd() * 2.5, bz0 = 4.0 + rnd() * 1.6; G.box(bx0, 0, bz0, bx0 + 0.08, 0.08, bz0 + 0.08, ['fabricRed', 'fabricGreen', 'woodPale'][i % 3]); }
+  for (let i = 0; i < 7; i++) { const bx0 = 14.5 + rnd() * 2.5, bz0 = 5.6 + rnd() * 1.6; G.box(bx0, 0, bz0, bx0 + 0.08, 0.08, bz0 + 0.08, ['fabricRed', 'fabricGreen', 'woodPale'][i % 3]); }
   doll(20.75, 0, 6.9, -Math.PI / 2, 1.3); // facing the wall
   doll(19.7, 0.6, 1.0, 0.2, 1.1);           // on the bed
   lbox(G, 14.0, 0, 6.9, '+x', -0.12, 0.35, -0.4, 0.12, 0.6, 0.4, 'woodPale');  // rocking horse body
@@ -303,7 +305,7 @@ export function buildDecor(h) {
   decal(tx.portrait, 21.14, 1.4, 4.4, 0.18, 0.22, '+x', { rz: -0.08 });
   decal(tx.drawing, 21.14, 1.7, 4.2, 0.26, 0.2, '+x', { rz: 0.05 });
   pot(24.0, 0.78, 0.9, 0.04);
-  for (let i = 0; i < 5; i++) G.box(25 + rnd() * 3, 0.78, 0.3 + rnd() * 0.5, 25 + rnd() * 3 + 0.21, 0.785, 0.3 + rnd() * 0.5 + 0.28, 'fabricBed');
+  for (let i = 0; i < 5; i++) G.box(22 + rnd() * 4, 0.78, 0.3 + rnd() * 0.5, 25 + rnd() * 3 + 0.21, 0.785, 0.3 + rnd() * 0.5 + 0.28, 'fabricBed');
   // Office: typewriter, banker's lamp, armchair, globe, antlers over the door
   G.box(35.6, 0.78, 1.9, 36.05, 0.9, 2.25, 'black'); G.box(35.65, 0.9, 2.1, 36.0, 0.95, 2.25, 'black');
   G.box(36.9, 0.78, 1.95, 37.0, 1.15, 2.05, 'brass');
@@ -321,8 +323,8 @@ export function buildDecor(h) {
   add(fallen);
   pot(37.6, 0.8, 8.35, 0.1);
   for (let i = 0; i < 5; i++) { const st = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.01, 0.45, 4), new THREE.MeshStandardMaterial({ color: 0x3a2a14 })); st.position.set(37.6 + (rnd() - 0.5) * 0.08, 1.1, 8.35 + (rnd() - 0.5) * 0.08); st.rotation.set((rnd() - 0.5) * 0.9, 0, (rnd() - 0.5) * 0.9); add(st); }
-  portrait(3.5, 1.75, 8.1, '+z', 0.45, 0.58, -0.05);
-  portrait(31.5, 1.75, 10.9, '-z', 0.45, 0.58, 0.04);
+  portrait(1.5, 1.75, 8.1, '+z', 0.45, 0.58, -0.05);
+  portrait(29.0, 1.75, 10.9, '-z', 0.45, 0.58, 0.04);
   // Living room: fireplace (brick surround, mantel, embers), coat stand, armchair, candles
   G.box(10.25, 0, 17.55, 10.9, 1.25, 17.8, 'brick'); G.box(10.25, 0, 19.8, 10.9, 1.25, 20.05, 'brick'); G.box(10.25, 0.95, 17.8, 10.9, 1.25, 19.8, 'brick');
   G.box(10.1, 1.25, 17.4, 10.9, 1.32, 20.2, 'woodDark');
@@ -336,7 +338,7 @@ export function buildDecor(h) {
   G.box(2.85, 0, 20.35, 2.95, 1.8, 20.45, 'woodDark'); G.box(2.65, 0, 20.15, 3.15, 0.04, 20.65, 'woodDark');
   G.box(2.7, 1.1, 20.3, 3.1, 1.75, 20.5, 'fabricBed'); // coat hanging on it
   h.collider(2.7, 20.2, 3.1, 20.6, 0, 1.8, { furniture: true });
-  rug(6.6, 0, 18.4, 9.6, 20.5, 'carpetB');
+  rug(7.4, 0, 18.0, 9.9, 20.6, 'carpetB');
   // Back room (where you wake up): tally marks over the mattress, candles, bucket
   decal(tx.tally, 12.2, 0.85, 16.89, 1.1, 0.55, '-z');
   candle(13.4, 0, 16.5, 0.1); candle(13.6, 0, 16.6, 0.16);
@@ -375,7 +377,7 @@ export function buildDecor(h) {
   G.box(9.78, U + 0.95, 2.62, 9.84, U + 1.78, 3.68, 'sheet');
   candle(9.5, U + 0.78, 2.8); candle(9.55, U + 0.78, 3.5, 0.1);
   wingChair(7.4, U, 4.6, '-x', 'fabricRed');
-  portrait(5.5, U + 1.75, 7.88, '-z', 0.55, 0.7, -0.04);
+  portrait(2.3, U + 1.75, 7.88, '-z', 0.55, 0.7, -0.04);
   // Upstairs bathroom: shower curtain
   G.box(10.12, U + 2.05, 1.95, 11.9, U + 2.08, 1.98, 'metal');
   const cur2 = cur.clone(); cur2.position.set(11.3, U + 1.3, 1.97); add(cur2);
@@ -428,8 +430,52 @@ export function buildDecor(h) {
   horn.position.set(33.7, U + 1.12, 16.5); horn.rotation.set(0, 0, Math.PI / 2 + 0.6); add(horn);
   G.box(27.0, U, 16.0, 27.04, U + 1.2, 16.04, 'metal'); G.box(26.75, U + 1.15, 15.98, 27.3, U + 1.45, 16.02, 'metal');
   G.box(24.15, U + 1.25, 18.55, 26.45, U + 1.3, 20.9, 'sheet');
-  rug(27.0, U, 15.0, 32.0, 18.5, 'carpet');
-  portrait(35.88, U + 1.8, 12.4, '-x', 0.5, 0.62, 0.05);
+  rug(26.5, U, 15.0, 29.6, 18.5, 'carpet');
+  portrait(35.88, U + 1.8, 17.0, '-x', 0.5, 0.62, 0.05);
+
+  // ======================================================== the new smaller rooms
+  const hangers = (x0, x1, z, y, n) => { for (let i = 0; i < n; i++) { const x = x0 + (i + 0.5) * (x1 - x0) / n; G.box(x - 0.03, y - 0.95 - rnd() * 0.25, z - 0.22, x + 0.03, y - 0.05, z + 0.22, ['fabricRed', 'fabricBed', 'fabricGreen', 'sheet', 'woodDark'][i % 5]); } };
+  const hangersZ = (x, z0, z1, y, n) => { for (let i = 0; i < n; i++) { const z = z0 + (i + 0.5) * (z1 - z0) / n; G.box(x - 0.22, y - 0.95 - rnd() * 0.25, z - 0.03, x + 0.22, y - 0.05, z + 0.03, ['fabricRed', 'fabricBed', 'fabricGreen', 'sheet', 'woodDark'][i % 5]); } };
+  // Walk-in wardrobe: coats on the rail, boxes
+  hangersZ(7.62, 1.7, 6.7, 1.75, 11);
+  G.box(5.75, 0, 0.15, 6.3, 0.35, 0.6, 'fabricBed');
+  // Laundry: washer and dryer, laundry basket, pipes, a sheet on a line
+  for (const x of [8.2, 8.9]) { G.box(x, 0, 7.25, x + 0.65, 0.85, 7.88, 'porcelain'); const door = new THREE.Mesh(new THREE.CircleGeometry(0.2, 18), new THREE.MeshStandardMaterial({ color: 0x1a1e22, roughness: 0.1, metalness: 0.5 })); door.position.set(x + 0.325, 0.48, 7.245); door.rotation.y = Math.PI; add(door); }
+  h.collider(8.2, 7.25, 9.55, 7.88, 0, 0.85, { furniture: true });
+  pot(12.4, 0, 7.4, 0.2);
+  G.box(8.12, 2.2, 6.2, 12.88, 2.21, 6.21, 'metal');
+  G.box(9.6, 1.25, 6.18, 11.0, 2.2, 6.22, 'sheet');
+  // Playroom: little table and chairs, toy chest (furniture.js), drawings
+  G.box(18.4, 0.45, 6.0, 19.4, 0.5, 6.8, 'woodPale'); for (const [a2, b2] of [[18.42, 6.02], [19.34, 6.02], [18.42, 6.74], [19.34, 6.74]]) G.box(a2, 0, b2, a2 + 0.04, 0.45, b2 + 0.04, 'woodPale');
+  h.collider(18.4, 6.0, 19.4, 6.8, 0, 0.5, { furniture: true });
+  doll(18.6, 0.5, 6.3, 0.5, 0.9); doll(19.2, 0.5, 6.5, 2.6, 0.8);
+  decal(tx.drawing, 20.89, 1.3, 6.5, 0.5, 0.38, '-x', { rz: 0.08 });
+  // Archive: stacks of boxes and loose files
+  for (let i = 0; i < 6; i++) { const x = 27.4 + (i % 2) * 0.7, z = 0.5 + Math.floor(i / 2) * 0.75; sheetOver(x, 0, z, x + 0.55, 0.4 + rnd() * 0.3, z + 0.5); }
+  h.collider(27.3, 0.4, 28.85, 2.85, 0, 0.8, { furniture: true });
+  for (let i = 0; i < 6; i++) G.box(27.4 + rnd() * 2, 0, 3.5 + rnd() * 2.5, 27.4 + rnd() * 2 + 0.25, 0.005, 3.5 + rnd() * 2.5 + 0.32, 'fabricBed');
+  // Reception: waiting bench, coat stand, a dead plant
+  G.box(31.0, 0.42, 7.4, 33.0, 0.48, 7.85, 'woodDark'); G.box(31.0, 0.48, 7.8, 33.0, 1.0, 7.86, 'woodDark'); for (const x of [31.05, 32.9]) G.box(x, 0, 7.42, x + 0.05, 0.42, 7.83, 'woodDark');
+  h.collider(31.0, 7.4, 33.0, 7.88, 0, 1.0, { furniture: true });
+  pot(30.6, 0, 7.4, 0.16);
+  // Parlor: second armchair facing the fire, side table with a candle
+  wingChair(8.4, 0, 18.2, '+x', 'fabricRed');
+  G.box(8.25, 0, 16.9, 8.65, 0.6, 17.3, 'woodDark'); candle(8.45, 0.6, 17.1, 0.12);
+  // Mudroom: boots by the basement door, coats on hooks, buckets
+  for (let i = 0; i < 4; i++) G.box(17.3 + i * 0.3, 0, 20.5, 17.5 + i * 0.3, 0.3, 20.8, 'black');
+  for (let i = 0; i < 4; i++) { G.box(24.0 + i * 0.6, 1.75, 20.85, 24.05 + i * 0.6, 1.8, 20.9, 'brass'); G.box(23.8 + i * 0.6, 0.9, 20.7, 24.25 + i * 0.6, 1.75, 20.88, ['fabricBed', 'fabricRed', 'fabricGreen', 'woodDark'][i]); }
+  pot(28.6, 0, 18.0, 0.18); pot(29.0, 0, 18.5, 0.14);
+  // Dressing room: rail of clothes, mirror, stool
+  hangers(7.0, 9.6, 7.6, U + 1.85, 9); G.box(6.9, U + 1.85, 7.58, 9.7, U + 1.88, 7.62, 'metal');
+  h.collider(6.9, 7.35, 9.7, 7.85, U, U + 1.9, { furniture: true });
+  // Linen room: shelves of folded sheets
+  for (let k = 0; k < 4; k++) G.box(10.12, U + 0.4 + k * 0.45, 4.9, 10.6, U + 0.43 + k * 0.45, 7.6, 'woodPale');
+  for (let k = 0; k < 4; k++) for (let i = 0; i < 6; i++) G.box(10.16, U + 0.43 + k * 0.45, 5.0 + i * 0.43, 10.55, U + 0.55 + k * 0.45, 5.35 + i * 0.43, i % 2 ? 'sheet' : 'fabricBed');
+  h.collider(10.12, 4.9, 10.6, 7.6, U, U + 2.0, { furniture: true });
+  // Sitting room: two armchairs and a low table
+  wingChair(34.6, U, 15.0, '-x', 'fabricGreen'); wingChair(34.6, U, 18.2, '-x', 'fabricRed');
+  G.box(33.4, U + 0.4, 17.2, 34.1, U + 0.45, 17.75, 'woodDark'); h.collider(33.4, 17.2, 34.1, 17.75, U, U + 0.45, { furniture: true });
+  candle(33.75, U + 0.45, 17.45, 0.14);
 
   // ======================================================== basement
   for (const [x, z] of [[6.0, 21.0], [12.5, 22.5], [26.0, 21.0], [36.0, 17.0]]) {
@@ -437,8 +483,8 @@ export function buildDecor(h) {
     const hook = new THREE.Mesh(new THREE.TorusGeometry(0.05, 0.01, 4, 8, Math.PI * 1.4), M.metal); hook.position.set(x, BY + 1.5, z); add(hook);
     const ph = rnd() * 6; h.decorAnims.push((dt, t) => { ch.rotation.z = Math.sin(t * 0.9 + ph) * 0.05; hook.position.x = x - Math.sin(t * 0.9 + ph) * 0.04; });
   }
-  G.box(8.0, BY, 19.0, 9.8, BY + 0.18, 20.9, 'fabricBed');
-  { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), mat(tx.stain, { color: 0x6a1010 })); m.rotation.x = -Math.PI / 2; m.position.set(8.9, BY + 0.185, 19.95); add(m); }
+  G.box(11.0, BY, 21.0, 12.8, BY + 0.18, 22.9, 'fabricBed');
+  { const m = new THREE.Mesh(new THREE.PlaneGeometry(1.5, 1.5), mat(tx.stain, { color: 0x6a1010 })); m.rotation.x = -Math.PI / 2; m.position.set(11.9, BY + 0.185, 21.95); add(m); }
   for (let i = 0; i < 6; i++) jar(2.33 + (i % 2) * 0.17, BY + [0.52, 1.015, 1.51][Math.floor(i / 2)], 18.4 + i * 0.4, [0x5a6a20, 0x6a2a10, 0x3a3a2a][i % 3]);
   for (let i = 0; i < 3; i++) { const pd = new THREE.Mesh(new THREE.CircleGeometry(0.5 + rnd() * 0.5, 20), new THREE.MeshStandardMaterial({ color: 0x0a0806, roughness: 0.05, metalness: 0.3, transparent: true, opacity: 0.8 })); pd.rotation.x = -Math.PI / 2; pd.position.set(4 + rnd() * 10, BY + 0.01, 22 + rnd() * 3); add(pd); }
   decal(tx.tally, 16.89, BY + 1.2, 25.5, 0.9, 0.45, '-x');

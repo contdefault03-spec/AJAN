@@ -143,7 +143,8 @@ export class LocalPlayer {
     const s = 0.0022 * settings.mouse;
     const inv = settings.invertY ? -1 : 1;
     if (this.hidden) {
-      this.hideLook = clamp(this.hideLook - dx * s, -0.7, 0.7);
+      const lim = this.hidden.type === 'seat' ? 1.7 : 0.7; // in a car seat you can look out of the side windows
+      this.hideLook = clamp(this.hideLook - dx * s, -lim, lim);
       this.pitch = clamp(this.pitch - dy * s * inv, -0.5, 0.5);
       return;
     }

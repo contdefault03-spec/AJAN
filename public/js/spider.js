@@ -12,10 +12,11 @@ const U = 3.4;
 export const SPIDER_ROOM = { x0: 0, x1: 10, z0: 11, z1: 21, y: U };
 export const SPIDER_HOME = new THREE.Vector3(9.1, U, 20.1);   // south-east corner
 export const SPIDER_KEY = new THREE.Vector3(1.2, U + 0.57, 19.7); // crib, south-west corner
-const SPEED = { easy: 3.6, medium: 4.2, hard: 4.7 };
+const SPEED = { easy: 3.8, medium: 4.4, hard: 4.9 };
+const POUNCE = 2.4;      // within this range it lunges at full speed
 const KEY_RADIUS = 2.6;   // "going for the key"
-const KILL_RANGE = 0.85;
-const ST = ['wait', 'alert', 'hunt', 'return', 'feed'];
+const KILL_RANGE = 1.15; // its legs reach about this far (the model is 1.35x scale)
+const ST = ['wait', 'alert', 'hunt', 'return', 'feed', 'dead'];
 
 const inRoom = (p, pad = 0) => p.x > SPIDER_ROOM.x0 - pad && p.x < SPIDER_ROOM.x1 + pad && p.z > SPIDER_ROOM.z0 - pad && p.z < SPIDER_ROOM.z1 + pad && p.y > U - 0.6 && p.y < U + 2.2;
 
@@ -100,6 +101,24 @@ export class Spider {
     const g = this.group;
     g.position.copy(this.pos);
     g.rotation.y = this.ry;
+    if (this.state === 'dead') {
+      // flipped onto its back, legs curled up
+      this.deadK = Math.min(1, (this.deadK || 0) + dt * 2.5);
+      const k = this.deadK;
+      g.rotation.z = Math.PI * k;
+      g.position.y = this.pos.y + 0.75 * k;
+      this.body.position.y = 0.38;
+      this.body.rotation.x = 0;
+      g.updateMatrixWorld(true);
+      for (const L of this.legs) {
+        const hip = new THREE.Vector3(L.side * 0.2, 0.38, 0.05 + L.a * 0.18);
+        const knee = new THREE.Vector3(L.side * 0.5, 0.75 + 0.2 * k, 0.05 + L.a * 0.4);
+        const foot = new THREE.Vector3(L.side * (0.55 - 0.35 * k), 0.95 + 0.3 * k, L.a * 0.3);
+        this.placeSeg(L.upper, g.localToWorld(hip.clone()), g.localToWorld(knee.clone()));
+        this.placeSeg(L.lower, g.localToWorld(knee.clone()), g.localToWorld(foot.clone()));
+      }
+      return;
+    }
     const moving = this.speed > 0.2;
     this.walkPhase += dt * (moving ? 6 + this.speed * 3 : 0.6);
     const t = performance.now() / 1000;
@@ -140,10 +159,20 @@ export class Spider {
 
   setState(s) { this.state = s; this.t = 0; }
 
+  /** Shot with the revolver: it dies for good (host decides, everyone animates). */
+  kill() {
+    if (this.state === 'dead') return false;
+    this.target = null;
+    this.setState('dead');
+    this.speed = 0;
+    return true;
+  }
+
   hostUpdate(dt) {
     const G = this.game;
     this.t += dt;
     this.speed = 0;
+    if (this.state === 'dead') return;
     if (this.state === 'wait') {
       this.pos.lerp(SPIDER_HOME, Math.min(1, dt * 2));
       this.rear = damp(this.rear, 0, 4, dt);
@@ -177,7 +206,8 @@ export class Spider {
         this.setState('return');
         return;
       }
-      const sp = SPEED[G.difficulty] || SPEED.medium;
+      const dist = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
+      const sp = dist < POUNCE ? 7.5 : SPEED[G.difficulty] || SPEED.medium;
       this.moveToward(p.pos, sp, dt);
       if (Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z) < KILL_RANGE) {
         if (G.freePlay) { this.target = null; G.broadcast({ k: 'spider', s: 'hiss' }); this.setState('return'); return; }
@@ -243,6 +273,9 @@ export class Spider {
       if (this.skitterT <= 0) { this.skitterT = 0.3; audio.play('skitter', { pos: this.pos.clone().add(new THREE.Vector3(0, 0.3, 0)), vol: 0.8, ref: 2, rate: 0.9 + Math.random() * 0.3 }); }
     }
   }
+
+  /** Centre of the body, for bullets. */
+  hitCentre() { return this.pos.clone().add(new THREE.Vector3(0, 0.55, 0)); }
 
   hiss() { audio.play('hiss', { pos: this.pos.clone().add(new THREE.Vector3(0, 0.5, 0)), vol: 1.0, ref: 2.5, rate: 0.85 + Math.random() * 0.2 }); }
 

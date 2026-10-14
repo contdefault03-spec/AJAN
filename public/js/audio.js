@@ -338,6 +338,53 @@ class AudioEngine {
         d[i] = bolt * 0.9 + groan;
       }
     });
+    // Car engine idle (1 s loop): firing pulses over a low rumble; pitch it up with playbackRate
+    this.buffers.engine = mk(1, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const fire = Math.pow(Math.max(0, Math.sin(t * 2 * Math.PI * 30)), 6);
+        lp += (rnd() - lp) * 0.08;
+        d[i] = (fire * 0.6 + Math.sin(t * 2 * Math.PI * 60) * 0.25 + Math.sin(t * 2 * Math.PI * 90) * 0.12 + lp * 0.5) * 0.7;
+      }
+    });
+    // Starter motor cranking, then the engine catching
+    this.buffers.ignition = mk(1.6, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const crank = t < 0.9 ? Math.pow(Math.max(0, Math.sin(t * 2 * Math.PI * 9)), 3) * (rnd() * 0.5 + 0.5) * 0.6 : 0;
+        const catchK = t > 0.85 ? Math.min(1, (t - 0.85) * 5) * Math.exp(-(t - 0.85) * 1.2) : 0;
+        d[i] = crank + catchK * (Math.sin(t * 2 * Math.PI * 70) * 0.5 + rnd() * 0.3);
+      }
+    });
+    // Big impact: thump, crunching metal, ringing panels
+    this.buffers.crash = mk(2.2, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * (t < 0.03 ? 0.9 : 0.2);
+        const thump = Math.sin(t * 2 * Math.PI * (48 + 30 * Math.exp(-t * 20))) * Math.exp(-t * 9);
+        const crunch = lp * Math.exp(-t * 3.5) * (0.6 + 0.4 * Math.sin(t * 170));
+        const ring = (Math.sin(t * 2 * Math.PI * 412) + Math.sin(t * 2 * Math.PI * 653) * 0.7 + Math.sin(t * 2 * Math.PI * 1170) * 0.4) * Math.exp(-t * 2.2) * 0.18;
+        d[i] = Math.max(-1, Math.min(1, thump * 0.9 + crunch * 0.9 + ring));
+      }
+    });
+    // Tyres squealing
+    this.buffers.screech = mk(1.2, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        ph += (1900 + Math.sin(t * 37) * 160 + rnd() * 80) / sr;
+        const env = Math.min(1, t * 10) * Math.exp(-Math.max(0, t - 0.6) * 5);
+        d[i] = (Math.sin(ph * 2 * Math.PI) * 0.35 + rnd() * 0.2) * env;
+      }
+    });
+    // Fitting a car part: a ratchet and a clank
+    this.buffers.clank = mk(0.8, (d, sr) => {
+      for (let k = 0; k < 6; k++) { const s0 = Math.floor(k * 0.06 * sr); for (let j = 0; j < 500 && s0 + j < d.length; j++) d[s0 + j] += rnd() * Math.exp(-j / 70) * 0.5; }
+      const s1 = Math.floor(0.45 * sr);
+      for (let j = 0; s1 + j < d.length; j++) { const t = j / sr; d[s1 + j] += (Math.sin(t * 2 * Math.PI * 320) + Math.sin(t * 2 * Math.PI * 517) * 0.6) * Math.exp(-t * 9) * 0.5 + rnd() * Math.exp(-t * 40) * 0.6; }
+    });
     // Old clock tick-tock (2 s loop)
     this.buffers.tick = mk(2, (d, sr) => {
       for (const [at, f] of [[0.0, 2100], [1.0, 1500]]) {

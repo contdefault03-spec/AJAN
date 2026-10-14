@@ -38,6 +38,7 @@ Single-player runs entirely in your browser. The server only serves files and re
 | F | Flashlight |
 | E | Interact: open, pick up, use, hide or leave, read |
 | Left click | Fire the revolver (once you have it) |
+| W (in the driver's seat) | Drive the car out through the garage door (once it's fixed) |
 | 1 / 2 / 3 / 4 | Inside the elevator: basement / ground / upstairs / attic |
 | M | Mute or unmute the microphone |
 | Esc | Pause and settings |
@@ -61,11 +62,13 @@ Four levels, connected by real walkable staircases and an elevator:
 | Level | Height | Rooms |
 |---|---|---|
 | **Attic** | +6.8 m | One big room under the roof: the cinema TV and VCR, sofas, crates. **Safe zone.** |
-| **Upstairs** | +3.4 m | Master bedroom, upstairs bathroom (the mirror), guest room (the phone), storage room, **Ajan's bedroom**, hallway, nursery, library, music room |
-| **Ground floor** | 0 m | Living room (front door), back room (spawn), two bedrooms, bathroom, security room, office, hallway, kitchen, dining room |
-| **Basement** | −3.2 m | Main basement (fuse box), boiler room, workshop |
+| **Upstairs** | +3.4 m | Master bedroom with its dressing room, upstairs bathroom (the mirror) and linen room, guest room (the phone), storage room, **Ajan's bedroom**, hallway, nursery (the spider), library, music room, sitting room |
+| **Ground floor** | 0 m | Living room (front door) and parlor (fireplace), back room (spawn), bedroom with a walk-in wardrobe, bathroom and laundry room, child's bedroom and playroom, security room and archive, office and reception, hallway, kitchen and mudroom (basement door), dining room |
+| **Basement** | −3.2 m | Main basement (fuse box), boiler room, **garage** (the car, and a garage door out to the driveway) |
 
 - **Basement stairs:** from the kitchen-side hallway, behind the locked basement door.
+- **Room sizes:** the big open rooms were split with interior walls and doors into rooms of a normal size (a bedroom plus a walk-in wardrobe, a bathroom plus a laundry, a kitchen plus a mudroom, and so on). Every room has its own light, wallpaper and furniture arranged around a focal point: the bed against a wall with nightstands, the sofa facing the TV, armchairs around the fireplace.
+- Pictures are never hung over a doorway; the house checks this when it builds.
 - **Grand staircase:** at the east end of the house, from the dining-room side up to the upstairs hallway.
 - **Attic stairs:** behind a door in the upstairs hallway.
 - **Elevator:** east side, stops on all four floors. Inside the car is a brass panel with four big labelled buttons (B BASEMENT, 1 GROUND, 2 UPSTAIRS, A ATTIC); aim at one and press E, or press 1–4 while standing in the car. Each landing has a call button next to the doors. It is locked until someone finds the **Elevator Key** in a drawer. The basement stop only works once the basement door is unlocked, or if the rider holds the basement key. It is loud, and Ajan hears it.
@@ -91,7 +94,8 @@ Ajan never paths into the attic or onto the upper part of the attic stairs. He c
 
 Optional:
 - the **Elevator Key** is in a ground-floor drawer (kitchen, desk, bathroom or nightstand);
-- the **Weapon Key** is hidden somewhere in the house (a different spot each game). It opens the **safe**, which also stands in one of three places (master bedroom, basement or music room) and holds the **revolver**.
+- the **Weapon Key** is hidden somewhere in the house (a different spot each game). It opens the **safe**, which also stands in one of three places (dressing room, basement or sitting room) and holds the **revolver**.
+- **Garage escape** (an alternative to the front door): find the four car parts and fix the car in the basement garage (see below).
 
 ### The nursery spider
 
@@ -99,12 +103,30 @@ A huge spider sits in the far (south-east) corner of the nursery and waits. The 
 - Walking or crouching through the room is fine. **Running** in there, or **going for the key** (getting within about 2.5 m of the crib), sets it off: it rears up, hisses, and scuttles after you.
 - If it reaches you, it kills you instantly.
 - It never leaves the nursery. Grab the key and **sprint for the door**; if you get out, it hisses at the doorway and goes back to its corner. Walking back in with the key sets it off again.
-- It is faster on Hard and slower on Easy. In free play it chases you but can't kill you.
+- It is faster on Hard and slower on Easy, and it pounces once it gets within a couple of metres. In free play it chases you but can't kill you.
+- **The revolver kills it.** It flips onto its back and stays dead, and the crib is safe from then on.
+
+### The garage escape
+
+The basement **garage** holds an old car facing a big steel garage door.
+- **Fix it:** find the **engine**, a **wrench**, **motor oil** and a **car battery**. Each spawns in one of a few spots around the house. Then look at the car's bonnet and press **E** for each part. The engine needs the wrench, which you use up fitting it. The prompt says what's still missing.
+- **Get in:** each of the four doors is a seat (driver, front, two in the back). From your seat you look around inside the car: dashboard, steering wheel, the windscreen. Anyone can sit in, but only the **driver** can drive. Press **W** once the car is fixed.
+- **The drive** (everyone in the car sees it from their own seat):
+  - the engine starts and the car rams the garage door, which buckles;
+  - it backs up, rams again and the door caves further;
+  - it backs up and rams a third time, and the door bursts apart: the panels and chunks of the wall fly out, bounce and tumble down the driveway;
+  - the car drives up into the yard;
+  - then it cuts to **Ajan sitting alone in the garage, glaring, eyes glowing**, as `ajan.mp3` plays;
+  - **YOU ESCAPED**.
+- Players who stayed behind see and hear it all happen, and the smashed doorway is now an exit: walk up the driveway to escape on foot.
+- Once the car is moving, Ajan can't touch the people in it.
 
 ### The revolver
 
 The revolver is `object.glb`, shrunk to fit in your hand.
-- **Left click** fires it. One round: after a shot it takes **3 minutes** to reload. The HUD shows `LOADED` or a `RELOADING m:ss` countdown, and the timer is shared in co-op.
+- **Left click** fires it. It holds **2 rounds** and is found with 1 loaded; there is no timed reload. The HUD shows `Revolver 1/2`.
+- **Bullets:** 3 loose bullets lie on tables and shelves on **every floor** (12 in all, different spots each game, glinting). Pick one up with the revolver in hand and it loads straight in (up to 2/2). Without the revolver, or with a full one, they stay where they are.
+- It hits whatever the bullet reaches first: Ajan or the nursery spider.
 - A hit puts Ajan on the floor for about **25 seconds**: he is blind and deaf, any chase ends, then he gets up roaring and goes back to patrolling. It doesn't kill him.
 - Walls stop the bullet. A miss is the loudest noise in the house, and he comes straight to where you fired.
 
@@ -115,12 +137,13 @@ The HUD objective always shows the next step. Locked doors say what they need ("
 - **Hiding view:** while you hide, the room in front of you is lit up and the exposure is raised, so you can watch it clearly. From inside a closet you look straight out through the louvers; to everyone else the closet stays shut. This is only on your screen and doesn't make you easier for Ajan to find.
 - **Crawl spaces:** beds and tables can be hidden under, as well as closets (eight crawl spaces and seven closets in total; none in the nursery). The hiding view sits low and looks out into the room.
 - **Radios:** one in the library (upstairs), one in the basement. Turned on, they play muffled music and static for 25 s, and Ajan walks over and switches them off. Use them as a lure.
-- **Boombox (music room):** plays a random character's death sound. Ajan can't hear it.
+- **Boombox (sitting room):** plays a random character's death sound. Ajan can't hear it.
 - **Phone (guest room):** while someone is in the room, every 15 s there's a 30 % chance it rings and plays 10 random seconds of `cinema.mp4`'s audio through a telephone filter. Ajan can't hear it.
 - **Cinema TV (attic):** press E on the TV to play `cinema.mp4` with its sound, again to pause or resume. Use the VCR to restart. In co-op it is synchronized for everyone, including pause and restart.
 - **Mirror (upstairs bathroom):** a blood message that changes each time you come back.
 - **Jelly:** a big wobbling `object.glb` stands in a random bedroom (the guest room or the child's room). Its base is fixed to the floor and its top half jiggles. Bumping into it makes it bounce with a *boing*. Ajan can't hear it.
-- **Creaky floorboards:** 2–3 per dangerous floor (none in the attic), slightly lighter than the boards around them. Stepping on one makes a loud creak, and Ajan comes to that exact spot. Each board has a 2.5 s cooldown, so it can't be spammed.
+- **Pickups glint:** anything you can pick up (keys, parts, bullets, the fuse…) has a soft pulsing sparkle, so it stands out in the dark.
+- **Creaky floorboards:** 2–3 per dangerous floor (none in the attic), slightly lighter than the boards around them. Stepping on one plays `noise.mp3`, and Ajan comes to that exact spot. Each board has a 2.5 s cooldown, so it can't be spammed.
 - **Atmosphere:** separate ambience beds for the basement, ground floor, upstairs and attic; blood trails and splatter; bones in Ajan's room; notes.
 - **Set dressing:** every room has its own wallpaper (damask, roses, regency stripes, lattice, a faded nursery print, dark wood panelling, filthy plaster) and wood wainscoting, chair rails or skirting that stop at the doorways. There are old spindle-back chairs and torn wingback armchairs, and a brick fireplace with glowing embers and candles. A grandfather clock in the hall ticks (you can hear it) and its pendulum swings. There is a dining table laid for seven under a swaying chandelier, and a rocking chair in the nursery and the attic rocks and creaks by itself. Webs hang in the ceiling corners, with water stains on the ceilings. You'll also find children's drawings ("HE IS HOME", "DONT WAKE IT"), family portraits with the faces scratched out, tally marks over the mattress where you wake up, claw marks in Ajan's room, bloody handprints, sheets over the furniture, a dress form, dolls (one facing the wall), egg sacs in the spider's corner, hanging chains and puddles in the basement.
 
@@ -173,6 +196,8 @@ Everything lives in `assets/`. These files were found and are used:
 | `cinema.mp4` | same | The attic TV and the phone. Only the H.264 original is used (see limitations). |
 | `sleep.mp3` | same | Ajan sleeping (looped from his bed). The first 3 s are his laugh. |
 | `object.glb` | same | The jelly in a bedroom, and (shrunk to hand size) the revolver. |
+| `car.glb` | same | The car in the garage. The model has no interior you could sit in, so the cockpit (seats, dashboard, wheel, headliner) is built around the camera; its shell gives the windows and pillars. |
+| `noise.mp3` | same | The creaky floorboard sound. |
 | `rot.mp3` | not needed | ROT was removed as a character on request. |
 | everything else | same | |
 
@@ -200,5 +225,6 @@ Saved to localStorage:
 - Voice muffling counts walls and floors between players rather than simulating real acoustics.
 - Peer-to-peer voice can fail on restrictive networks without a TURN server (see above).
 - `cinema.mp4` is H.264/AAC, used as delivered with no substitute file. Chrome, Edge, Safari and Firefox play it. A browser build without H.264 support (some Linux Chromium builds, including the headless test browser) shows "VIDEO UNAVAILABLE IN THIS BROWSER" on the attic TV, and the phone stays silent.
+- Players sitting in the car aren't drawn in their seats for other players, so the car looks empty from outside.
 - The browser can't close its own tab, so **QUIT** shows a goodbye screen.
 - Development testing ran in headless Chromium with software rendering. Everything worked, but frame rates there are not representative, and the game hasn't been profiled on real GPUs.

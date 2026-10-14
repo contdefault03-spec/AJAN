@@ -2,7 +2,7 @@
 // logic (when we're single-player or the host), replication, kill sequences,
 // spectating, escaping and the in-game HUD.
 import * as THREE from 'three';
-import { House, makeItemMesh, ITEM_SPAWNS, SPAWN_POINTS } from './house.js';
+import { House, makeItemMesh, ITEM_SPAWNS, SPAWN_POINTS, BULLET_SPOTS } from './house.js';
 import { Avatar, DissolveFX } from './avatar.js';
 import { AjanBrain } from './ajan.js';
 import { LocalPlayer } from './player.js';
@@ -14,9 +14,10 @@ import { loadGLTF, loadTexture } from './assets.js';
 import { settings } from './settings.js';
 import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf } from './config.js';
 
-const GUN_RELOAD_MS = 180000; // the revolver reloads one round every 3 minutes
+const GUN_CAPACITY = 2; // the revolver holds two rounds; more lie around the house
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
 import { Spider } from './spider.js';
+import { Car, DRIVE_TOTAL, CAR_PARTS } from './car.js';
 import { isSafeZone, levelIndex, LEVELS, inElevator } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
 import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission } from './physics.js';
@@ -107,6 +108,8 @@ export class Game {
     this.props = new Props(this);
     await this.props.init();
     this.spider = new Spider(this);
+    this.car = new Car(this);
+    await this.car.init();
     await this.fitRevolver();
 
     progress(0.7, 'Waking him up...');
@@ -226,26 +229,61 @@ export class Game {
   placeItems() {
     for (const [type, cands] of Object.entries(ITEM_SPAWNS)) {
       const c = cands[Math.floor(this.rnd() * cands.length)];
-      const mesh = makeItemMesh(type, this.house.M);
-      const item = { id: type, type, holder: null, used: false, mesh, container: c.container || null, dropped: null };
-      if (c.container) {
-        const cont = this.house.containers.get(c.container);
-        mesh.position.copy(cont.slot);
-        mesh.rotation.y = 0.4;
-        (cont.type === 'drawer' ? cont.part : cont.group).add(mesh);
-      } else {
-        mesh.position.set(...c.pos);
-        mesh.rotation.y = this.rnd() * 6;
-        this.house.group.add(mesh);
-      }
-      // Invisible, generous pick volume so small items are easy to aim at.
-      const proxy = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
-      mesh.add(proxy);
-      const wp = new THREE.Vector3();
-      mesh.getWorldPosition(wp);
-      this.house.register('item_' + type, 'item', [mesh], wp, { item });
-      this.items.set(type, item);
+      this.placeItem(type, type, c);
     }
+    const gun = this.items.get('revolver');
+    if (gun) gun.ammo = 1; // found with one round in it
+    // three loose bullets on every floor
+    let n = 0;
+    for (const spots of BULLET_SPOTS) {
+      const pool = spots.slice();
+      for (let k = 0; k < 3 && pool.length; k++) this.placeItem('bullet_' + n++, 'bullet', { pos: pool.splice(Math.floor(this.rnd() * pool.length), 1)[0] });
+    }
+  }
+
+  placeItem(id, type, c) {
+    const mesh = makeItemMesh(type, this.house.M);
+    const item = { id, type, holder: null, used: false, mesh, container: c.container || null, dropped: null };
+    if (c.container) {
+      const cont = this.house.containers.get(c.container);
+      mesh.position.copy(cont.slot);
+      mesh.rotation.y = 0.4;
+      (cont.type === 'drawer' ? cont.part : cont.group).add(mesh);
+    } else {
+      mesh.position.set(...c.pos);
+      mesh.rotation.y = this.rnd() * 6;
+      this.house.group.add(mesh);
+    }
+    // Invisible, generous pick volume so small items are easy to aim at.
+    const proxy = new THREE.Mesh(new THREE.SphereGeometry(0.16, 8, 6), new THREE.MeshBasicMaterial({ visible: false }));
+    mesh.add(proxy);
+    // A soft glint so things you can pick up stand out in the dark.
+    mesh.add(this.makeGlint());
+    const wp = new THREE.Vector3();
+    mesh.getWorldPosition(wp);
+    this.house.register('item_' + id, 'item', [mesh], wp, { item });
+    this.items.set(id, item);
+  }
+
+  makeGlint() {
+    if (!this.glintTex) {
+      const c = document.createElement('canvas'); c.width = c.height = 64;
+      const x = c.getContext('2d');
+      const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, 'rgba(255,245,200,1)'); g.addColorStop(0.25, 'rgba(255,220,140,0.55)'); g.addColorStop(1, 'rgba(255,200,100,0)');
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+      x.strokeStyle = 'rgba(255,250,220,0.9)'; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(32, 4); x.lineTo(32, 60); x.moveTo(4, 32); x.lineTo(60, 32); x.stroke();
+      this.glintTex = new THREE.CanvasTexture(c);
+      this.glints = [];
+    }
+    const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: this.glintTex, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, opacity: 0.8 }));
+    sp.scale.setScalar(0.32);
+    sp.position.y = 0.06;
+    sp.userData.ph = Math.random() * 6;
+    sp.raycast = () => {}; // never blocks the interaction ray
+    this.glints.push(sp);
+    return sp;
   }
 
   makeLabel(p) {
@@ -263,6 +301,8 @@ export class Game {
       if (e.code === 'Escape' && $('noteView').classList.contains('show')) { this.closeNote(); return; }
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if (e.code === 'KeyM' && !e.repeat) { mic.setMuted(!settings.micMuted); this.updateHUD(); }
+      // In the driver's seat: W floors it (if the car is fixed).
+      if (e.code === 'KeyW' && !e.repeat && this.local.hidden?.seat === 'driver' && this.car.state === 'parked' && !this.localDead) this.request({ k: 'drive' });
       // Inside the elevator car, 1–4 pick a floor (B, ground, upstairs, attic).
       const fl = ['Digit1', 'Digit2', 'Digit3', 'Digit4'].indexOf(e.code);
       if (fl >= 0 && !e.repeat && this.inElevatorCar()) this.pressElevator(fl);
@@ -441,6 +481,14 @@ export class Game {
       case 'pickup': {
         const it = this.items.get(r.id);
         if (!it || it.holder || it.used) return;
+        if (it.type === 'bullet') {
+          const gun = this.items.get('revolver');
+          if (!this.playerHas(pid, 'revolver')) { this.broadcast({ k: 'msg', text: 'Bullets. You need the revolver to use them (it\'s in a safe).' }, pid); return; }
+          if (gun.ammo >= GUN_CAPACITY) { this.broadcast({ k: 'msg', text: `The revolver is full (${GUN_CAPACITY}/${GUN_CAPACITY}).` }, pid); return; }
+          it.used = true;
+          this.broadcast({ k: 'ammo', id: r.id, by: pid, ammo: gun.ammo + 1 });
+          return;
+        }
         it.holder = pid; // claim immediately so a second request is rejected
         this.broadcast({ k: 'item', id: r.id, holder: pid });
         return;
@@ -544,6 +592,34 @@ export class Game {
         return;
       }
       case 'shoot': this.hostShoot(pid, r); return;
+      case 'carfix': {
+        const car = this.car;
+        if (car.state !== 'parked') return;
+        let part = null;
+        if (!car.parts.engine && this.playerHas(pid, 'engine')) {
+          if (!this.playerHas(pid, 'wrench')) { this.broadcast({ k: 'msg', text: 'You need a wrench to bolt the engine in.' }, pid); return; }
+          part = 'engine';
+        } else if (!car.parts.oil && this.playerHas(pid, 'oil')) part = 'oil';
+        else if (!car.parts.battery && this.playerHas(pid, 'battery')) part = 'battery';
+        if (!part) { this.broadcast({ k: 'msg', text: car.ready ? 'The car is ready. Get in the driver\'s seat.' : `The car still needs: ${car.missing().map(m => m === 'engine' ? 'an engine (and a wrench)' : m === 'oil' ? 'oil' : 'a battery').join(', ')}.` }, pid); return; }
+        this.broadcast({ k: 'carfix', part, by: pid });
+        this.hostNoise(this.car.group.position, 6, 'drawer');
+        return;
+      }
+      case 'drive': {
+        const car = this.car;
+        if (car.state !== 'parked' || car.driverSeat()?.occupant !== pid) return;
+        if (!car.ready) { this.broadcast({ k: 'msg', text: `It won't start. Still needs: ${car.missing().join(', ')}.` }, pid); return; }
+        const riders = car.occupants();
+        const at = this.net.serverNow() + 600;
+        this.broadcast({ k: 'drive', at, riders });
+        setTimeout(() => {
+          if (this.disposed) return;
+          const pids = riders.filter(id => { const q = this.players.get(id); return q && q.alive && !q.escaped; });
+          if (pids.length) this.broadcast({ k: 'escape', pids, at: this.net.serverNow(), car: true });
+        }, Math.max(0, at - this.net.serverNow()) + DRIVE_TOTAL * 1000);
+        return;
+      }
       case 'jelly': {
         if ((this.jellyHostT || 0) > this.time - 0.25) return;
         this.jellyHostT = this.time;
@@ -551,6 +627,14 @@ export class Game {
         return;
       }
       case 'escape': {
+        if (r.via === 'garage') {
+          if (!this.car?.broken) return;
+          const group = [...this.players.values()].filter(q => q.alive && !q.escaped && !q.dying && q.pos.x > 46).map(q => q.id);
+          if (!group.includes(pid)) group.push(pid);
+          group.forEach(id => this.dropItems(id, V(38.5, -3.2, 21)));
+          this.broadcast({ k: 'escape', pids: group, at: this.net.serverNow() + 600 });
+          return;
+        }
         const d = H.doors.get('d_front');
         if (!d || d.locked || !d.open) return;
         const group = [...this.players.values()].filter(q => q.alive && !q.escaped && !q.dying && Math.hypot(q.pos.x - 4.65, q.pos.z - 21.2) < 3.2).map(q => q.id);
@@ -582,6 +666,7 @@ export class Game {
     if (!p || !p.alive || p.dying || this.kills.has(pid)) return;
     if (isSafeZone(p.pos)) return; // the attic is sacred
     if (this.freePlay) return;
+    if (this.car?.state !== 'parked' && this.car?.riders.includes(pid)) return; // already driving away
     p.dying = true;
     const b = this.brain;
     b.setState('kill');
@@ -603,7 +688,6 @@ export class Game {
   // ============================================================ revolver
   /** object.glb shrunk to pistol size: placed in the safe and used as the in-hand model. */
   async fitRevolver() {
-    this.gunReadyAt = 0;
     const gltf = await loadGLTF('objectModel');
     let src = null;
     gltf?.scene.traverse(o => { if (!src && o.isMesh) src = o; });
@@ -628,19 +712,31 @@ export class Game {
     if (it) { const m = holder.clone(); m.position.y = 0.06; it.mesh.add(m); }
   }
 
-  gunStatus() {
-    const left = (this.gunReadyAt || 0) - this.net.serverNow();
-    if (left <= 0) return 'LOADED';
-    const sec = Math.ceil(left / 1000);
-    return `RELOADING ${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}`;
+  carPrompt() {
+    const car = this.car, me = this.localId;
+    if (car.ready) return 'THE CAR IS READY  <span class="dim">— get in the driver\'s seat</span>';
+    if (!car.parts.engine && this.playerHas(me, 'engine')) return this.playerHas(me, 'wrench') ? 'E — BOLT IN THE ENGINE' : 'E — FIT ENGINE  <span class="dim">[NEEDS A WRENCH]</span>';
+    if (!car.parts.oil && this.playerHas(me, 'oil')) return 'E — POUR IN THE OIL';
+    if (!car.parts.battery && this.playerHas(me, 'battery')) return 'E — CONNECT THE BATTERY';
+    return `CAR  <span class="dim">— needs: ${car.missing().map(m => m === 'engine' ? 'engine + wrench' : m).join(', ')}</span>`;
   }
+
+  seatPrompt(spot) {
+    if (this.car.state !== 'parked') return '';
+    if (spot.seat !== 'driver') return 'E — GET OUT  <span class="dim">(the driver drives)</span>';
+    return this.car.ready ? 'W — DRIVE  ·  E — GET OUT' : `E — GET OUT  <span class="dim">— won't start: needs ${this.car.missing().join(', ')}</span>`;
+  }
+
+  /** Rounds in the revolver (it holds two). */
+  gunAmmo() { return this.items.get('revolver')?.ammo ?? 0; }
+  gunStatus() { return `${this.gunAmmo()}/${GUN_CAPACITY}`; }
 
   tryShoot() {
     const L = this.local;
     if (!this.playerHas(this.localId, 'revolver') || this.localDead || this.localEscaped || L.hidden || L.frozen || this.me?.dying) return false;
-    if (this.net.serverNow() < (this.gunReadyAt || 0)) {
+    if (this.gunAmmo() <= 0) {
       audio.play('click', { vol: 0.35, rate: 1.5 });
-      this.message(`Revolver: ${this.gunStatus().toLowerCase()}.`, 2);
+      this.message('Click. Out of bullets. There are a few lying around on every floor.', 3);
       return true;
     }
     this.camera.updateMatrixWorld();
@@ -649,48 +745,54 @@ export class Game {
     return true;
   }
 
-  /** Host: resolve a shot. One round, then three minutes to reload. */
+  /** Host: resolve a shot against Ajan and the nursery spider (whichever the bullet reaches first). */
   hostShoot(pid, r) {
     const now = this.net.serverNow();
     const p = this.players.get(pid);
-    if (!p || !p.alive || p.dying || !this.playerHas(pid, 'revolver') || now < (this.gunReadyAt || 0)) return;
+    const gun = this.items.get('revolver');
+    if (!p || !p.alive || p.dying || !this.playerHas(pid, 'revolver') || !(gun.ammo > 0)) return;
     const o = V(...r.o), d = V(...r.d);
     if (!(d.lengthSq() > 0.5) || o.distanceTo(p.pos) > 2.6) return;
     d.normalize();
-    const b = this.brain;
-    let hit = null;
-    if (b && b.state !== 'dormant') {
-      for (let t = 0.3; t < 40; t += 0.06) {
-        const q = o.clone().addScaledVector(d, t);
-        if (Math.hypot(q.x - b.pos.x, q.z - b.pos.z) < 0.55 && q.y > b.pos.y + 0.15 && q.y < b.pos.y + 2.4) { hit = q; break; }
-      }
-      if (hit) {
-        const sameFloor = levelOf(o.y - 1.4) === levelOf(b.pos.y) || (inStairs(o) && inStairs(b.pos));
-        if (!sameFloor || segmentBlockers(o.x, o.z, hit.x, hit.z, (o.y + hit.y) / 2, this.house.colliders, { max: 1 }) > 0) hit = null;
-      }
+    const clear = q => (levelOf(o.y - 1.4) === levelOf(q.y - 0.3) || (inStairs(o) && inStairs(q))) &&
+      segmentBlockers(o.x, o.z, q.x, q.z, (o.y + q.y) / 2, this.house.colliders, { max: 1 }) === 0;
+    let hit = null, target = null;
+    const b = this.brain, sp = this.spider;
+    for (let t = 0.3; t < 40 && !hit; t += 0.05) {
+      const q = o.clone().addScaledVector(d, t);
+      if (b && b.state !== 'dormant' && Math.hypot(q.x - b.pos.x, q.z - b.pos.z) < 0.55 && q.y > b.pos.y + 0.15 && q.y < b.pos.y + 2.4) { hit = q; target = 'ajan'; }
+      else if (sp && sp.state !== 'dead' && q.distanceTo(sp.hitCentre()) < 0.8) { hit = q; target = 'spider'; }
     }
-    const stunned = hit ? b.stun(25) : false;
-    this.broadcast({ k: 'shot', by: pid, at: now, ox: o.x, oy: o.y, oz: o.z, hit: !!hit, stunned, hx: hit?.x, hy: hit?.y, hz: hit?.z });
+    if (hit && !clear(hit)) { hit = null; target = null; }
+    let effect = null;
+    if (target === 'ajan') effect = b.stun(25) ? 'stun' : 'hit';
+    if (target === 'spider') effect = sp.kill() ? 'spiderdead' : null;
+    gun.ammo -= 1;
+    this.broadcast({ k: 'shot', by: pid, at: now, ammo: gun.ammo, ox: o.x, oy: o.y, oz: o.z, target, effect, hx: hit?.x, hy: hit?.y, hz: hit?.z });
     // A gunshot is the loudest thing in the house. If he's still up, he comes.
-    if (!stunned) this.hostNoise(p.pos, 45, 'gunshot', pid, true);
+    if (effect !== 'stun') this.hostNoise(p.pos, 45, 'gunshot', pid, true);
   }
 
   applyShot(e) {
-    this.gunReadyAt = e.at + GUN_RELOAD_MS;
+    const gun = this.items.get('revolver');
+    if (gun) gun.ammo = e.ammo;
     const local = e.by === this.localId;
     const at = V(e.ox, e.oy, e.oz);
     audio.play('gunshot', local ? { vol: 1.0, limit: true } : { pos: at, vol: 1.0, ref: 6, rolloff: 0.8 });
     this.muzzle.position.copy(at);
+    this.muzzle.color.setHex(0xffc070);
     this.muzzle.intensity = 40;
     if (local) { this.local.recoil = 1; this.post.glitch(0.25); }
-    if (e.hit) {
+    if (e.target) {
       const hp = V(e.hx, e.hy, e.hz);
       this.fx.emit(hp, 0.2, 0.4, 14);
-      audio.play('roar', { pos: hp, vol: 1.0, ref: 3, rate: 0.8 });
+      if (e.target === 'ajan') audio.play('roar', { pos: hp, vol: 1.0, ref: 3, rate: 0.8 });
     }
+    if (e.effect === 'spiderdead') { this.spider.kill(); this.spider.hiss(); }
     const who = this.players.get(e.by)?.name || 'Someone';
-    if (local) this.message(e.stunned ? 'Hit! He goes down — you have about 25 seconds.' : e.hit ? 'Hit… but it didn\'t stop him.' : 'Missed. He heard that.', 4);
-    else this.message(e.stunned ? `${who} shot Ajan! He's down.` : `${who} fired a gun.`, 3);
+    const left = `(${e.ammo}/${GUN_CAPACITY})`;
+    if (local) this.message(e.effect === 'stun' ? `Hit! He goes down — you have about 25 seconds. ${left}` : e.effect === 'spiderdead' ? `The spider is dead. ${left}` : e.target ? `Hit… but it didn\'t stop him. ${left}` : `Missed. He heard that. ${left}`, 4);
+    else this.message(e.effect === 'stun' ? `${who} shot Ajan! He's down.` : e.effect === 'spiderdead' ? `${who} killed the spider.` : `${who} fired a gun.`, 3);
     this.updateHUD();
   }
 
@@ -830,6 +932,25 @@ export class Game {
         break;
       }
       case 'shot': this.applyShot(e); break;
+      case 'carfix': {
+        const it = this.items.get(e.part);
+        if (it) it.used = true;
+        if (e.part === 'engine') { const w = this.items.get('wrench'); if (w) w.used = true; }
+        this.car.parts[e.part] = true;
+        audio.play('clank', { pos: this.car.group.position, vol: 0.9, ref: 3 });
+        this.markAct(e.by);
+        const what = { engine: 'The engine is bolted in.', oil: 'Oil poured in.', battery: 'Battery connected.' }[e.part];
+        if (e.by === this.localId) this.message(this.car.ready ? `${what} The car is ready — get in the driver's seat and press W.` : `${what} Still needs: ${this.car.missing().join(', ')}.`);
+        else this.toast(`${this.players.get(e.by)?.name || 'Someone'} worked on the car (${e.part}).`);
+        this.updateHUD();
+        break;
+      }
+      case 'drive': {
+        this.car.startDrive(e.at, e.riders);
+        if (e.riders.includes(this.localId)) { this.local.frozen = true; $('hideOverlay').classList.remove('show'); this.message('', 0.1); }
+        else this.message('The car engine roars in the garage!', 3);
+        break;
+      }
       case 'cont': {
         H.setContainer(e.id, e.open);
         const c = H.containers.get(e.id);
@@ -846,8 +967,20 @@ export class Game {
         this.markAct(e.holder);
         if (e.holder === this.localId) {
           audio.play('pickup', { vol: 0.7 });
-          this.message(`Picked up: ${ITEM_INFO[e.id].name}`);
-        } else if (who) this.toast(`${who.name} found the ${ITEM_INFO[e.id].name}.`);
+          this.message(`Picked up: ${ITEM_INFO[it.type].name}`);
+        } else if (who) this.toast(`${who.name} found the ${ITEM_INFO[it.type].name}.`);
+        this.updateHUD();
+        break;
+      }
+      case 'ammo': {
+        const it = this.items.get(e.id), gun = this.items.get('revolver');
+        if (!it) break;
+        it.used = true;
+        it.mesh.parent?.remove(it.mesh);
+        H.interactables.delete('item_' + e.id);
+        if (gun) gun.ammo = e.ammo;
+        this.markAct(e.by);
+        if (e.by === this.localId) { audio.play('click', { vol: 0.6 }); this.message(`Loaded a bullet (${e.ammo}/${GUN_CAPACITY}).`); }
         this.updateHUD();
         break;
       }
@@ -994,6 +1127,8 @@ export class Game {
         this.local.hidden = h;
         this.local.hideLook = 0;
         this.local.pitch = 0;
+        $('hideOverlay').classList.toggle('car', h.type === 'seat');
+        $('hideOverlay').querySelector('p').textContent = h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
         $('hideOverlay').classList.add('show');
       }
     } else {
@@ -1209,7 +1344,17 @@ export class Game {
       this.localEscaped = true;
       this.local.frozen = true;
       const delay = Math.max(0, e.at - this.net.serverNow());
-      setTimeout(() => this.app.playEscape(() => { this.escapeVideoDone = true; this.afterEscapeVideo(); }), delay);
+      if (e.car) {
+        setTimeout(() => {
+          this.cineAjan = false;
+          this.car.eyes?.forEach(m => { m.visible = false; });
+          $('hud').classList.remove('cine');
+          this.post.vhs.uniforms.fade.value = 0;
+          this.escapeVideoDone = true;
+          this.afterEscapeVideo();
+          setTimeout(() => $('escapeTitle').classList.remove('show'), 400);
+        }, delay + 1200);
+      } else setTimeout(() => this.app.playEscape(() => { this.escapeVideoDone = true; this.afterEscapeVideo(); }), delay);
     }
     if (this.isHost) this.checkEnd();
     this.updateHUD();
@@ -1282,7 +1427,7 @@ export class Game {
     const L = this.local;
     if (this.localDead || this.localEscaped || L.frozen) return;
     if ($('noteView').classList.contains('show')) { this.closeNote(); return; }
-    if (L.hidden) { this.request({ k: 'hide', id: L.hidden.id, enter: false }); return; }
+    if (L.hidden) { if (L.hidden.type === 'seat' && this.car.state !== 'parked') return; this.request({ k: 'hide', id: L.hidden.id, enter: false }); return; }
     const f = this.focus;
     if (!f) return;
     const it = f.it;
@@ -1328,6 +1473,7 @@ export class Game {
       case 'note': L.act(); this.openNote(it.text); break;
       case 'elevbtn':
       case 'elevcall': this.pressElevator(it.level); break;
+      case 'carhood': L.act(); this.request({ k: 'carfix' }); break;
       case 'radio': L.act(); this.request({ k: 'radio', id: it.id }); break;
       case 'boombox': L.act(); this.request({ k: 'boom' }); break;
       case 'cinema': L.act(); this.request({ k: 'cinema', a: 'toggle' }); break;
@@ -1367,7 +1513,7 @@ export class Game {
         return d.open ? 'E — CLOSE' : 'E — OPEN';
       }
       case 'container': return it.container.locked ? `E — OPEN ${it.name.toUpperCase()}${this.playerHas(this.localId, it.container.lock) ? '  <span class="dim">[USE ' + ITEM_INFO[it.container.lock].name.toUpperCase() + ']</span>' : '  <span class="dim">[LOCKED — ' + ITEM_INFO[it.container.lock].name.toUpperCase() + ']</span>'}` : it.container.target > 0.5 ? `E — CLOSE ${it.name.toUpperCase()}` : `E — OPEN ${it.name.toUpperCase()}`;
-      case 'item': return `E — PICK UP ${ITEM_INFO[it.item.type].name.toUpperCase()}`;
+      case 'item': return it.item.type === 'bullet' ? (this.playerHas(this.localId, 'revolver') ? (this.gunAmmo() >= GUN_CAPACITY ? 'E — BULLET  <span class="dim">[REVOLVER FULL]</span>' : 'E — LOAD BULLET') : 'E — BULLET  <span class="dim">[NEEDS THE REVOLVER]</span>') : `E — PICK UP ${ITEM_INFO[it.item.type].name.toUpperCase()}`;
       case 'hide': return it.spot.occupant ? '<span class="dim">OCCUPIED</span>' : `E — ${it.spot.label}`;
       case 'fusebox': return this.house.power ? '<span class="dim">POWER RESTORED</span>' : this.playerHas(me, 'fuse') ? 'E — USE FUSE' : 'E — USE';
       case 'tv': return this.screens.tv.mode === 'off' ? 'E — TURN ON' : 'E — TURN OFF';
@@ -1375,6 +1521,7 @@ export class Game {
       case 'note': return 'E — READ';
       case 'elevbtn': return `E — GO TO ${['BASEMENT', 'GROUND FLOOR', 'UPSTAIRS', 'ATTIC'][it.level]}${!this.props.elev.unlocked ? '  <span class="dim">[NEEDS ELEVATOR KEY]</span>' : it.level === 0 && this.house.doors.get('d_basement').locked && !this.playerHas(this.localId, 'basement_key') ? '  <span class="dim">[NEEDS BASEMENT KEY]</span>' : ''}`;
       case 'elevcall': return `E — CALL ELEVATOR${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS ELEVATOR KEY]</span>'}`;
+      case 'carhood': return this.carPrompt();
       case 'radio': return it.radio.on ? 'E — TURN OFF RADIO' : 'E — TURN ON RADIO';
       case 'boombox': return 'E — PRESS PLAY';
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
@@ -1386,7 +1533,7 @@ export class Game {
 
   updateFocus() {
     const L = this.local;
-    if (L.hidden) { this.setPrompt('E — LEAVE'); this.focus = null; return; }
+    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : 'E — LEAVE'); this.focus = null; return; }
     if (L.frozen || this.localDead || this.localEscaped) { this.setPrompt(''); this.focus = null; return; }
     const rc = this.raycaster || (this.raycaster = new THREE.Raycaster());
     this.camera.updateMatrixWorld();
@@ -1469,7 +1616,7 @@ export class Game {
 
   updateHUD() {
     if (!this.house) return;
-    $('objective').textContent = this.localDead ? 'You were eaten.' : this.localEscaped ? 'You escaped.' : this.objective();
+    $('objective').textContent = this.localDead ? 'You were eaten.' : this.localEscaped ? 'You escaped.' : (this.freePlay ? '[FREE PLAY — nothing can kill you] ' : '') + this.objective() + (this.car && this.car.state === 'parked' && (Object.values(this.car.parts).some(Boolean) || CAR_PARTS.concat('wrench').some(t => this.playerHas(this.localId, t))) ? `  ·  OR: fix the car in the basement garage (still needs ${this.car.missing().join(', ') || 'nothing — drive!'})` : '');
     const inv = [...this.items.values()].filter(i => i.holder === this.localId && !i.used);
     $('inventory').innerHTML = inv.length
       ? inv.map(i => `<div class="slot"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('')
@@ -1632,6 +1779,12 @@ export class Game {
       // Ajan uses the escape route? No: but escaping players on the threshold.
     }
 
+    // Escape trigger: walk up the driveway once the garage door is smashed
+    if (this.phase === 'play' && !this.localDead && !this.localEscaped && me && !me.dying && this.car?.broken && L.pos.x > 46.5 && !this.escapeAsked) {
+      this.escapeAsked = true;
+      this.request({ k: 'escape', via: 'garage' });
+      setTimeout(() => { this.escapeAsked = false; }, 1500);
+    }
     // Escape trigger: walk out through the open front door
     if (this.phase === 'play' && !this.localDead && !this.localEscaped && me && !me.dying) {
       const fd = H.doors.get('d_front');
@@ -1649,19 +1802,11 @@ export class Game {
     this.updateDust(dt);
     this.props.update(dt, this.net.serverNow());
     this.spider.update(dt);
+    this.car.update(dt, this.net.serverNow());
     const hasGun = !!this.revolverModel && this.playerHas(this.localId, 'revolver');
-    if (hasGun !== !!this.gunShown) { this.local.setWeapon(hasGun ? this.revolverModel.clone() : null); this.gunShown = hasGun; if (hasGun) this.message('Revolver: one round. LEFT CLICK to shoot. Reloading takes 3 minutes.', 6); }
-    this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 400);
-    if (hasGun) {
-      this.gunHudT = (this.gunHudT || 0) - dt;
-      const ready = this.net.serverNow() >= (this.gunReadyAt || 0);
-      if (this.gunHudT <= 0 || ready !== this.gunWasReady) {
-        if (ready && this.gunWasReady === false) { audio.play('click', { vol: 0.5 }); this.message('Revolver reloaded.', 3); }
-        this.gunWasReady = ready;
-        this.gunHudT = 1;
-        this.updateHUD();
-      }
-    }
+    if (hasGun !== !!this.gunShown) { this.local.setWeapon(hasGun ? this.revolverModel.clone() : null); this.gunShown = hasGun; if (hasGun) this.message(`Revolver (${this.gunStatus()} rounds). LEFT CLICK to shoot. It holds 2 — bullets lie around on every floor.`, 6); }
+    if (!this.cineAjan) this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 400);
+    if (this.glints) { const t = performance.now() / 1000; for (const g of this.glints) { const k = 0.55 + 0.45 * Math.sin(t * 3 + g.userData.ph); g.material.opacity = k; g.scale.setScalar(0.24 + k * 0.14); g.material.rotation = t * 0.6 + g.userData.ph; } }
     this.updateSpiderDeath(dt);
     this.updateFloorboards(dt);
     this.updateJellyTouch(dt);
@@ -1673,7 +1818,7 @@ export class Game {
     const lk = this.lightningK > 0 ? this.lightningK * (0.6 + 0.4 * Math.sin(this.time * 60)) : 0;
     // Hiding: brighten the room in front of the hiding spot (local view only).
     const hk = this.hideK = damp(this.hideK, L.hidden && !this.localDead ? 1 : 0, 4, dt);
-    if (L.hidden) {
+    if (L.hidden && !this.cineAjan) {
       const h = L.hidden, r = roomAt(h.exit.x, h.exit.z, h.exit.y + 0.5);
       const fx = h.exit.x - h.inside.x, fz = h.exit.z - h.inside.z, fl = Math.hypot(fx, fz) || 1;
       let lx = h.exit.x + (fx / fl) * 2.2, lz = h.exit.z + (fz / fl) * 2.2;
@@ -1692,7 +1837,7 @@ export class Game {
     const sk = this.specK = damp(this.specK || 0, (this.localDead || this.localEscaped) && this.phase === 'play' ? 1 : 0, 2, dt);
     if (!L.hidden && sk > 0.01) this.hideLight.position.copy(this.camera.position).add(V(0, 0.6, 0));
     const bk = Math.max(hk, sk);
-    this.hideLight.intensity = Math.max(hk * 18, sk * 16);
+    this.hideLight.intensity = this.cineAjan ? 30 : Math.max(hk * 18, sk * 16);
     this.app.renderer.toneMappingExposure = 1.15 + Math.max(hk * 0.45, sk * 0.55);
     this.hemi.intensity = 1.0 + lk * 4 + bk * 1.6;
     H.M.glassWin.emissiveIntensity = 1 + lk * 25;
@@ -1767,6 +1912,7 @@ export class Game {
   }
 
   updateAjanVisual(dt) {
+    if (this.cineAjan) return; // car.js is posing him for the escape cut
     const v = this.ajanVis;
     let s = this.isHost ? this.brain?.snapshot() : this.ajanSnap;
     if (s) {
@@ -1971,6 +2117,9 @@ export class Game {
     this.tvSound?.stop();
     this.wind?.stop();
     this.clockTick?.stop();
+    this.car?.dispose();
+    document.getElementById('hud')?.classList.remove('cine');
+    document.getElementById('escapeTitle')?.classList.remove('show');
     this.sleepSound?.stop();
     if (this.amb) Object.values(this.amb).forEach(h => h?.stop());
     this.props?.dispose();

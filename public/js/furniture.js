@@ -13,7 +13,7 @@ export function buildFurniture(h) {
   buildNotes(h);
   // The giant wobbly thing appears in one of three bedrooms each session.
   const spots = [
-    { room: 'bed2', pos: new THREE.Vector3(17.0, 0, 4.6) },
+    { room: 'bed2', pos: new THREE.Vector3(16.2, 0, 2.8) },
     { room: 'guest', pos: new THREE.Vector3(18.8, U, 4.4) },
   ];
   h.jellySpot = spots[Math.floor(h.rnd() * spots.length)];
@@ -21,7 +21,7 @@ export function buildFurniture(h) {
   const safes = [
     { x: 9.5, y: U, z: 6.6, f: '-x', room: 'master' },
     { x: 2.45, y: BY, z: 22.6, f: '+x', room: 'base' },
-    { x: 32.4, y: U, z: 11.45, f: '+z', room: 'music' },
+    { x: 32.4, y: U, z: 11.45, f: '+z', room: 'sitting' },
   ];
   const sp = safes[Math.floor(h.rnd() * safes.length)];
   h.safe('c_safe', sp.x, sp.y, sp.z, sp.f);
@@ -41,8 +41,10 @@ function buildGround(h) {
   h.hideSpot('h_bed1', 7.15, 0.62, 1.2, 0.8, 2.15, '+z', 'woodDark');
   h.furnitureBox(0.12, 0, 4.4, 0.62, 0.95, 6.0, 'wood');
   G.box(0.1, 0.002, 3, 3.5, 0.008, 5.4, 'fabricRed');
-  h.chair(5.2, 6.4);
-  h.furnitureBox(5.6, 0, 3.0, 6.1, 0.45, 3.5, 'woodPale');
+  h.chair(1.2, 6.9);
+  // walk-in wardrobe: shoe boxes and a hanging rail
+  h.furnitureBox(7.35, 0, 3.0, 7.88, 0.45, 3.6, 'woodPale');
+  G.box(7.6, 1.75, 1.6, 7.64, 1.78, 6.8, 'metal');
   h.painting(7.88, 1.7, 4.2, '-x');
   h.painting(0.12, 1.85, 5.2, '+x');
 
@@ -64,21 +66,22 @@ function buildGround(h) {
   h.bed(18.6, 0.36, 20.8, 2.6, 0, true);
   h.underHide('u_bed2', 18.6, 0.36, 20.8, 2.6, 0, '+z', 'HIDE UNDER BED');
   h.hideSpot('h_bed2', 13.85, 0.62, 1.2, 0.8, 2.15, '+z', 'wood');
-  h.furnitureBox(19.95, 0, 3.9, 20.88, 0.76, 5.5, 'wood');
-  h.container('c_desk2', 'drawer', 20.16, 0.52, 4.7, 0.55, 0.16, 0.42, '-x', 'woodPale', 'Desk');
-  h.chair(19.35, 5.65);
-  G.box(14, 0.002, 3.5, 17.5, 0.008, 6, 'fabricGreen');
+  h.furnitureBox(19.95, 0, 2.9, 20.88, 0.76, 4.5, 'wood');
+  h.container('c_desk2', 'drawer', 20.16, 0.52, 3.7, 0.55, 0.16, 0.42, '-x', 'woodPale', 'Desk');
+  h.chair(19.4, 3.7);
+  G.box(14, 0.002, 5.5, 17.5, 0.008, 7.6, 'fabricGreen');
   h.furnitureBox(15.2, 0, 6.6, 15.9, 0.5, 7.3, 'woodPale');
-  h.painting(13.12, 1.7, 4.6, '+x');
+  h.painting(13.12, 1.7, 3.2, '+x');
   h.painting(20.88, 1.8, 6.6, '-x', 0.5, 0.7);
 
   // Security room
-  h.furnitureBox(23.4, 0, 0.12, 28.6, 0.78, 1.25, 'woodDark');
-  h.chair(26, 2.1, 0, 'metal');
+  h.furnitureBox(21.5, 0, 0.12, 26.8, 0.78, 1.25, 'woodDark');
+  h.chair(24.2, 2.1, 0, 'metal');
+  h.shelf(27.12, 6.6, 29.0, 7.88, 2.0, 'metal', 0, true);
   h.shelf(29.3, 2.5, 29.88, 6.5, 2.0, 'metal', 0, true);
   h.furnitureBox(21.15, 0, 6.2, 22.0, 1.3, 7.7, 'metal', true);
   for (let i = 0; i < 4; i++) {
-    const x = 24.1 + i * 1.25;
+    const x = 22.3 + i * 1.25;
     const casing = bx(1.0, 0.75, 0.55, M.dark);
     casing.position.set(x, 0.78 + 0.4, 0.55);
     h.group.add(casing);
@@ -99,10 +102,11 @@ function buildGround(h) {
   h.container('c_office', 'drawer', 36.3, 0.55, 2.39, 0.6, 0.16, 0.42, '+z', 'wood', 'Desk');
   h.underHide('u_desk', 35.0, 1.6, 37.6, 2.6, 0, '+z', 'HIDE UNDER DESK', 0.45);
   h.chair(36.3, 3.3);
-  h.shelf(39.3, 1.0, 39.88, 7.0, 2.2, 'woodDark', 0, true);
+  h.shelf(39.3, 0.3, 39.88, 4.3, 2.2, 'woodDark', 0, true);
+  h.shelf(39.3, 5.0, 39.88, 7.6, 2.0, 'woodDark', 0, true);
   h.furnitureBox(30.2, 0, 0.2, 30.8, 1.3, 1.0, 'metal');
   h.furnitureBox(30.2, 0, 1.1, 30.8, 1.3, 1.9, 'metal');
-  G.box(32, 0.002, 4, 38, 0.008, 6.5, 'carpet');
+  G.box(32, 0.002, 5.0, 38, 0.008, 7.5, 'carpet');
   h.painting(30.12, 1.7, 5.0, '+x');
 
   // Hallway
@@ -163,7 +167,7 @@ function buildGround(h) {
   h.painting(14.3, 1.7, 16.88, '-z');
 
   // Kitchen (east counter split around the dining-room door)
-  for (const [z0, z1] of [[12.0, 14.7], [16.4, 20.0]]) {
+  for (const [z0, z1] of [[12.0, 14.7], [17.4, 20.0]]) {
     h.furnitureBox(29.3, 0, z0, 29.9, 0.92, z1, 'woodPale');
     G.box(29.25, 0.92, z0, 29.9, 0.97, z1, 'porcelain');
     G.box(29.5, 1.6, z0, 29.9, 2.3, z1, 'woodPale');
@@ -178,7 +182,7 @@ function buildGround(h) {
   h.underHide('u_ktable', 22.0, 15.0, 24.0, 16.6, 0, '-z', 'HIDE UNDER TABLE', 0.45);
   h.chair(21.6, 15.8);
   h.chair(24.4, 15.8);
-  h.chair(23.0, 17.0);
+  h.chair(23.0, 14.55);
   h.hideSpot('h_pantry', 26.6, 20.48, 1.2, 0.7, 2.15, '-z', 'woodPale');
   h.painting(17.12, 1.7, 16.2, '+x', 0.5, 0.7);
   h.painting(22.5, 1.7, 20.88, '-z');
@@ -343,9 +347,13 @@ function buildBasement(h) {
   // Workshop
   h.furnitureBox(35.8, BY, 25.8, 38.6, BY + 0.9, 26.85, 'wood');
   G.box(35.8, BY + 1.2, 26.85, 38.6, BY + 2.4, 26.9, 'woodDark');
-  h.hideSpot('h_workshop', 39.48, 18.0, 1.0, 0.7, 2.0, '-x', 'metal', BY);
-  for (const [x, z, s] of [[31.2, 25.8, 0.9], [32.3, 26.2, 0.7], [31.0, 15.0, 0.8], [38.8, 14.4, 0.7]]) h.furnitureBox(x - s / 2, BY, z - s / 2, x + s / 2, BY + s, z + s / 2, 'woodPale');
-  h.table(32.5, 19.5, 34.5, 21.0, 0.9, 'woodDark', BY);
+  h.hideSpot('h_workshop', 30.48, 24.6, 1.0, 0.7, 2.0, '+x', 'metal', BY);
+  for (const [x, z, s] of [[30.7, 18.0, 0.7], [31.0, 15.0, 0.8], [38.8, 14.4, 0.7], [39.3, 26.2, 0.7]]) h.furnitureBox(x - s / 2, BY, z - s / 2, x + s / 2, BY + s, z + s / 2, 'woodPale');
+  h.table(31.2, 25.9, 33.2, 26.85, 0.9, 'woodDark', BY);
+  // The car (car.js) is parked in the middle facing the garage door in the east wall.
+  h.carCollider = h.collider(33.05, 19.9, 36.95, 22.1, BY, BY + 1.7, { furniture: true, occlude: true });
+  h.garageDoorCollider = h.collider(39.85, 19.4, 40.15, 22.6, BY, BY + 2.5, { occlude: true, wall: true });
+  h.wallChair(34.5, 24.8, BY, '+x');
 }
 
 // ================================================================== attic
@@ -379,7 +387,7 @@ function buildNotes(h) {
   h.note('note_base', 15.4, BY + 0.9, 26.3, 0.2,
     'Fuse goes in the left slot. Then pull the lever.\n\nThe security door and the cameras run on the same circuit.');
   h.note('note_workshop', 37.0, BY + 0.9, 26.1, -0.3,
-    'Took the BOLT CUTTERS back down here.\n\nIf you need to get through that chain on the front door, this is what you want.');
+    'Took the BOLT CUTTERS back down here.\n\nIf you need to get through that chain on the front door, this is what you want.\n\nThe old car would still run if it had an ENGINE (you\'ll need a WRENCH to fit it), OIL and a BATTERY. Everything got carried off around the house. Floor it and that garage door won\'t hold.');
   h.furnitureBox(2.6, U, 8.12, 3.8, U + 0.8, 8.55, 'woodDark');
   h.note('note_nursery', 3.2, U + 0.8, 8.33, 0,
     'DO NOT GO IN THE NURSERY\n\nIt sits in the far corner and waits. It feels you RUNNING.\n\nThe moment you reach for the key on the crib it comes for you. It is FAST.\n\nGrab it and RUN for the door. It never leaves that room.');

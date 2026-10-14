@@ -22,6 +22,8 @@ export const ASSETS = {
   cinemaVideo: { names: ['cinema.mp4'] },
   objectModel: { names: ['object.glb'] },
   sleep: { names: ['sleep.mp3'] },
+  noise: { names: ['noise.mp3'] },
+  carModel: { names: ['car.glb'] },
   image1: { names: ['image1.png', '1.png'] },
   image2: { names: ['image2.png', '2.png'] },
   image3: { names: ['image3.png', '3.png'] },
@@ -50,6 +52,11 @@ export const ITEM_INFO = {
   elevator_key: { name: 'Elevator Key' },
   weapon_key: { name: 'Weapon Key' },
   revolver: { name: 'Revolver' },
+  bullet: { name: 'Bullet' },
+  engine: { name: 'Car Engine' },
+  wrench: { name: 'Wrench' },
+  oil: { name: 'Motor Oil' },
+  battery: { name: 'Car Battery' },
 };
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a
