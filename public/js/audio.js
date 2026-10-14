@@ -3,6 +3,21 @@
 import { settings, onSettingChange } from './settings.js';
 import { loadAudioBuffer } from './assets.js';
 
+const peaks = new WeakMap();
+/** Largest absolute sample in a buffer (cached). */
+function bufferPeak(buf) {
+  let pk = peaks.get(buf);
+  if (pk === undefined) {
+    pk = 0;
+    for (let ch = 0; ch < buf.numberOfChannels; ch++) {
+      const d = buf.getChannelData(ch);
+      for (let i = 0; i < d.length; i++) { const a = d[i] < 0 ? -d[i] : d[i]; if (a > pk) pk = a; }
+    }
+    peaks.set(buf, pk);
+  }
+  return pk;
+}
+
 class AudioEngine {
   constructor() {
     this.ctx = null;
@@ -106,8 +121,10 @@ class AudioEngine {
     }
     node.connect(gain);
     // Optional brick-wall limiter for boosted sounds so extra gain doesn't clip.
+    // Only engaged when the boosted peak would actually get near 0 dBFS: the
+    // compressor adds its own makeup gain, which would overshoot the boost.
     let out = gain;
-    if (opts.limit) {
+    if (opts.limit && bufferPeak(buf) * (opts.vol ?? 1) > 0.89) {
       const comp = c.createDynamicsCompressor();
       comp.threshold.value = -3; comp.knee.value = 2; comp.ratio.value = 20;
       comp.attack.value = 0.002; comp.release.value = 0.12;

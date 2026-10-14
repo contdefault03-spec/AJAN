@@ -110,6 +110,7 @@ His AI is a state machine that runs on the host:
 - **Navigation:** A* over an auto-generated waypoint graph covering every room, the doorways and all staircases, with real collision. He opens doors, which you can hear, and can't pass locked ones. He never uses the elevator or enters the attic.
 - **Kill:** grab, lift to the mouth, eat with disintegration (dissolve shader and embers), then `ajan.mp3`.
   - During eating, MAX, MASKED, RIZE, LUCKY and MIDO play their own clip. NONE OF THESE plays nothing.
+  - MASKED's (Xhiko's) clip is mastered much quieter than the others, so it plays at 2× volume, both on a kill and from the boombox. A limiter engages only if a boosted sound would get near clipping.
   - Playable AJAN plays `ajandie.mp3` at the grab.
   - The host coordinates each kill once, so no sound plays twice.
 

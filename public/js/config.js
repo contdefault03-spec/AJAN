@@ -52,7 +52,8 @@ export const ITEM_INFO = {
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a
 // limiter so they get louder without clipping.
-export const DEATH_GAIN = {};
+// MASKED's clip ("Xhiko") is mastered much quieter than the others, so it is doubled.
+export const DEATH_GAIN = { MASKED: 2 };
 
 export const PLAYER = {
   height: 1.75,

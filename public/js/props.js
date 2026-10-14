@@ -10,6 +10,7 @@ import { elevatorState } from './physics.js';
 import { ELEVATOR, ELEV_DOORS, LEVELS } from './layout.js';
 import { bx } from './house.js';
 import { mulberry32, clamp } from './util.js';
+import { CHARACTERS, DEATH_GAIN } from './config.js';
 
 export const DEATH_KEYS = ['max', 'masked', 'rize', 'lucky', 'mido', 'ajandie'];
 export const MIRROR_TEXTS = ['I HAVE NO\nLOVE LIFE BRO', 'WHO WANTS\nMY CUCK', 'IM AN\nUNLOVEABLE\nFRACK BRO'];
@@ -262,7 +263,9 @@ export class Props {
     if (!bb) return;
     const dur = audio.duration(key) || 2;
     bb.until = performance.now() + dur * 1000;
-    audio.play(key, { pos: bb.pos, vol: 1.2, ref: 3.5, rolloff: 0.9 });
+    const ch = CHARACTERS.find(c => c.sound === key);
+    const g = (ch && DEATH_GAIN[ch.id]) || 1;
+    audio.play(key, { pos: bb.pos, vol: 1.2 * g, ref: 3.5, rolloff: 0.9, limit: g > 1 });
   }
 
   // ================================================================== phone
