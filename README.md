@@ -41,6 +41,10 @@ Single-player runs entirely in your browser. The server only serves files and re
 | Esc | Pause and settings |
 | A / D / click | Switch the spectated player (when dead) |
 
+## Free play
+
+**Settings → FREE PLAY** (at the bottom, only from the main menu) starts a normal single-player game in which Ajan never comes home: you can't die, and everything else (keys, puzzles, elevator, cinema, props, escape) works as usual. **Restart** on the end screen keeps you in free play.
+
 ## The house
 
 Four levels, connected by real walkable staircases and an elevator:
@@ -78,6 +82,7 @@ The HUD objective always shows the next step. Locked doors say what they need ("
 
 ## Things in the house
 
+- **Hiding view:** while you hide, the room in front of you is lit up and the exposure is raised, so you can watch it clearly. From inside a closet you look straight out through the louvers; to everyone else the closet stays shut. This is only on your screen and doesn't make you easier for Ajan to find.
 - **Crawl spaces:** beds and tables can be hidden under, as well as closets (eight crawl spaces and eight closets in total). The hiding view sits low and looks out into the room.
 - **Radios:** one in the library (upstairs), one in the basement. Turned on, they play muffled music and static for 25 s, and Ajan walks over and switches them off. Use them as a lure.
 - **Boombox (music room):** plays a random character's death sound. Ajan can't hear it.

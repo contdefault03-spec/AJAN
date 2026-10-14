@@ -25,7 +25,7 @@ const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const EAT_START = 1.6;
 
 export class Game {
-  constructor(app, { net, seed, players, startAt }) {
+  constructor(app, { net, seed, players, startAt, freePlay = false }) {
     this.app = app;
     this.net = net;
     this.seed = seed;
@@ -33,6 +33,8 @@ export class Game {
     this.roster = players;
     this.localId = net.id;
     this.single = !net.online;
+    // Free play: the normal house and puzzles, but Ajan never comes out (single-player only).
+    this.freePlay = freePlay && this.single;
     this.startAt = startAt;
     this.players = new Map();
     this.items = new Map();
@@ -76,6 +78,10 @@ export class Game {
     scene.add(this.hemi);
     this.ambient = new THREE.AmbientLight(0x262a36, 0.6);
     scene.add(this.ambient);
+    // While hiding, the room you look out into is lit up so you can actually watch it.
+    this.hideLight = new THREE.PointLight(0xffe4c0, 0, 16, 1.0);
+    scene.add(this.hideLight);
+    this.hideK = 0;
 
     progress(0.1, 'Building the house...');
     this.house = new House(mulberry32(this.seed ^ 0x51ed));
@@ -138,6 +144,10 @@ export class Game {
     this.buildDust();
 
     if (this.isHost) this.brain = new AjanBrain(this, mulberry32(this.seed ^ 0x9e3779b9));
+    if (this.freePlay && this.brain) {
+      this.brain.dormantLeft = Infinity; // he stays out of the house
+      this.brain.hear = () => {};
+    }
 
     this.post = new PostFX(this.renderer, scene, this.camera);
     this.applyGraphics();
@@ -537,6 +547,7 @@ export class Game {
     const p = this.players.get(pid);
     if (!p || !p.alive || p.dying || this.kills.has(pid)) return;
     if (isSafeZone(p.pos)) return; // the attic is sacred
+    if (this.freePlay) return;
     p.dying = true;
     const b = this.brain;
     b.setState('kill');
@@ -1053,7 +1064,7 @@ export class Game {
     $('hud').classList.add('show');
     this.updateMusic();
     this.lockPointer();
-    this.message('Find a way out. Stay quiet.', 6);
+    this.message(this.freePlay ? 'FREE PLAY — he isn\'t home. Explore freely.' : 'Find a way out. Stay quiet.', 6);
     this.wind = audio.play('wind', { loop: true, vol: 0.12 });
     this.amb = {};
     for (const k of ['ambBase', 'ambHouse', 'ambUp', 'ambAttic']) this.amb[k] = audio.play(k, { loop: true, vol: 0 });
@@ -1451,9 +1462,28 @@ export class Game {
     // Lightning flash
     if (this.lightningK > 0) this.lightningK = Math.max(0, this.lightningK - dt * 2.2);
     const lk = this.lightningK > 0 ? this.lightningK * (0.6 + 0.4 * Math.sin(this.time * 60)) : 0;
-    this.hemi.intensity = 1.0 + lk * 4;
+    // Hiding: brighten the room in front of the hiding spot (local view only).
+    const hk = this.hideK = damp(this.hideK, L.hidden && !this.localDead ? 1 : 0, 4, dt);
+    if (L.hidden) {
+      const h = L.hidden, r = roomAt(h.exit.x, h.exit.z, h.exit.y + 0.5);
+      const fx = h.exit.x - h.inside.x, fz = h.exit.z - h.inside.z, fl = Math.hypot(fx, fz) || 1;
+      let lx = h.exit.x + (fx / fl) * 2.2, lz = h.exit.z + (fz / fl) * 2.2;
+      if (r) { lx = clamp(lx, r.x0 + 0.5, r.x1 - 0.5); lz = clamp(lz, r.z0 + 0.5, r.z1 - 0.5); }
+      this.hideLight.position.set(lx, h.exit.y + 2.3, lz);
+    }
+    // From inside a closet you see the room, not the back of its doors (on your
+    // screen only: everyone else still sees the closet shut).
+    const seeThrough = L.hidden && L.hidden.doors.length && hk > 0.5 ? L.hidden : null;
+    if (seeThrough !== this.seeThroughHide) {
+      if (this.seeThroughHide) for (const d of this.seeThroughHide.doors) d.pivot.visible = true;
+      if (seeThrough) for (const d of seeThrough.doors) d.pivot.visible = false;
+      this.seeThroughHide = seeThrough;
+    }
+    this.hideLight.intensity = hk * 18;
+    this.app.renderer.toneMappingExposure = 1.15 + hk * 0.45;
+    this.hemi.intensity = 1.0 + lk * 4 + hk * 1.6;
     H.M.glassWin.emissiveIntensity = 1 + lk * 25;
-    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0);
+    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + hk * 2.0;
 
     // Local avatar mirrors us (for cameras and the death cam)
     if (me && !me.dying) {
@@ -1711,6 +1741,7 @@ export class Game {
 
   dispose() {
     this.disposed = true;
+    this.app.renderer.toneMappingExposure = 1.15;
     this.offs.forEach(o => o());
     removeEventListener('keydown', this.onKeyDown);
     removeEventListener('mousemove', this.onMouseMove);

@@ -374,9 +374,9 @@ class App {
   }
 
   // ---------------------------------------------------------- game start
-  startSingle() {
+  startSingle(freePlay = false) {
     const net = new LocalNet();
-    this.launchGame({ net, seed: Math.floor(Math.random() * 2 ** 31), players: [{ id: 'local', ...this.netProfile() }], startAt: Date.now() });
+    this.launchGame({ net, seed: Math.floor(Math.random() * 2 ** 31), players: [{ id: 'local', ...this.netProfile() }], startAt: Date.now(), freePlay });
   }
 
   launchMultiplayer(m) {
@@ -515,6 +515,12 @@ class App {
       $('setMonitor').checked = false;
       this.settingsDone?.();
     };
+    $('settingsFreePlay').onclick = () => {
+      if (this.game) return;
+      mic.setMonitor(false);
+      $('setMonitor').checked = false;
+      this.startSingle(true);
+    };
     $('setChangeChar').onclick = () => {
       if (this.game) { this.toast('Change your character from the main menu.'); return; }
       this.openCharSelect(() => this.openSettings(this.settingsDone));
@@ -524,6 +530,7 @@ class App {
   async openSettings(done) {
     this.settingsDone = done;
     this.show('settingsScreen', this.game ? ['pause'] : []);
+    $('freePlayRow').classList.toggle('hidden', !!this.game);
     if (!this.game) this.stopMenuVideo();
     if (settings.micId !== 'none' && !mic.stream) await mic.open(settings.micId);
     await this.fillMicSelect($('setMic'));
@@ -540,7 +547,7 @@ class App {
     $('endMenu').onclick = () => this.leaveGame();
     $('endRestart').onclick = () => {
       if (!this.game) return;
-      if (this.game.single) this.startSingle();
+      if (this.game.single) this.startSingle(this.game.freePlay);
       else if (this.mpNet?.isHost) this.mpNet.startGame();
     };
   }
