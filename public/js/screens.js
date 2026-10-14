@@ -5,12 +5,12 @@ import { CAMERAS } from './house.js';
 
 const SCREEN_VERT = `varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }`;
 const SCREEN_FRAG = `
-uniform sampler2D tex; uniform float mode; uniform float time; uniform float glitch; uniform float tint; uniform float bright;
+uniform sampler2D tex; uniform float mode; uniform float time; uniform float glitch; uniform float tint; uniform float bright; uniform float mono; uniform float curve;
 varying vec2 vUv;
 float rand(vec2 c){ return fract(sin(dot(c, vec2(12.9898,78.233))) * 43758.5453); }
 void main(){
   vec2 cc = vUv - 0.5;
-  vec2 uv = 0.5 + cc * (1.0 + dot(cc, cc) * 0.25);
+  vec2 uv = 0.5 + cc * (1.0 + dot(cc, cc) * curve);
   if (uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0) { gl_FragColor = vec4(0.0,0.0,0.0,1.0); return; }
   float line = floor(uv.y * 220.0);
   float jit = (rand(vec2(line, floor(time * 24.0))) - 0.5) * 0.012 * (0.3 + glitch * 3.0);
@@ -24,22 +24,23 @@ void main(){
     img.g = texture2D(tex, uv).g;
     img.b = texture2D(tex, uv - vec2(0.003 * (1.0 + glitch * 4.0), 0.0)).b;
     float g = dot(img, vec3(0.3, 0.59, 0.11));
-    vec3 mono = mix(vec3(g), vec3(g * 0.8, g * 1.05, g * 0.85), tint);
-    col = mix(img, mono, 0.45 + tint * 0.4) * bright + (n - 0.5) * (0.07 + glitch * 0.3);
+    vec3 mono3 = mix(vec3(g), vec3(g * 0.8, g * 1.05, g * 0.85), tint);
+    float monoAmt = mono >= 0.0 ? mono : 0.45 + tint * 0.4;
+    col = mix(img, mono3, monoAmt) * bright + (n - 0.5) * (0.07 + glitch * 0.3);
     col = mix(col, vec3(n), glitch * 0.3);
   }
   float roll = smoothstep(0.0, 0.08, abs(fract(uv.y * 1.2 - time * 0.11) - 0.5));
   col *= 0.82 + 0.18 * roll;
   col *= 0.78 + 0.22 * sin(uv.y * 700.0);
-  col *= 1.0 - dot(cc, cc) * 1.6;
+  col *= 1.0 - dot(cc, cc) * 1.6 * (curve * 4.0);
   if (mode < 0.5) col = vec3(0.012);
   gl_FragColor = vec4(col, 1.0);
 }`;
 
-function screenMaterial() {
+export function screenMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
-      tex: { value: null }, mode: { value: 0 }, time: { value: 0 }, glitch: { value: 0 }, tint: { value: 1 }, bright: { value: 2.6 },
+      tex: { value: null }, mode: { value: 0 }, time: { value: 0 }, glitch: { value: 0 }, tint: { value: 1 }, bright: { value: 2.6 }, mono: { value: -1 }, curve: { value: 0.25 },
     },
     vertexShader: SCREEN_VERT,
     fragmentShader: SCREEN_FRAG,

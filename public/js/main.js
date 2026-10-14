@@ -77,7 +77,8 @@ class App {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setSize(innerWidth, innerHeight);
     $('gameRoot').appendChild(this.renderer.domElement);
-    await audio.loadAll(['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'music1', 'music2', 'musicchase']);
+    await audio.loadAll(['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'music1', 'music2', 'musicchase', 'sleep']);
+    loadGLTF('objectModel');
     loadGLTF('playerModel');
     loadGLTF('ajanModel');
     if (!settings.micConfigured) this.openMicSetup(() => this.openCharSelect(() => this.openMenu()));
@@ -173,6 +174,8 @@ class App {
   }
 
   updateMeters() {
+    for (const id of ['micOut', 'setOut']) { const el = $(id); if (el?.offsetParent) el.style.width = (mic.outLevel * 100).toFixed(1) + '%'; }
+    document.querySelectorAll('[data-pct]').forEach(el => { const v = Math.round((settings[el.dataset.pct] ?? 1) * 100) + '%'; if (el.textContent !== v) el.textContent = v; });
     const lvl = mic.level;
     const thr = mic.threshold();
     for (const [m, t, s] of [['micMeter', 'micThreshold', 'micSpeaking'], ['setMeter', 'setThreshold', 'setSpeaking']]) {

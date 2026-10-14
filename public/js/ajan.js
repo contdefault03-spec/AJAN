@@ -1,9 +1,13 @@
 // Ajan's AI. Runs only on the authority (single-player client or the room host)
 // and is replicated to everyone else as snapshots. A plain state machine:
-// dormant -> patrol <-> investigate -> chase -> search -> patrol, plus kill / drag.
+//   dormant → patrol ⇄ investigate → search → patrol
+//   chase → (kill | drag a seen hider out | lose → search)
+//   inspect a hiding spot · nap in his bed · sit facing a wall
+// He never plans a path into the attic and ignores anyone inside it.
 import * as THREE from 'three';
 import { AJAN } from './config.js';
-import { collideCircle, groundAt, lineOfSight, levelOf, segmentBlockers, inStairs } from './physics.js';
+import { collideCircle, groundAt, lineOfSight, levelOf, segmentBlockers, soundTransmission } from './physics.js';
+import { isSafeZone } from './layout.js';
 import { nearestNode, findPath } from './nav.js';
 import { angleDiff, clamp } from './util.js';
 
@@ -14,7 +18,7 @@ export class AjanBrain {
     this.game = game;
     this.house = game.house;
     this.rnd = rnd;
-    this.pos = new THREE.Vector3(17, 0, 4);
+    this.pos = new THREE.Vector3(36.8, -50, 4);
     this.ry = 0;
     this.speed = 0;
     this.state = 'dormant';
@@ -38,6 +42,11 @@ export class AjanBrain {
     this.headYaw = 0;
     this.lastPatrol = null;
     this.dragHide = null;
+    // Idle routines (seconds of active play)
+    this.sleepTimer = 180 + rnd() * 60;
+    this.sitTimer = 100 + rnd() * 80;
+    this.whisperT = 25 + rnd() * 35;
+    this.restLeft = 0;
   }
 
   setState(s) {
@@ -56,11 +65,12 @@ export class AjanBrain {
 
   // ------------------------------------------------------------ perception
   candidates() {
-    return [...this.game.players.values()].filter(p => p.alive && !p.escaped && !p.dying && p.pos);
+    return [...this.game.players.values()].filter(p => p.alive && !p.escaped && !p.dying && p.pos && !isSafeZone(p.pos));
   }
 
   canSee(p) {
-    if (p.hidden) return false;
+    if (p.hidden || isSafeZone(p.pos)) return false;
+    if (this.state === 'sleep' || this.state === 'dormant') return false;
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
     const d = Math.hypot(dx, dz) + Math.abs(p.pos.y - this.pos.y) * 0.5;
     let range = 13;
@@ -73,29 +83,41 @@ export class AjanBrain {
     return lineOfSight(this.pos, p.pos, this.house.colliders);
   }
 
-  /** A noise event from anywhere in the house. */
+  /**
+   * A noise event. Loudness falls off with distance, walls/closed doors and
+   * floors (soundTransmission). He only learns an approximate position, except
+   * for "exact" sources like a creaking floorboard or a radio.
+   */
   hear(n) {
     if (this.state === 'dormant' || this.state === 'kill' || this.state === 'drag') return;
-    const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z);
-    let r = n.radius;
-    if (levelOf(n.pos.y) !== levelOf(this.pos.y) && !inStairs(n.pos) && !inStairs(this.pos)) r *= 0.35;
-    const walls = segmentBlockers(this.pos.x, this.pos.z, n.pos.x, n.pos.z, Math.max(n.pos.y, this.pos.y) + 1.2, this.house.colliders, { max: 4 });
-    r *= Math.pow(0.62, walls);
+    if (isSafeZone(n.pos)) return;
+    const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z) + Math.abs(n.pos.y - this.pos.y) * 0.5;
+    // Low, booming sources (radio, elevator) carry through walls better than footsteps.
+    const tr = soundTransmission(n.pos, this.pos, this.house.colliders, n.kind === 'radio' || n.kind === 'elevator' ? 0.75 : 0.55);
+    let r = n.radius * tr.k;
+    if (this.state === 'sleep') r *= 0.4; // dozing: only loud, close noises wake him
     if (d > r) return;
+    // A hider making noise right in front of him gives themselves away.
+    if (this.state === 'inspect' && this.inspecting && n.pid && this.inspecting.spot.occupant === n.pid && d < 4) {
+      const p = this.game.players.get(n.pid);
+      if (p) p.hideSeen = true;
+      return;
+    }
     if (this.state === 'chase') {
       if (n.pid && n.pid === this.target) { this.lastSeen = n.pos.clone(); this.lastSeenT = 0; }
       return;
     }
-    // Only an approximate location: error grows with distance and walls.
-    const err = Math.min(3.5, d * 0.12 + walls * 0.6);
+    if (this.state === 'sleep' || this.state === 'sit') this.wakeUp();
+    const err = n.exact ? 0 : Math.min(3.5, d * 0.12 + tr.walls * 0.6 + tr.floors * 1.5);
     const a = this.rnd() * Math.PI * 2;
     const guess = new THREE.Vector3(n.pos.x + Math.cos(a) * err * this.rnd(), n.pos.y, n.pos.z + Math.sin(a) * err * this.rnd());
-    const loud = n.radius / Math.max(1, d);
-    if (this.state === 'investigate' && this.goal && loud < this.goalLoud * 0.8) return;
+    const loud = r / Math.max(1, d);
+    if (this.state === 'investigate' && this.goal && loud < this.goalLoud * 0.8 && !n.exact) return;
     this.goalLoud = loud;
-    const wasPatrol = this.state === 'patrol';
+    const wasCalm = this.state === 'patrol' || this.state === 'sit' || this.state === 'sleep';
+    this.inspecting = null;
     this.setState('investigate');
-    this.pauseT = wasPatrol ? 0.6 : 0;
+    this.pauseT = wasCalm ? 0.6 : 0;
     this.moveTo(guess);
     if (loud > 2.5 && this.rnd() < 0.5) this.game.ajanSound('growl');
   }
@@ -110,12 +132,11 @@ export class AjanBrain {
     const path = findPath(this.house.nav, from.id, to.id, id => !this.house.doors.get(id)?.locked);
     if (!path) { this.path = null; return false; }
     this.path = path.map(id => { const n = this.house.nav.byId[id]; return { x: n.x, y: n.y, z: n.z, id }; });
-    // Only walk the last stretch off-graph if it's actually clear.
+    // Only walk the last stretch off-graph if it's actually clear (and not into the attic).
     const last = this.path[this.path.length - 1];
-    const clear = segmentBlockers(last.x, last.z, p.x, p.z, last.y + 0.6, cols, { pad: AJAN.radius, occludeOnly: false, max: 1 }) === 0;
-    if (clear && Math.abs(p.y - last.y) < 1.2) this.path.push({ x: p.x, y: p.y, z: p.z, id: null });
+    const clear = segmentBlockers(last.x, last.z, p.x, p.z, last.y + 0.6, cols, { pad: AJAN.radius, occludeOnly: false, max: 1, who: 'ajan' }) === 0;
+    if (clear && Math.abs(p.y - last.y) < 1.2 && !isSafeZone(p)) this.path.push({ x: p.x, y: p.y, z: p.z, id: null });
     this.pathIdx = 0;
-    // Skip the first node if we're already past it
     if (this.path.length > 2) {
       const a = this.path[0], b = this.path[1];
       if (Math.hypot(b.x - this.pos.x, b.z - this.pos.z) < Math.hypot(b.x - a.x, b.z - a.z)) this.pathIdx = 1;
@@ -152,27 +173,27 @@ export class AjanBrain {
   }
 
   advance(dt, speed, nx, nz) {
-    // Slow down for sharp turns
-    const v = speed;
-    this.pos.x += nx * v * dt;
-    this.pos.z += nz * v * dt;
-    collideCircle(this.pos, AJAN.radius, AJAN.height, this.house.colliders);
+    this.pos.x += nx * speed * dt;
+    this.pos.z += nz * speed * dt;
+    collideCircle(this.pos, AJAN.radius, AJAN.height, this.house.colliders, 'ajan');
     const gy = groundAt(this.pos.x, this.pos.z, this.pos.y);
     this.pos.y += (gy - this.pos.y) * Math.min(1, dt * 12);
-    this.speed = v;
+    this.speed = speed;
   }
 
   // --------------------------------------------------------------- update
   update(dt) {
+    this.stateClock = (this.stateClock || 0) + dt;
     this.stateT += dt;
     this.animT += dt;
     if (this.cooldown > 0) this.cooldown -= dt;
     this.speed = 0;
     if (this.state === 'dormant') {
       this.dormantLeft -= dt;
-      this.pos.set(17, -50, 4);
+      this.pos.set(36.8, -50, 4);
       if (this.dormantLeft <= 0) {
-        this.pos.set(17.6, 0, 3.6);
+        // He wakes up in his own room upstairs.
+        this.pos.copy(this.house.ajanBed.stand);
         this.ry = Math.PI;
         this.setState('patrol');
         this.game.ajanSound('roar');
@@ -180,7 +201,13 @@ export class AjanBrain {
       }
       return;
     }
-    if (this.state === 'kill') { this.anim = this.anim || 'grab'; return; }
+    if (this.state === 'kill') return;
+
+    this.sleepTimer -= dt;
+    this.sitTimer -= dt;
+    this.whisperT -= dt;
+
+    if (this.state === 'sleep' || this.state === 'sit') { this.updateRest(dt); return; }
 
     // Vision
     this.visionT -= dt;
@@ -191,8 +218,9 @@ export class AjanBrain {
 
     if (this.pauseT > 0) {
       this.pauseT -= dt;
-      this.anim = this.state === 'patrol' || this.state === 'search' ? 'search' : 'move';
-      this.headYaw = Math.sin(this.stateT * 1.5) * 0.6;
+      this.anim = this.state === 'inspect' ? 'inspect' : this.state === 'patrol' || this.state === 'search' ? 'search' : 'move';
+      this.headYaw = this.state === 'inspect' ? Math.sin(this.stateT * 0.8) * 0.25 : Math.sin(this.stateT * 1.5) * 0.6;
+      if (this.state === 'inspect' && this.pauseT <= 0) this.finishInspect();
       return;
     }
     this.headYaw *= 0.9;
@@ -200,7 +228,13 @@ export class AjanBrain {
 
     switch (this.state) {
       case 'patrol':
-        if (this.step(dt, AJAN.patrol)) { this.pauseT = 1 + this.rnd() * 2.5; this.pickPatrol(); }
+        if (this.whisperT <= 0) { this.whisperT = 30 + this.rnd() * 45; this.game.ajanSound('whisper'); }
+        if (this.sleepTimer <= 0) { this.goToBed(); break; }
+        if (this.sitTimer <= 0) { this.goToChair(); break; }
+        if (this.step(dt, AJAN.patrol)) {
+          this.pauseT = 1 + this.rnd() * 2.5;
+          if (!(this.rnd() < 0.2 && this.tryInspect(6))) this.pickPatrol();
+        }
         break;
       case 'investigate':
         if (this.step(dt, AJAN.investigate)) {
@@ -213,8 +247,17 @@ export class AjanBrain {
           this.pauseT = 1.2 + this.rnd();
           const next = this.searchPoints.shift();
           if (next) this.moveTo(next);
-          else { this.setState('patrol'); this.pickPatrol(); }
+          else if (!(this.rnd() < 0.6 && this.tryInspect(8))) { this.setState('patrol'); this.pickPatrol(); }
         }
+        break;
+      case 'inspectGo':
+        if (this.step(dt, AJAN.search)) this.startInspect();
+        break;
+      case 'gotobed':
+        if (this.step(dt, AJAN.patrol)) this.lieDown();
+        break;
+      case 'gotochair':
+        if (this.step(dt, AJAN.patrol)) this.sitDown();
         break;
       case 'chase':
         this.updateChase(dt);
@@ -224,7 +267,7 @@ export class AjanBrain {
         break;
     }
 
-    // Stuck detection → repath
+    // Stuck detection → repath / give up
     this.stuckT += dt;
     if (this.stuckT > 1.5) {
       const moved = this.pos.distanceTo(this.lastPos);
@@ -234,6 +277,8 @@ export class AjanBrain {
         this.stuckCount = (this.stuckCount || 0) + 1;
         if (this.state === 'patrol' || this.stuckCount > 2) {
           this.stuckCount = 0;
+          if (this.state === 'gotobed') this.sleepTimer = 30;
+          if (this.state === 'gotochair') this.sitTimer = 60;
           this.setState('patrol');
           this.pickPatrol();
         } else if (this.goal) this.moveTo(this.goal);
@@ -258,6 +303,7 @@ export class AjanBrain {
       if (this.state !== 'chase' || this.target !== best.id) {
         if (this.state !== 'chase') this.game.ajanSound('roar');
         this.target = best.id;
+        this.inspecting = null;
         this.setState('chase');
         this.pauseT = 0;
       }
@@ -269,15 +315,15 @@ export class AjanBrain {
   updateChase(dt) {
     const p = this.game.players.get(this.target);
     this.lastSeenT += dt;
-    if (!p || !p.alive || p.escaped || p.dying) { this.loseTarget(); return; }
-    // If they hid while we were watching closely, go and drag them out.
+    if (!p || !p.alive || p.escaped || p.dying) { this.loseTarget(false); return; }
+    // Reached the attic: he stops dead and won't follow.
+    if (isSafeZone(p.pos)) { this.loseTarget(true); return; }
     if (p.hidden) {
       if (p.hideSeen) { this.beginDrag(p); return; }
-      this.loseTarget();
+      this.loseTarget(true);
       return;
     }
     const visible = this.lastSeenT < 0.3;
-    // Short memory: keep heading toward a live position for a moment after LOS breaks.
     if (this.lastSeenT < 1.0) this.lastSeen = p.pos.clone();
     const tgt = this.lastSeen;
     const d = Math.hypot(p.pos.x - this.pos.x, p.pos.z - this.pos.z);
@@ -286,7 +332,7 @@ export class AjanBrain {
       this.game.hostStartKill(p.id);
       return;
     }
-    const direct = visible && segmentBlockers(this.pos.x, this.pos.z, tgt.x, tgt.z, this.pos.y + 0.6, this.house.colliders, { pad: 0.3, occludeOnly: false, max: 1 }) === 0;
+    const direct = visible && segmentBlockers(this.pos.x, this.pos.z, tgt.x, tgt.z, this.pos.y + 0.6, this.house.colliders, { pad: 0.3, occludeOnly: false, max: 1, who: 'ajan' }) === 0;
     if (direct) {
       const dx = tgt.x - this.pos.x, dz = tgt.z - this.pos.z;
       const dd = Math.hypot(dx, dz) || 1;
@@ -299,22 +345,24 @@ export class AjanBrain {
         this.repathT = 0.6;
       }
       const done = this.step(dt, AJAN.chase * 0.92);
-      if (done && this.lastSeenT > 1.0) this.loseTarget();
+      if (done && this.lastSeenT > 1.0) this.loseTarget(true);
     }
-    if (this.lastSeenT > 7) this.loseTarget();
+    if (this.lastSeenT > 7) this.loseTarget(true);
   }
 
-  loseTarget() {
-    const where = this.lastSeen || this.pos.clone();
+  loseTarget(laugh = true) {
+    const where = this.lastSeen && !isSafeZone(this.lastSeen) ? this.lastSeen : this.pos.clone();
     this.target = null;
     this.awareness.clear();
+    // Sometimes he laughs quietly to himself when he loses you.
+    if (laugh && this.rnd() < 0.6) this.game.ajanSound('laugh');
     this.beginSearch(where, 3);
   }
 
   beginSearch(center, count) {
     this.setState('search');
     this.searchPoints = [];
-    const nodes = this.house.nav.nodes.filter(n => Math.hypot(n.x - center.x, n.z - center.z) < 9 && levelOf(n.y) === levelOf(center.y));
+    const nodes = this.house.nav.nodes.filter(n => Math.hypot(n.x - center.x, n.z - center.z) < 9 && levelOf(n.y) === levelOf(center.y) && n.edges.length);
     for (let i = 0; i < count && nodes.length; i++) {
       const n = nodes.splice(Math.floor(this.rnd() * nodes.length), 1)[0];
       this.searchPoints.push(new THREE.Vector3(n.x, n.y, n.z));
@@ -322,9 +370,42 @@ export class AjanBrain {
     this.moveTo(center);
   }
 
+  // ------------------------------------------------------ hiding spots
+  /** Walk up to a nearby hiding place and stare at it for a while. */
+  tryInspect(radius) {
+    const spots = [...this.house.hides.values()].filter(s => levelOf(s.exit.y) === levelOf(this.pos.y) && s.exit.distanceTo(this.pos) < radius);
+    if (!spots.length) return false;
+    const spot = spots[Math.floor(this.rnd() * spots.length)];
+    if (!this.moveTo(spot.exit)) return false;
+    this.inspecting = { spot };
+    this.setState('inspectGo');
+    return true;
+  }
+
+  startInspect() {
+    const spot = this.inspecting?.spot;
+    if (!spot) { this.setState('patrol'); this.pickPatrol(); return; }
+    this.ry = Math.atan2(spot.inside.x - this.pos.x, spot.inside.z - this.pos.z);
+    this.setState('inspect');
+    this.animT = 0;
+    this.pauseT = 2.6 + this.rnd() * 1.4;
+  }
+
+  finishInspect() {
+    const spot = this.inspecting?.spot;
+    this.inspecting = null;
+    const pid = spot?.occupant;
+    const p = pid && this.game.players.get(pid);
+    if (p && p.hidden && p.hideSeen) { this.beginDrag(p); return; }
+    // Nothing (as far as he knows). He leaves, laughing.
+    this.game.ajanSound('laugh');
+    this.setState('patrol');
+    this.pickPatrol();
+  }
+
   beginDrag(p) {
     const spot = this.house.hides.get(p.hideId);
-    if (!spot) { this.loseTarget(); return; }
+    if (!spot) { this.loseTarget(false); return; }
     this.dragHide = { pid: p.id, spot };
     this.setState('drag');
     this.moveTo(spot.exit);
@@ -333,7 +414,7 @@ export class AjanBrain {
   updateDrag(dt) {
     const { pid, spot } = this.dragHide;
     const p = this.game.players.get(pid);
-    if (!p || !p.alive || !p.hidden) { this.dragHide = null; this.loseTarget(); return; }
+    if (!p || !p.alive || !p.hidden) { this.dragHide = null; this.loseTarget(false); return; }
     const d = Math.hypot(spot.exit.x - this.pos.x, spot.exit.z - this.pos.z);
     if (d < 0.9 || this.step(dt, AJAN.chase * 0.8)) {
       this.faceTo(Math.atan2(spot.inside.x - this.pos.x, spot.inside.z - this.pos.z), dt, 10);
@@ -342,37 +423,102 @@ export class AjanBrain {
     }
   }
 
+  // ------------------------------------------------------ naps & chairs
+  goToBed() {
+    const bed = this.house.ajanBed;
+    if (!bed || !this.moveTo(bed.stand)) { this.sleepTimer = 30; this.pickPatrol(); return; }
+    this.setState('gotobed');
+  }
+
+  lieDown() {
+    const bed = this.house.ajanBed;
+    if (this.pos.distanceTo(bed.stand) > 1.6) { this.sleepTimer = 30; this.setState('patrol'); this.pickPatrol(); return; }
+    this.restFrom = bed.stand.clone();
+    this.pos.copy(bed.seat);
+    this.ry = bed.ry;
+    this.restLeft = 30;
+    this.anim = 'sleep';
+    this.animT = 0;
+    this.setState('sleep');
+  }
+
+  goToChair() {
+    const chairs = this.house.wallChairs.filter(c => levelOf(c.seat.y) === levelOf(this.pos.y) || this.rnd() < 0.5);
+    const chair = chairs[Math.floor(this.rnd() * chairs.length)];
+    if (!chair || !this.moveTo(chair.front)) { this.sitTimer = 60; this.pickPatrol(); return; }
+    this.chair = chair;
+    this.setState('gotochair');
+  }
+
+  sitDown() {
+    const c = this.chair;
+    if (!c || this.pos.distanceTo(c.front) > 1.6) { this.sitTimer = 60; this.setState('patrol'); this.pickPatrol(); return; }
+    this.restFrom = c.front.clone();
+    this.pos.copy(c.seat);
+    this.ry = c.ry;
+    this.restLeft = 14 + this.rnd() * 12;
+    this.anim = 'sit';
+    this.animT = 0;
+    this.setState('sit');
+  }
+
+  updateRest(dt) {
+    this.restLeft -= dt;
+    this.anim = this.state;
+    // Sitting he still watches what's in front of him (the wall, mostly).
+    if (this.state === 'sit') {
+      this.visionT -= dt;
+      if (this.visionT <= 0) { this.visionT = 0.2; this.look(0.2); if (this.state === 'chase') { this.standUp(); return; } }
+    }
+    if (this.restLeft <= 0) this.wakeUp();
+  }
+
+  standUp() {
+    if (this.restFrom) this.pos.copy(this.restFrom);
+    this.restFrom = null;
+    this.anim = 'move';
+  }
+
+  wakeUp() {
+    const was = this.state;
+    this.standUp();
+    if (was === 'sleep') this.sleepTimer = 180 + this.rnd() * 60;
+    if (was === 'sit') this.sitTimer = 100 + this.rnd() * 80;
+    if (was === 'sleep' || was === 'sit') { this.setState('patrol'); this.pauseT = 1.5; this.pickPatrol(); }
+  }
+
   pickPatrol() {
     const cols = this.house.colliders;
     const here = nearestNode(this.house.nav, this.pos, cols);
     const passable = id => !this.house.doors.get(id)?.locked;
-    this.recent = this.recent || [];
     let nodes = this.house.patrolNodes.filter(id => {
       const n = this.house.nav.byId[id];
       if (id === this.lastPatrol || Math.hypot(n.x - this.pos.x, n.z - this.pos.z) < 3) return false;
       return !here || !!findPath(this.house.nav, here.id, id, passable);
     });
-    // Prefer rooms he hasn't checked recently so the whole house gets covered.
-    const fresh = nodes.filter(id => !this.recent.includes(this.house.nav.byId[id].room));
-    if (fresh.length) nodes = fresh;
     if (!nodes.length) { this.pauseT = 2; return; }
+    // Prefer the rooms he has gone longest without checking, so over time he
+    // covers every reachable room on every floor.
+    this.visited = this.visited || {};
+    const age = id => this.stateClock - (this.visited[this.house.nav.byId[id].room] ?? -1e9);
+    nodes.sort((x, y) => age(y) - age(x));
+    nodes = nodes.slice(0, Math.max(3, Math.ceil(nodes.length / 3)));
     let choice = null;
-    // Mild "director": sometimes wander toward a region where somebody is,
+    // Mild "director": sometimes wander toward a floor/region where somebody is,
     // without knowing anyone's exact position.
     const alive = this.candidates();
-    if (alive.length && this.rnd() < 0.35) {
+    if (alive.length && this.rnd() < 0.3) {
       const p = alive[Math.floor(this.rnd() * alive.length)];
       const near = nodes.filter(id => {
         const n = this.house.nav.byId[id];
-        return Math.hypot(n.x - p.pos.x, n.z - p.pos.z) < 12 && levelOf(n.y) === levelOf(p.pos.y);
+        return Math.hypot(n.x - p.pos.x, n.z - p.pos.z) < 14 && levelOf(n.y) === levelOf(p.pos.y);
       });
       if (near.length) choice = near[Math.floor(this.rnd() * near.length)];
     }
     if (!choice) choice = nodes[Math.floor(this.rnd() * nodes.length)];
     this.lastPatrol = choice;
     const n = this.house.nav.byId[choice];
-    this.recent.push(n.room);
-    if (this.recent.length > 4) this.recent.shift();
+    this.visited[n.room] = this.stateClock;
     if (!this.moveTo(tmp.set(n.x, n.y, n.z).clone())) this.path = null;
   }
 

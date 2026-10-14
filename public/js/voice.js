@@ -1,7 +1,7 @@
 // Microphone capture + voice-activity detection, and peer-to-peer WebRTC voice
 // chat with positional audio (distance, direction, wall/floor muffling).
 import { audio } from './audio.js';
-import { settings, setSetting } from './settings.js';
+import { settings, setSetting, onSettingChange } from './settings.js';
 import { clamp } from './util.js';
 
 class Mic {
@@ -13,6 +13,8 @@ class Mic {
     this.deviceId = '';
     this.error = null;
     this.listeners = new Set();
+    this.outLevel = 0;
+    onSettingChange(k => { if (k === 'micVolume') this.applyVolume(); });
   }
 
   get supported() { return !!navigator.mediaDevices?.getUserMedia; }
@@ -48,6 +50,21 @@ class Mic {
     this.analyser.fftSize = 1024;
     this.buf = new Float32Array(this.analyser.fftSize);
     this.source.connect(this.analyser);
+    // Outgoing voice: source → volume gain (0–200 %) → limiter → WebRTC track.
+    // Sensitivity (voice detection) reads the raw signal above; volume only
+    // changes what other players hear.
+    this.volGain = ctx.createGain();
+    this.limiter = ctx.createDynamicsCompressor();
+    this.limiter.threshold.value = -6; this.limiter.knee.value = 4; this.limiter.ratio.value = 14;
+    this.limiter.attack.value = 0.003; this.limiter.release.value = 0.15;
+    this.dest = ctx.createMediaStreamDestination();
+    this.outAnalyser = ctx.createAnalyser();
+    this.outAnalyser.fftSize = 1024;
+    this.source.connect(this.volGain);
+    this.volGain.connect(this.limiter);
+    this.limiter.connect(this.dest);
+    this.limiter.connect(this.outAnalyser);
+    this.applyVolume();
     this.applyMute();
     this.listeners.forEach(fn => fn(this.stream));
     return this.stream;
@@ -55,7 +72,14 @@ class Mic {
 
   onStream(fn) { this.listeners.add(fn); return () => this.listeners.delete(fn); }
 
-  get track() { return this.stream?.getAudioTracks()[0] || null; }
+  /** The processed track that is actually sent to other players. */
+  get track() { return this.stream ? (this.dest?.stream.getAudioTracks()[0] || null) : null; }
+
+  applyVolume() {
+    if (!this.volGain) return;
+    const v = clamp(settings.micVolume ?? 1, 0, 2);
+    this.volGain.gain.setTargetAtTime(v, audio.ctx.currentTime, 0.03);
+  }
 
   applyMute() {
     const t = this.track;
@@ -74,7 +98,14 @@ class Mic {
     const db = 20 * Math.log10(rms + 1e-8);
     const lvl = clamp((db + 62) / 52, 0, 1);
     this.level += (lvl - this.level) * Math.min(1, dt * (lvl > this.level ? 25 : 8));
-    const active = !settings.micMuted && this.level > this.threshold();
+    // Transmitted level (after volume + limiter) for the "what others hear" meter.
+    this.outAnalyser.getFloatTimeDomainData(this.buf);
+    let so = 0;
+    for (let i = 0; i < this.buf.length; i++) so += this.buf[i] * this.buf[i];
+    const olvl = clamp((20 * Math.log10(Math.sqrt(so / this.buf.length) + 1e-8) + 62) / 52, 0, 1);
+    this.outLevel += (olvl - this.outLevel) * Math.min(1, dt * 15);
+    // Speaking = detected speech that is actually being transmitted.
+    const active = !settings.micMuted && (settings.micVolume ?? 1) > 0.02 && this.level > this.threshold();
     if (active) this.hold = 0.35; else this.hold -= dt;
     this.speaking = this.hold > 0;
   }
@@ -85,10 +116,10 @@ class Mic {
     if (on && !this.monitorNode) {
       this.monitorNode = ctx.createDelay(1);
       this.monitorNode.delayTime.value = 0.25;
-      this.source.connect(this.monitorNode);
+      (this.limiter || this.source).connect(this.monitorNode); // hear what others hear
       this.monitorNode.connect(audio.master);
     } else if (!on && this.monitorNode) {
-      try { this.source.disconnect(this.monitorNode); } catch { /* not connected */ }
+      try { (this.limiter || this.source).disconnect(this.monitorNode); } catch { /* not connected */ }
       this.monitorNode.disconnect();
       this.monitorNode = null;
     }
@@ -98,8 +129,9 @@ class Mic {
     this.setMonitor(false);
     this.stream?.getTracks().forEach(t => t.stop());
     this.stream = null;
-    try { this.source?.disconnect(); } catch { /* ignore */ }
-    this.source = this.analyser = null;
+    try { this.source?.disconnect(); this.volGain?.disconnect(); this.limiter?.disconnect(); } catch { /* ignore */ }
+    this.source = this.analyser = this.volGain = this.limiter = this.dest = this.outAnalyser = null;
+    this.outLevel = 0;
     this.level = 0;
     this.speaking = false;
   }

@@ -101,28 +101,67 @@ export class LocalPlayer {
       if (k === 'KeyF') this.toggleFlash();
       if (k === 'KeyC' || k === 'ControlLeft') this.crouch = !this.crouch;
     };
+    // Mouse look: events only accumulate deltas; update() applies them once per
+    // frame, so the camera has exactly one writer and stops the moment the
+    // mouse stops. Spurious deltas Chrome emits right after pointer lock is
+    // (re)acquired, and absurd single-event spikes, are discarded.
+    this.lookDX = 0;
+    this.lookDY = 0;
+    this.lockAt = 0;
     this.onMouse = e => {
       if (document.pointerLockElement !== this.game.canvas) return;
-      const s = 0.0022 * settings.mouse;
-      if (this.hidden) {
-        this.hideLook = clamp(this.hideLook - e.movementX * s, -0.7, 0.7);
-        this.pitch = clamp(this.pitch - e.movementY * s * (settings.invertY ? -1 : 1), -0.5, 0.5);
-        return;
-      }
-      if (this.frozen) return;
-      this.yaw -= e.movementX * s;
-      this.turnRate = -e.movementX * s * 60;
-      this.pitch = clamp(this.pitch - e.movementY * s * (settings.invertY ? -1 : 1), -1.45, 1.45);
+      if (performance.now() - this.lockAt < 120) return;
+      const dx = e.movementX || 0, dy = e.movementY || 0;
+      if (Math.abs(dx) > 350 || Math.abs(dy) > 350) return;
+      this.lookDX += dx;
+      this.lookDY += dy;
     };
+    // Losing focus or the pointer lock drops held keys and pending look input.
+    this.onReset = () => {
+      this.keys.clear();
+      this.lookDX = this.lookDY = 0;
+      this.vel.set(0, 0, 0);
+    };
+    this.onLock = () => {
+      this.lockAt = performance.now();
+      this.lookDX = this.lookDY = 0;
+      if (document.pointerLockElement !== this.game.canvas) this.onReset();
+    };
+    this.onVis = () => { if (document.hidden) this.onReset(); };
     addEventListener('keydown', this.onKey);
     addEventListener('keyup', this.onKey);
     addEventListener('mousemove', this.onMouse);
+    addEventListener('blur', this.onReset);
+    document.addEventListener('pointerlockchange', this.onLock);
+    document.addEventListener('visibilitychange', this.onVis);
+  }
+
+  applyLook() {
+    const dx = this.lookDX, dy = this.lookDY;
+    this.lookDX = this.lookDY = 0;
+    if (!dx && !dy) { this.turnRate = 0; return; }
+    const s = 0.0022 * settings.mouse;
+    const inv = settings.invertY ? -1 : 1;
+    if (this.hidden) {
+      this.hideLook = clamp(this.hideLook - dx * s, -0.7, 0.7);
+      this.pitch = clamp(this.pitch - dy * s * inv, -0.5, 0.5);
+      return;
+    }
+    if (this.frozen) return;
+    this.yaw -= dx * s;
+    // keep the angle bounded so float error can't accumulate over a long session
+    if (this.yaw > Math.PI) this.yaw -= Math.PI * 2; else if (this.yaw < -Math.PI) this.yaw += Math.PI * 2;
+    this.turnRate = -dx * s * 60;
+    this.pitch = clamp(this.pitch - dy * s * inv, -1.45, 1.45);
   }
 
   dispose() {
     removeEventListener('keydown', this.onKey);
     removeEventListener('keyup', this.onKey);
     removeEventListener('mousemove', this.onMouse);
+    removeEventListener('blur', this.onReset);
+    document.removeEventListener('pointerlockchange', this.onLock);
+    document.removeEventListener('visibilitychange', this.onVis);
     this.camera.remove(this.light, this.light.target, this.fill, this.hands);
   }
 
@@ -138,7 +177,7 @@ export class LocalPlayer {
   update(dt) {
     const k = this.keys;
     this.actT += dt;
-    this.turnRate *= Math.exp(-dt * 10);
+    this.applyLook();
     this.crouchK = damp(this.crouchK, this.crouch ? 1 : 0, 10, dt);
     let mx = 0, mz = 0;
     if (!this.frozen && !this.hidden) {
@@ -185,7 +224,7 @@ export class LocalPlayer {
     const cam = this.camera;
     if (this.hidden) {
       const spot = this.hidden;
-      cam.position.set(spot.inside.x, spot.inside.y + 1.45, spot.inside.z);
+      cam.position.set(spot.inside.x, spot.inside.y + (spot.camY ?? 1.45), spot.inside.z);
       cam.rotation.set(this.pitch, spot.yaw + this.hideLook, 0, 'YXZ');
       this.light.intensity = 0;
     } else {
@@ -217,7 +256,8 @@ export class LocalPlayer {
   footstep() {
     const vol = this.run ? 0.55 : this.crouch ? 0.12 : 0.3;
     audio.play('step', { vol, rate: 0.85 + Math.random() * 0.3 });
-    const r = this.run ? 15 : this.crouch ? 2.2 : 6.5;
-    this.game.emitNoise(this.pos, r, this.run ? 'run' : 'step');
+    // Crouching is near silent, walking carries a few metres, running is loud.
+    const r = this.run ? 11 : this.crouch ? 0.9 : 3.5;
+    if (r >= 1) this.game.emitNoise(this.pos, r, this.run ? 'run' : 'step');
   }
 }

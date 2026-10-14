@@ -1,75 +1,26 @@
-// The house: layout, walls with door openings, furniture, colliders, lights,
-// windows, interactables (doors, drawers, hiding spots, TV, monitors, fuse box),
-// painting slots, item spawn candidates and Ajan's navigation graph.
+// The house: builds the four-level layout from layout.js (walls with door
+// openings, floors, ceilings, stairs), furniture (furniture.js), colliders,
+// lights, windows, interactables (doors, drawers, hiding spots, TV, monitors,
+// fuse box) and Ajan's navigation graph.
 import * as THREE from 'three';
 import { buildMaterials } from './textures.js';
-import { segmentBlockers, groundAt, BASEMENT_Y } from './physics.js';
+import { segmentBlockers } from './physics.js';
 import { shuffle } from './util.js';
+import {
+  LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
+  roomAt, rampHeight, levelIndex, SPAWN_POINTS,
+} from './layout.js';
+import { buildFurniture } from './furniture.js';
+
+export { roomAt, SPAWN_POINTS };
 
 const T = 0.2; // wall thickness
-const H = 3.0; // ground floor wall height
-const BY = BASEMENT_Y;
-const BC = -0.25; // basement ceiling
 
 const TEX_SCALE = {
   wallA: 2.4, wallB: 2.4, wallC: 2.4, wallTile: 1.6, wallBase: 3, floorWood: 3, floorWoodDark: 3, floorTile: 2.4,
   floorBath: 2, floorConcrete: 4, carpet: 2, carpetB: 2, ceiling: 3, wood: 1.2, woodDark: 1.2, woodPale: 1.2,
-  fabricRed: 1, fabricGreen: 1, fabricBed: 1.2, metal: 1, frame: 0.6,
+  fabricRed: 1, fabricGreen: 1, fabricBed: 1.2, metal: 1, frame: 0.6, boardCreak: 1,
 };
-
-export const ROOMS = [
-  { id: 'bed1', name: 'BEDROOM', x0: 0, x1: 8, z0: 0, z1: 8, y: 0, floor: 'carpet', wall: 'wallB' },
-  { id: 'bath', name: 'BATHROOM', x0: 8, x1: 13, z0: 0, z1: 8, y: 0, floor: 'floorBath', wall: 'wallTile' },
-  { id: 'bed2', name: "CHILD'S ROOM", x0: 13, x1: 21, z0: 0, z1: 8, y: 0, floor: 'carpetB', wall: 'wallC' },
-  { id: 'sec', name: 'SECURITY ROOM', x0: 21, x1: 30, z0: 0, z1: 8, y: 0, floor: 'floorTile', wall: 'wallA' },
-  { id: 'hall', name: 'HALLWAY', x0: 0, x1: 30, z0: 8, z1: 11, y: 0, floor: 'floorWoodDark', wall: 'wallA' },
-  { id: 'living', name: 'LIVING ROOM', x0: 0, x1: 11, z0: 11, z1: 21, y: 0, floor: 'floorWood', wall: 'wallB' },
-  { id: 'start', name: 'BACK ROOM', x0: 11, x1: 17, z0: 11, z1: 17, y: 0, floor: 'floorWoodDark', wall: 'wallC' },
-  { id: 'stair', name: 'STAIRWELL', x0: 11, x1: 17, z0: 17, z1: 21, y: 0, floor: null, wall: 'wallBase' },
-  { id: 'kitchen', name: 'KITCHEN', x0: 17, x1: 30, z0: 11, z1: 21, y: 0, floor: 'floorTile', wall: 'wallA' },
-  { id: 'base', name: 'BASEMENT', x0: 2, x1: 17, z0: 17, z1: 27, y: BY, floor: 'floorConcrete', wall: 'wallBase' },
-];
-
-export function roomAt(x, z, y = 0) {
-  const basement = y < -1.4;
-  if (z > 17 && z < 21 && x > 11 && x < 17) return ROOMS.find(r => r.id === 'stair');
-  for (const r of ROOMS) {
-    if ((r.y < -1) !== basement) continue;
-    if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return r;
-  }
-  return null;
-}
-
-// Doors: line 'x' = wall runs along X at z=c; line 'z' = wall runs along Z at x=c.
-export const DOORS = [
-  { id: 'd_bed1', line: 'x', c: 8, a0: 3.0, w: 1.1, swing: -1, name: 'Bedroom Door' },
-  { id: 'd_bath', line: 'x', c: 8, a0: 10.0, w: 1.1, swing: -1, name: 'Bathroom Door' },
-  { id: 'd_bed2', line: 'x', c: 8, a0: 16.0, w: 1.1, swing: -1, name: 'Bedroom Door' },
-  { id: 'd_sec', line: 'x', c: 8, a0: 25.0, w: 1.1, swing: -1, lock: 'power', name: 'Security Room Door' },
-  { id: 'd_living', line: 'x', c: 11, a0: 5.0, w: 1.1, swing: 1, name: 'Living Room Door' },
-  { id: 'd_start_n', line: 'x', c: 11, a0: 13.5, w: 1.1, swing: 1, name: 'Door' },
-  { id: 'd_kitchen', line: 'x', c: 11, a0: 22.0, w: 1.1, swing: 1, name: 'Kitchen Door' },
-  { id: 'd_start_w', line: 'z', c: 11, a0: 13.5, w: 1.1, swing: -1, name: 'Door' },
-  { id: 'd_start_e', line: 'z', c: 17, a0: 13.5, w: 1.1, swing: 1, name: 'Door' },
-  { id: 'd_basement', line: 'z', c: 17, a0: 18.6, w: 1.1, swing: 1, lock: 'basement_key', name: 'Basement Door' },
-  { id: 'd_front', line: 'x', c: 21, a0: 4.0, w: 1.3, swing: -1, lock: 'exit_key', name: 'Front Door', exit: true },
-];
-const OPENINGS = [{ line: 'z', c: 8, a0: 23.0, w: 1.4, y0: BY, h: 2.3 }];
-const DOOR_H = 2.3;
-
-// line, c, a0, a1, y0, y1
-const WALLS = [
-  ['x', 0, 0, 30, 0, H], ['x', 8, 0, 30, 0, H], ['x', 11, 0, 30, 0, H],
-  ['x', 17, 11, 17, BY, H],
-  ['x', 21, 0, 11, 0, H], ['x', 21, 11, 17, BY, H], ['x', 21, 17, 30, 0, H],
-  ['z', 0, 0, 21, 0, H], ['z', 30, 0, 21, 0, H],
-  ['z', 8, 0, 8, 0, H], ['z', 13, 0, 8, 0, H], ['z', 21, 0, 8, 0, H],
-  ['z', 11, 11, 17, 0, H], ['z', 11, 17, 21, -0.2, H],
-  ['z', 17, 11, 17, 0, H], ['z', 17, 17, 21, 0, H], ['z', 17, 17, 21, BY, 0],
-  // basement
-  ['z', 2, 17, 27, BY, BC], ['x', 27, 2, 17, BY, BC], ['z', 17, 21, 27, BY, BC], ['x', 17, 2, 11, BY, BC],
-  ['z', 8, 21, 27, BY, BC],
-];
 
 // ---------------------------------------------------------------------------
 class GeoBuilder {
@@ -139,19 +90,22 @@ class GeoBuilder {
   }
 }
 
-const YAW = { '+z': 0, '+x': Math.PI / 2, '-z': Math.PI, '-x': -Math.PI / 2 };
-const DIR = { '+z': [0, 1], '-z': [0, -1], '+x': [1, 0], '-x': [-1, 0] };
+export const YAW = { '+z': 0, '+x': Math.PI / 2, '-z': Math.PI, '-x': -Math.PI / 2 };
+export const DIR = { '+z': [0, 1], '-z': [0, -1], '+x': [1, 0], '-x': [-1, 0] };
 
-function bx(w, h, d, mat) {
+export function bx(w, h, d, mat) {
   const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
   m.castShadow = true;
   m.receiveShadow = true;
   return m;
 }
 
+const PICK_MAT = new THREE.MeshBasicMaterial({ visible: false });
+
 // ---------------------------------------------------------------------------
 export class House {
-  constructor() {
+  constructor(rnd = Math.random) {
+    this.rnd = rnd;
     this.M = buildMaterials();
     this.group = new THREE.Group();
     this.colliders = [];
@@ -163,11 +117,10 @@ export class House {
     this.lights = [];
     this.windows = [];
     this.paintingSlots = [];
-    this.paintingMeshes = [];
     this.monitors = [];
     this.notes = [];
-    this.itemMeshes = new Map();
-    this.flickerT = 0;
+    this.wallChairs = [];
+    this.staticMeshes = [];
     this.power = false;
     this.blackout = 0;
     this.geo = new GeoBuilder();
@@ -187,6 +140,14 @@ export class House {
     return it;
   }
 
+  /** Invisible box used purely as an interaction target. */
+  pickBox(x0, y0, z0, x1, y1, z1) {
+    const m = new THREE.Mesh(new THREE.BoxGeometry(x1 - x0, y1 - y0, z1 - z0), PICK_MAT);
+    m.position.set((x0 + x1) / 2, (y0 + y1) / 2, (z0 + z1) / 2);
+    this.group.add(m);
+    return m;
+  }
+
   wallMat(axis, sign, c) {
     if (axis === 'y') return 'wallBase';
     const off = 0.35;
@@ -194,83 +155,91 @@ export class House {
     const z = c.z + (axis === 'z' ? sign * off : 0);
     const r = roomAt(x, z, c.y);
     if (!r) return 'wallBase';
-    if (c.y < -0.1 && r.id !== 'base' && r.id !== 'stair') return 'wallBase';
-    return r.wall;
+    return r.wall || 'wallBase';
   }
 
   build() {
     const G = this.geo;
-    // ---------------- walls
-    const all = [...DOORS.map(d => ({ ...d, y0: 0, h: DOOR_H })), ...OPENINGS];
+    // ---------------- walls (split per level band so wall materials match each room)
+    const cuts = [
+      ...DOORS.map(d => ({ ...d, y0: d.y, h: DOOR_H })),
+      ...OPENINGS,
+      ...ELEV_DOORS,
+    ];
     for (const [line, c, a0, a1, y0, y1] of WALLS) {
-      const cuts = all.filter(d => d.line === line && d.c === c && d.a0 >= a0 - 0.01 && d.a0 + d.w <= a1 + 0.01 && d.y0 < y1 && d.y0 + d.h > y0)
-        .sort((p, q) => p.a0 - q.a0);
-      let s = a0 - T / 2;
-      const segs = [];
-      for (const d of cuts) {
-        segs.push([s, d.a0, y0, y1]);
-        if (d.y0 + d.h < y1) segs.push([d.a0, d.a0 + d.w, d.y0 + d.h, y1]);
-        s = d.a0 + d.w;
-      }
-      segs.push([s, a1 + T / 2, y0, y1]);
-      for (const [p, q, ya, yb] of segs) {
-        if (q - p < 0.01) continue;
-        if (line === 'x') {
-          G.box(p, ya, c - T / 2, q, yb, c + T / 2, (ax, sg, ce) => this.wallMat(ax, sg, ce));
-          this.collider(p, c - T / 2, q, c + T / 2, ya, yb, { occlude: true, wall: true });
-        } else {
-          G.box(c - T / 2, ya, p, c + T / 2, yb, q, (ax, sg, ce) => this.wallMat(ax, sg, ce));
-          this.collider(c - T / 2, p, c + T / 2, q, ya, yb, { occlude: true, wall: true });
+      const mine = cuts.filter(d => d.line === line && d.c === c && d.a0 >= a0 - 0.01 && d.a0 + d.w <= a1 + 0.01 && d.y0 < y1 && d.y0 + d.h > y0);
+      const bands = [];
+      let ya = y0;
+      for (const L of LEVELS) for (const yy of [L.y, L.top]) if (yy > ya + 0.05 && yy < y1 - 0.05) { bands.push([ya, yy]); ya = yy; }
+      bands.push([ya, y1]);
+      for (const [ba, bb] of bands) {
+        const bandCuts = mine.filter(d => d.y0 < bb && d.y0 + d.h > ba).sort((p, q) => p.a0 - q.a0);
+        let s = a0 - T / 2;
+        const segs = [];
+        for (const d of bandCuts) {
+          segs.push([s, d.a0, ba, bb]);
+          const top = d.y0 + d.h;
+          if (top < bb) segs.push([d.a0, d.a0 + d.w, Math.max(ba, top), bb]);
+          if (d.y0 > ba) segs.push([d.a0, d.a0 + d.w, ba, d.y0]);
+          s = d.a0 + d.w;
+        }
+        segs.push([s, a1 + T / 2, ba, bb]);
+        for (const [p, q, yA, yB] of segs) {
+          if (q - p < 0.01 || yB - yA < 0.01) continue;
+          if (line === 'x') {
+            G.box(p, yA, c - T / 2, q, yB, c + T / 2, (ax, sg, ce) => this.wallMat(ax, sg, ce));
+            this.collider(p, c - T / 2, q, c + T / 2, yA, yB, { occlude: true, wall: true });
+          } else {
+            G.box(c - T / 2, yA, p, c + T / 2, yB, q, (ax, sg, ce) => this.wallMat(ax, sg, ce));
+            this.collider(c - T / 2, p, c + T / 2, q, yA, yB, { occlude: true, wall: true });
+          }
         }
       }
     }
     // Door frames (trim)
-    for (const d of DOORS) {
-      const t = 0.08;
+    for (const d of [...DOORS, ...ELEV_DOORS.map(e => ({ ...e, y: e.y0, metal: true }))]) {
+      const t = 0.08, y = d.y;
+      const mat = d.metal ? 'metal' : 'woodDark';
       if (d.line === 'x') {
-        G.box(d.a0 - t, 0, d.c - T / 2 - 0.02, d.a0, DOOR_H, d.c + T / 2 + 0.02, 'woodDark');
-        G.box(d.a0 + d.w, 0, d.c - T / 2 - 0.02, d.a0 + d.w + t, DOOR_H, d.c + T / 2 + 0.02, 'woodDark');
-        G.box(d.a0 - t, DOOR_H, d.c - T / 2 - 0.02, d.a0 + d.w + t, DOOR_H + t, d.c + T / 2 + 0.02, 'woodDark');
+        G.box(d.a0 - t, y, d.c - T / 2 - 0.02, d.a0, y + DOOR_H, d.c + T / 2 + 0.02, mat);
+        G.box(d.a0 + d.w, y, d.c - T / 2 - 0.02, d.a0 + d.w + t, y + DOOR_H, d.c + T / 2 + 0.02, mat);
+        G.box(d.a0 - t, y + DOOR_H, d.c - T / 2 - 0.02, d.a0 + d.w + t, y + DOOR_H + t, d.c + T / 2 + 0.02, mat);
       } else {
-        G.box(d.c - T / 2 - 0.02, 0, d.a0 - t, d.c + T / 2 + 0.02, DOOR_H, d.a0, 'woodDark');
-        G.box(d.c - T / 2 - 0.02, 0, d.a0 + d.w, d.c + T / 2 + 0.02, DOOR_H, d.a0 + d.w + t, 'woodDark');
-        G.box(d.c - T / 2 - 0.02, DOOR_H, d.a0 - t, d.c + T / 2 + 0.02, DOOR_H + t, d.a0 + d.w + t, 'woodDark');
+        G.box(d.c - T / 2 - 0.02, y, d.a0 - t, d.c + T / 2 + 0.02, y + DOOR_H, d.a0, mat);
+        G.box(d.c - T / 2 - 0.02, y, d.a0 + d.w, d.c + T / 2 + 0.02, y + DOOR_H, d.a0 + d.w + t, mat);
+        G.box(d.c - T / 2 - 0.02, y + DOOR_H, d.a0 - t, d.c + T / 2 + 0.02, y + DOOR_H + t, d.a0 + d.w + t, mat);
       }
     }
 
-    // ---------------- floors & ceilings
+    // ---------------- floors, ceilings, baseboards
     for (const r of ROOMS) {
-      if (r.id === 'stair') continue;
-      if (r.id === 'base') {
-        G.plane(r.floor, r.x0, r.z0, r.x1, r.z1, BY, true);
-        G.plane('ceiling', 2, 17, 11, 21, BC, false);
-        G.plane('ceiling', 2, 21, 17, 27, BC, false);
-        continue;
+      const L = LEVELS[r.L];
+      for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) {
+        G.plane(r.floor, x0, z0, x1, z1, L.y, true);
+        if (r.L !== 3) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
       }
-      G.plane(r.floor, r.x0, r.z0, r.x1, r.z1, 0, true);
-      G.plane('ceiling', r.x0, r.z0, r.x1, r.z1, H, false);
-      // Baseboards
-      const bb = 0.12;
-      G.box(r.x0 + T / 2, 0, r.z0 + T / 2, r.x1 - T / 2, bb, r.z0 + T / 2 + 0.02, 'woodDark', { skip: ['y-'] });
-      G.box(r.x0 + T / 2, 0, r.z1 - T / 2 - 0.02, r.x1 - T / 2, bb, r.z1 - T / 2, 'woodDark');
+      if (r.L === 0) continue;
+      const bb = 0.12, y = L.y;
+      G.box(r.x0 + T / 2, y, r.z0 + T / 2, r.x1 - T / 2, y + bb, r.z0 + T / 2 + 0.02, 'woodDark', { skip: ['y-'] });
+      G.box(r.x0 + T / 2, y, r.z1 - T / 2 - 0.02, r.x1 - T / 2, y + bb, r.z1 - T / 2, 'woodDark');
     }
-    // Stairwell: landing, steps, ceiling, rail
+    // Shaft landings and ceilings
     G.plane('floorWoodDark', 16, 17, 17, 21, 0, true);
-    G.plane('ceiling', 11, 17, 17, 21, H, false);
-    const steps = 16, run = 4.5 / steps, rise = 3.2 / steps;
-    for (let i = 0; i < steps; i++) {
-      const xa = 16 - (i + 1) * run, xb = 16 - i * run;
-      G.box(xa, BY, 17.1, xb, -(i + 1) * rise + rise * 0.5, 20.9, 'floorWoodDark', { skip: ['x+', 'x-'] });
-      G.box(xb - 0.02, -(i + 1) * rise, 17.1, xb, -(i + 1) * rise + rise * 0.5, 20.9, 'woodDark');
-    }
-    // Stair rail along the north side
-    for (let i = 0; i <= 6; i++) {
-      const x = 16 - i * 0.75;
-      const y = groundAt(x, 18, 0);
-      G.box(x - 0.03, y, 17.2, x + 0.03, y + 0.95, 17.26, 'woodDark');
-    }
+    G.plane('ceiling', 11, 17, 17, 21, 3.0, false);
+    G.plane('floorWoodDark', 36, 19.5, 40, 21, 0, true);
+    G.plane('floorWood', 36, 11, 40, 13, 3.4, true);
+    G.plane('ceiling', 36, 11, 40, 21, 6.4, false);
+    G.plane('floorWoodDark', 20, 11, 24, 12.5, 3.4, true);
+    G.plane('floorWood', 20, 19.5, 24, 21, 6.8, true);
+    this.buildStairs();
+    this.buildAtticRoof();
+    this.buildFloorboards();
 
-    this.buildFurniture();
+    // Ajan can never enter the attic stairs or the elevator shaft.
+    this.collider(20.05, 10.7, 23.95, 12.8, 3.4, 6.4, { ajanOnly: true });
+    this.collider(ELEVATOR.x0, ELEVATOR.z0 - 0.4, ELEVATOR.x1, ELEVATOR.z1 + 0.4, -4, 10, { ajanOnly: true });
+
+    buildFurniture(this);
     this.buildDoors();
     this.buildLights();
     this.buildWindows();
@@ -278,7 +247,6 @@ export class House {
 
     for (const m of G.build(this.M)) {
       this.group.add(m);
-      this.staticMeshes = this.staticMeshes || [];
       this.staticMeshes.push(m);
     }
     // Outside the front door: a dark porch so the doorway isn't a void.
@@ -286,12 +254,59 @@ export class House {
     porch.rotation.x = -Math.PI / 2;
     porch.position.set(4.65, -0.02, 23);
     this.group.add(porch);
-    this.collider(2, 22.6, 8, 23, 0, 3); // invisible porch boundary
+    this.collider(2, 22.6, 8, 23, 0, 3);
     this.collider(2, 21, 2.4, 23, 0, 3);
     this.collider(7.2, 21, 7.6, 23, 0, 3);
   }
 
-  // ------------------------------------------------------------- furniture
+  buildStairs() {
+    const G = this.geo;
+    for (const r of RAMPS) {
+      const len = Math.abs(r.b - r.a);
+      const steps = Math.round(len / 0.28);
+      const lo = Math.min(r.ya, r.yb);
+      for (let i = 0; i < steps; i++) {
+        const c0 = r.a + (r.b - r.a) * (i / steps), c1 = r.a + (r.b - r.a) * ((i + 1) / steps);
+        const mid = (c0 + c1) / 2;
+        const yTop = rampHeight(r, r.axis === 'x' ? mid : r.x0, r.axis === 'z' ? mid : r.z0) + 0.04;
+        const a = Math.min(c0, c1), b = Math.max(c0, c1);
+        if (r.axis === 'x') G.box(a, lo, r.z0, b, yTop, r.z1, 'floorWoodDark', { skip: ['z+', 'z-'] });
+        else G.box(r.x0, lo, a, r.x1, yTop, b, 'floorWoodDark', { skip: ['x+', 'x-'] });
+      }
+      // handrail posts
+      const n = Math.max(4, Math.round(len / 0.75));
+      for (let i = 0; i <= n; i++) {
+        const c = r.a + (r.b - r.a) * (i / n);
+        const x = r.axis === 'x' ? c : r.x0 + 0.08;
+        const z = r.axis === 'z' ? c : r.z0 + 0.12;
+        const y = rampHeight(r, x, z);
+        G.box(x - 0.03, y, z - 0.03, x + 0.03, y + 0.95, z + 0.03, 'woodDark');
+      }
+    }
+  }
+
+  buildAtticRoof() {
+    const G = this.geo;
+    const AY = LEVELS[3].y;
+    G.plane('ceiling', 18, 8, 40, 21, AY + 2.2, false);
+    for (let x = 19; x < 40; x += 2.2) G.box(x, AY + 1.95, 8.1, x + 0.18, AY + 2.2, 20.9, 'woodDark', { bottom: true });
+    for (const z of [11.5, 17.5]) G.box(18.1, AY + 1.8, z, 39.9, AY + 1.95, z + 0.2, 'woodDark', { bottom: true });
+    for (const [x, z] of [[27, 14.5], [31, 11.0], [37, 14.5]]) {
+      G.box(x - 0.1, AY, z - 0.1, x + 0.1, AY + 2.2, z + 0.1, 'woodDark');
+      this.collider(x - 0.12, z - 0.12, x + 0.12, z + 0.12, AY, AY + 2.2);
+    }
+  }
+
+  /** Creaky boards: a slightly darker, warped plank patch — easy to miss, learnable. */
+  buildFloorboards() {
+    this.floorboards = FLOORBOARDS.map((b, i) => {
+      this.geo.box(b.x - 0.5, b.y, b.z - 0.12, b.x + 0.5, b.y + 0.006, b.z + 0.12, 'boardCreak', { skip: ['x+', 'x-', 'z+', 'z-'] });
+      this.geo.box(b.x - 0.42, b.y, b.z - 0.5, b.x - 0.3, b.y + 0.005, b.z + 0.5, 'boardCreak', { skip: ['x+', 'x-', 'z+', 'z-'] });
+      return { ...b, i };
+    });
+  }
+
+  // ------------------------------------------------------------- furniture helpers
   furnitureBox(x0, y0, z0, x1, y1, z1, mat, collide = true, occlude = false) {
     this.geo.box(x0, y0, z0, x1, y1, z1, mat);
     if (collide) this.collider(x0, z0, x1, z1, y0, y1, { occlude, furniture: true });
@@ -312,14 +327,40 @@ export class House {
     this.collider(x - s, z - s, x + s, z + s, y, y + 0.9);
   }
 
-  bed(x0, z0, x1, z1) {
+  /** A big chair Ajan sometimes sits in, facing the wall. facing = direction the sitter looks. */
+  wallChair(x, z, y, facing) {
+    const g = new THREE.Group();
+    g.position.set(x, y, z);
+    g.rotation.y = YAW[facing];
+    const mat = this.M.woodDark;
+    const seat = bx(0.9, 0.08, 0.8, mat); seat.position.set(0, 0.5, 0);
+    const back = bx(0.9, 1.1, 0.08, mat); back.position.set(0, 1.0, -0.38);
+    g.add(seat, back);
+    for (const [dx, dz] of [[-0.4, -0.35], [0.4, -0.35], [-0.4, 0.35], [0.4, 0.35]]) { const l = bx(0.07, 0.5, 0.07, mat); l.position.set(dx, 0.25, dz); g.add(l); }
+    this.group.add(g);
+    this.collider(x - 0.45, z - 0.45, x + 0.45, z + 0.45, y, y + 0.55);
+    const [fx, fz] = DIR[facing];
+    this.wallChairs.push({ seat: new THREE.Vector3(x, y, z), front: new THREE.Vector3(x - fx * 1.0, y, z - fz * 1.0), ry: YAW[facing] });
+  }
+
+  bed(x0, z0, x1, z1, y = 0, open = false) {
     const G = this.geo;
-    G.box(x0, 0, z0, x1, 0.35, z1, 'woodDark');
-    G.box(x0 + 0.05, 0.35, z0 + 0.05, x1 - 0.05, 0.55, z1 - 0.05, 'fabricBed');
-    G.box(x0, 0, z0 - 0.06, x1, 1.0, z0, 'woodDark');
-    G.box((x0 + x1) / 2 - 0.35, 0.55, z0 + 0.1, (x0 + x1) / 2 + 0.35, 0.68, z0 + 0.45, 'fabricBed');
-    G.box(x0 + 0.04, 0.55, z0 + 0.9, x1 - 0.04, 0.6, z1 - 0.1, 'fabricRed');
-    this.collider(x0, z0 - 0.06, x1, z1, 0, 0.6);
+    if (open) {
+      // raised frame on legs so you can crawl underneath
+      for (const [x, z] of [[x0, z0], [x1 - 0.08, z0], [x0, z1 - 0.08], [x1 - 0.08, z1 - 0.08]]) G.box(x, y, z, x + 0.08, y + 0.42, z + 0.08, 'woodDark');
+      G.box(x0, y + 0.3, z0, x1, y + 0.42, z0 + 0.06, 'woodDark', { bottom: true });
+      G.box(x0, y + 0.3, z1 - 0.06, x1, y + 0.42, z1, 'woodDark', { bottom: true });
+      G.box(x0, y + 0.3, z0, x0 + 0.06, y + 0.42, z1, 'woodDark', { bottom: true });
+      G.box(x1 - 0.06, y + 0.3, z0, x1, y + 0.42, z1, 'woodDark', { bottom: true });
+      G.box(x0 + 0.05, y + 0.4, z0 + 0.05, x1 - 0.05, y + 0.6, z1 - 0.05, 'fabricBed', { bottom: true });
+    } else {
+      G.box(x0, y, z0, x1, y + 0.35, z1, 'woodDark');
+      G.box(x0 + 0.05, y + 0.35, z0 + 0.05, x1 - 0.05, y + 0.55, z1 - 0.05, 'fabricBed');
+    }
+    G.box(x0, y, z0 - 0.06, x1, y + 1.0, z0, 'woodDark');
+    G.box((x0 + x1) / 2 - 0.35, y + 0.58, z0 + 0.1, (x0 + x1) / 2 + 0.35, y + 0.7, z0 + 0.45, 'fabricBed');
+    G.box(x0 + 0.04, y + 0.58, z0 + 0.9, x1 - 0.04, y + 0.63, z1 - 0.1, 'fabricRed');
+    this.collider(x0, z0 - 0.06, x1, z1, y, y + 0.62);
   }
 
   shelf(x0, z0, x1, z1, h, mat = 'woodDark', y = 0, boxes = true) {
@@ -332,7 +373,6 @@ export class House {
       const yy = y + (i / n) * (h - 0.03);
       G.box(x0, yy, z0, x1, yy + 0.03, z1, mat, { bottom: true });
       if (boxes && i < n) {
-        // clutter: books / jars
         let p = 0.05;
         const L = vert ? x1 - x0 : z1 - z0;
         while (p < L - 0.1) {
@@ -350,7 +390,7 @@ export class House {
     this.collider(x0, z0, x1, z1, y, y + h, { occlude: h > 1.6 });
   }
 
-  /** Tall cabinet you can hide inside. facing = direction its doors face. */
+  /** Tall closet you can hide inside, with louvered doors you can see out through. */
   hideSpot(id, cx, cz, w, d, h, facing, matKey, y = 0) {
     const g = new THREE.Group();
     g.position.set(cx, y, cz);
@@ -369,12 +409,23 @@ export class House {
     for (const side of [-1, 1]) {
       const pivot = new THREE.Group();
       pivot.position.set(side * w / 2, 0, d / 2);
-      const panel = bx(w / 2 - 0.01, h - 0.02, 0.03, mat);
-      panel.position.set(-side * (w / 4), h / 2, 0);
+      const pw = w / 2 - 0.01;
+      const cxp = -side * (w / 4);
+      // frame + horizontal louvers with gaps you can see out through
+      for (const [a, b, px, py] of [[pw, 0.08, 0, 0.04], [pw, 0.08, 0, h - 0.06], [0.06, h - 0.02, -pw / 2 + 0.03, h / 2], [0.06, h - 0.02, pw / 2 - 0.03, h / 2]]) {
+        const m = bx(a, b, 0.03, mat);
+        m.position.set(cxp + px, py, 0);
+        pivot.add(m);
+      }
+      for (let yy = 0.12; yy < h - 0.12; yy += 0.12) {
+        const s = bx(pw - 0.1, 0.05, 0.02, mat);
+        s.position.set(cxp, yy, 0);
+        s.rotation.x = -0.45;
+        pivot.add(s);
+      }
       const knob = bx(0.03, 0.08, 0.04, this.M.brass);
       knob.position.set(-side * (w / 2 - 0.06), h / 2, 0.03);
-      pivot.add(panel, knob);
-      // slats so you can peek out
+      pivot.add(knob);
       g.add(pivot);
       doors.push({ pivot, side });
     }
@@ -383,14 +434,30 @@ export class House {
     const ww = facing === '+x' || facing === '-x' ? d : w, dd = facing === '+x' || facing === '-x' ? w : d;
     this.collider(cx - ww / 2, cz - dd / 2, cx + ww / 2, cz + dd / 2, y, y + h, { occlude: true, furniture: true });
     const spot = {
-      id, group: g, doors, open: 0, target: 0,
-      inside: new THREE.Vector3(cx + fx * 0.05, y, cz + fz * 0.05),
-      exit: new THREE.Vector3(cx + fx * (d / 2 + 0.55), y, cz + fz * (d / 2 + 0.55)),
-      yaw: Math.atan2(-fx, -fz), // camera yaw looking out of the doors
-      occupant: null,
+      id, type: 'closet', group: g, doors, open: 0, target: 0,
+      inside: new THREE.Vector3(cx + fx * (d / 2 - 0.2), y, cz + fz * (d / 2 - 0.2)),
+      exit: new THREE.Vector3(cx + fx * (d / 2 + 0.6), y, cz + fz * (d / 2 + 0.6)),
+      yaw: Math.atan2(-fx, -fz), camY: 1.45, occupant: null, label: 'HIDE',
     };
     this.hides.set(id, spot);
     this.register(id, 'hide', [g], new THREE.Vector3(cx + fx * d / 2, y + 1.2, cz + fz * d / 2), { spot });
+    return spot;
+  }
+
+  /** Crawl space under a bed/table. side = the edge you crawl in from (you look out of it). */
+  underHide(id, x0, z0, x1, z1, y, side, label, camY = 0.24) {
+    const [fx, fz] = DIR[side];
+    const cx = (x0 + x1) / 2, cz = (z0 + z1) / 2;
+    const ex = fx > 0 ? x1 : fx < 0 ? x0 : cx, ez = fz > 0 ? z1 : fz < 0 ? z0 : cz;
+    const pick = this.pickBox(x0, y, z0, x1, y + 0.75, z1);
+    const spot = {
+      id, type: 'under', doors: [], open: 0, target: 0,
+      inside: new THREE.Vector3(ex - fx * 0.45, y, ez - fz * 0.45),
+      exit: new THREE.Vector3(ex + fx * 0.6, y, ez + fz * 0.6),
+      yaw: Math.atan2(-fx, -fz), camY, occupant: null, label,
+    };
+    this.hides.set(id, spot);
+    this.register(id, 'hide', [pick], new THREE.Vector3(ex, y + 0.4, ez), { spot });
     return spot;
   }
 
@@ -416,7 +483,6 @@ export class House {
       knob.position.set(w - 0.07, h / 2, 0.045);
       part.add(panel, knob);
       part.position.set(-w / 2, 0, d / 2);
-      // hollow shell so the contents are visible when the door opens
       const t = 0.03;
       for (const [a, b, c2, px, py, pz] of [[w, h, t, 0, h / 2, -d / 2 + t / 2], [t, h, d, -w / 2 + t / 2, h / 2, 0], [t, h, d, w / 2 - t / 2, h / 2, 0], [w, t, d, 0, h - t / 2, 0], [w, t, d, 0, t / 2, 0]]) {
         const m = bx(a, b, c2, mat);
@@ -460,204 +526,9 @@ export class House {
     canvasMesh.position.z = 0.025;
     canvasMesh.receiveShadow = true;
     g.add(back, canvasMesh);
-    // Slight random tilt for an unkempt look
     g.rotation.z = (Math.sin(x * 13.1 + z * 7.7) * 0.04);
     this.group.add(g);
     this.paintingSlots.push({ group: g, mesh: canvasMesh, pos: new THREE.Vector3(x + fx * 0.05, y, z + fz * 0.05) });
-  }
-
-  buildFurniture() {
-    const G = this.geo;
-    const M = this.M;
-
-    // ===== Bedroom 1
-    this.bed(0.2, 0.36, 2.3, 2.6);
-    this.furnitureBox(2.45, 0, 0.12, 3.05, 0.6, 0.62, 'woodDark');
-    this.container('c_ns1', 'drawer', 2.75, 0.38, 0.62 - 0.22, 0.5, 0.16, 0.42, '+z', 'wood', 'Nightstand');
-    this.hideSpot('h_bed1', 7.15, 0.62, 1.2, 0.8, 2.15, '+z', 'woodDark');
-    this.furnitureBox(0.12, 0, 4.4, 0.62, 0.95, 6.0, 'wood');
-    G.box(0.1, 0.002, 3, 3.5, 0.008, 5.4, 'fabricRed');
-    this.chair(5.2, 6.4);
-    this.furnitureBox(5.6, 0, 3.0, 6.1, 0.45, 3.5, 'woodPale');
-    this.painting(7.88, 1.7, 4.2, '-x');
-    this.painting(0.12, 1.85, 5.2, '+x');
-
-    // ===== Bathroom
-    this.furnitureBox(8.12, 0, 0.12, 9.9, 0.6, 1.95, 'porcelain', true);
-    G.box(8.3, 0.3, 0.3, 9.72, 0.61, 1.77, 'dark');
-    this.furnitureBox(12.2, 0, 0.15, 12.8, 0.45, 0.85, 'porcelain');
-    G.box(12.2, 0.45, 0.12, 12.8, 0.95, 0.3, 'porcelain');
-    this.furnitureBox(11.0, 0, 0.12, 11.9, 0.85, 0.62, 'porcelain');
-    G.box(11.05, 1.25, 0.11, 11.85, 1.95, 0.13, 'metal'); // mirror frame
-    const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.6), new THREE.MeshStandardMaterial({ color: 0x9aa4a6, metalness: 0.9, roughness: 0.25 }));
-    mirror.position.set(11.45, 1.6, 0.135);
-    this.group.add(mirror);
-    this.collider(12.4, 2.95, 12.9, 4.25, 0, 0.9);
-    this.container('c_bath', 'cabinet', 12.65, 0.05, 3.6, 1.2, 0.85, 0.5, '-x', 'woodPale', 'Cabinet');
-    this.painting(8.12, 1.75, 5.5, '+x', 0.5, 0.7);
-
-    // ===== Bedroom 2
-    this.bed(18.6, 0.36, 20.8, 2.6);
-    this.hideSpot('h_bed2', 13.85, 0.62, 1.2, 0.8, 2.15, '+z', 'wood');
-    this.furnitureBox(19.95, 0, 3.9, 20.88, 0.76, 5.5, 'wood');
-    this.container('c_desk2', 'drawer', 20.16, 0.52, 4.7, 0.55, 0.16, 0.42, '-x', 'woodPale', 'Desk');
-    this.chair(19.35, 5.65);
-    G.box(14, 0.002, 3.5, 17.5, 0.008, 6, 'fabricGreen');
-    this.furnitureBox(15.2, 0, 6.6, 15.9, 0.5, 7.3, 'woodPale');
-    this.painting(13.12, 1.7, 4.6, '+x');
-    this.painting(20.88, 1.8, 6.6, '-x', 0.5, 0.7);
-
-    // ===== Security room
-    this.furnitureBox(23.4, 0, 0.12, 28.6, 0.78, 1.25, 'woodDark');
-    this.chair(26, 2.1, 0, 'metal');
-    this.shelf(29.3, 2.5, 29.88, 6.5, 2.0, 'metal', 0, true);
-    this.furnitureBox(21.15, 0, 6.2, 22.0, 1.3, 7.7, 'metal', true);
-    for (let i = 0; i < 4; i++) {
-      const x = 24.1 + i * 1.25;
-      const casing = bx(1.0, 0.75, 0.55, M.dark);
-      casing.position.set(x, 0.78 + 0.4, 0.55);
-      this.group.add(casing);
-      const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.6), new THREE.MeshBasicMaterial({ color: 0x050505 }));
-      scr.position.set(x, 0.78 + 0.41, 0.83 + 0.005);
-      this.group.add(scr);
-      const label = new THREE.Mesh(new THREE.PlaneGeometry(0.82, 0.6), new THREE.MeshBasicMaterial({ transparent: true, opacity: 1, depthWrite: false }));
-      label.position.set(x, 0.78 + 0.41, 0.84);
-      label.renderOrder = 2;
-      this.group.add(label);
-      const mon = { index: i, screen: scr, label, pos: new THREE.Vector3(x, 1.2, 0.86) };
-      this.monitors.push(mon);
-      this.register('mon' + i, 'monitor', [scr, casing], mon.pos, { monitor: mon });
-    }
-
-    // ===== Hallway
-    this.furnitureBox(19.0, 0, 8.12, 20.2, 0.8, 8.55, 'wood');
-    this.furnitureBox(8.0, 0, 10.45, 9.0, 0.8, 10.88, 'wood');
-    G.box(1, 0.002, 9.1, 29, 0.008, 9.9, 'fabricRed');
-    this.painting(7.0, 1.7, 8.12, '+z');
-    this.painting(13.4, 1.75, 8.12, '+z', 0.5, 0.7);
-    this.painting(28.0, 1.7, 8.12, '+z');
-    this.painting(2.5, 1.7, 10.88, '-z');
-    this.painting(18.5, 1.75, 10.88, '-z', 0.5, 0.7);
-    this.painting(27.0, 1.7, 10.88, '-z');
-
-    // ===== Living room
-    this.furnitureBox(0.12, 0, 14.4, 0.85, 0.55, 16.1, 'woodDark');
-    this.furnitureBox(3.4, 0, 14.0, 4.3, 0.45, 16.6, 'fabricRed');
-    G.box(4.0, 0.45, 14.0, 4.3, 0.95, 16.6, 'fabricRed');
-    G.box(3.4, 0.45, 14.0, 4.0, 0.7, 14.25, 'fabricRed');
-    G.box(3.4, 0.45, 16.35, 4.0, 0.7, 16.6, 'fabricRed');
-    this.table(1.8, 14.6, 2.8, 15.9, 0.45, 'wood');
-    this.furnitureBox(1.0, 0, 18.5, 1.85, 0.45, 19.4, 'fabricGreen');
-    G.box(1.0, 0.45, 19.15, 1.85, 1.0, 19.4, 'fabricGreen');
-    this.shelf(7.5, 11.12, 9.5, 11.55, 2.0, 'woodDark', 0, true);
-    this.furnitureBox(10.35, 0, 17.8, 10.9, 1.2, 19.8, 'woodDark', true);
-    G.box(10.3, 0.1, 18.3, 10.36, 0.8, 19.3, 'black');
-    G.box(1.2, 0.002, 13, 6.5, 0.008, 17.5, 'carpet');
-    this.painting(2.6, 1.75, 11.12, '+z');
-    this.painting(10.88, 1.7, 12.4, '-x', 0.5, 0.7);
-    this.painting(1.8, 1.7, 20.88, '-z');
-    // CRT television on the stand, facing +x
-    const tv = new THREE.Group();
-    tv.position.set(0.48, 0.55, 15.25);
-    const body = bx(0.55, 0.52, 0.66, M.woodDark);
-    body.position.y = 0.26;
-    const bezel = bx(0.04, 0.44, 0.56, M.black);
-    bezel.position.set(0.27, 0.27, 0);
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.46, 0.36), new THREE.MeshBasicMaterial({ color: 0x050505 }));
-    screen.rotation.y = Math.PI / 2;
-    screen.position.set(0.295, 0.28, -0.02);
-    const ant = bx(0.02, 0.4, 0.02, M.metal);
-    ant.position.set(0, 0.7, 0.1);
-    ant.rotation.x = 0.4;
-    const ant2 = ant.clone();
-    ant2.position.z = -0.1;
-    ant2.rotation.x = -0.4;
-    tv.add(body, bezel, screen, ant, ant2);
-    this.group.add(tv);
-    this.tv = { group: tv, screen, pos: new THREE.Vector3(0.8, 0.85, 15.25) };
-    this.register('tv', 'tv', [screen, body], this.tv.pos);
-
-    // ===== Start (back) room
-    this.furnitureBox(11.3, 0, 15.2, 13.1, 0.22, 16.8, 'fabricBed');
-    this.furnitureBox(15.5, 0, 15.6, 16.8, 0.7, 16.8, 'woodPale');
-    this.furnitureBox(16.0, 0.7, 15.9, 16.6, 1.05, 16.5, 'woodPale');
-    this.table(15.8, 11.25, 16.75, 11.95, 0.7, 'woodDark');
-    this.chair(12.0, 12.0);
-    this.painting(14.3, 1.7, 16.88, '-z');
-
-    // ===== Kitchen
-    this.furnitureBox(29.3, 0, 12.0, 29.9, 0.92, 20.0, 'woodPale');
-    G.box(29.25, 0.92, 12.0, 29.9, 0.97, 20.0, 'porcelain');
-    G.box(29.3, 0.93, 13.0, 29.9, 0.98, 14.0, 'metal'); // stove top
-    G.box(29.5, 1.6, 12.0, 29.9, 2.3, 20.0, 'woodPale'); // upper cupboards
-    this.furnitureBox(24.0, 0, 11.12, 29.3, 0.92, 11.7, 'woodPale');
-    G.box(24.0, 0.92, 11.1, 29.3, 0.97, 11.75, 'porcelain');
-    this.container('c_kit1', 'drawer', 29.575, 0.68, 16.5, 0.6, 0.18, 0.55, '-x', 'woodPale', 'Drawer');
-    this.container('c_kit2', 'drawer', 26.5, 0.68, 11.7 - 0.27, 0.6, 0.18, 0.5, '+z', 'woodPale', 'Drawer');
-    this.furnitureBox(17.15, 0, 11.15, 17.95, 1.85, 12.0, 'porcelain', true, true);
-    this.table(22.0, 15.0, 24.0, 16.6, 0.76, 'wood');
-    this.chair(21.6, 15.8);
-    this.chair(24.4, 15.8);
-    this.chair(23.0, 17.0);
-    this.hideSpot('h_pantry', 26.6, 20.48, 1.2, 0.7, 2.15, '-z', 'woodPale');
-    this.painting(17.12, 1.7, 16.2, '+x', 0.5, 0.7);
-    this.painting(22.5, 1.7, 20.88, '-z');
-
-    // ===== Basement
-    this.shelf(2.15, 18.0, 2.7, 21.0, 2.0, 'metal', BY, true);
-    this.furnitureBox(14.5, BY, 25.9, 16.85, BY + 0.9, 26.85, 'wood');
-    const boiler = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.5, 2.0, 16), M.metal);
-    boiler.position.set(9.6, BY + 1.0, 26.2);
-    boiler.castShadow = true;
-    this.group.add(boiler);
-    this.collider(9.1, 25.7, 10.1, 26.7, BY, BY + 2);
-    this.furnitureBox(4.0, BY, 18.0, 5.0, BY + 0.8, 18.8, 'woodPale');
-    this.furnitureBox(4.2, BY + 0.8, 18.1, 4.9, BY + 1.3, 18.7, 'woodPale');
-    this.furnitureBox(9.8, BY, 21.6, 10.7, BY + 0.7, 22.4, 'woodPale');
-    this.furnitureBox(5.5, BY, 25.8, 7.6, BY + 0.85, 26.8, 'woodDark');
-    this.hideSpot('h_locker', 3.4, 26.5, 0.8, 0.6, 2.0, '-z', 'metal', BY);
-    this.painting(2.12, BY + 1.6, 24.0, '+x');
-    // pipes along the ceiling
-    for (const z of [18.0, 24.5]) {
-      const p = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 15, 8), M.metal);
-      p.rotation.z = Math.PI / 2;
-      p.position.set(9.5, BC - 0.15, z);
-      this.group.add(p);
-    }
-    // Electrical panel (fuse box) on the south wall
-    const fb = new THREE.Group();
-    fb.position.set(13, BY + 1.45, 26.85);
-    const fbBody = bx(0.7, 0.9, 0.2, M.metal);
-    const fbSlot = bx(0.12, 0.2, 0.05, M.black);
-    fbSlot.position.set(-0.15, 0.1, -0.11);
-    const lever = new THREE.Group();
-    lever.position.set(0.2, 0.0, -0.12);
-    const lv = bx(0.05, 0.3, 0.05, M.red);
-    lv.position.y = 0.12;
-    lever.add(lv);
-    lever.rotation.x = 0.7;
-    const warn = bx(0.25, 0.12, 0.01, new THREE.MeshBasicMaterial({ color: 0xb08a10 }));
-    warn.position.set(0, 0.36, -0.105);
-    fb.add(fbBody, fbSlot, lever, warn);
-    this.group.add(fb);
-    this.collider(12.6, 26.7, 13.4, 26.95, BY, BY + 2);
-    this.fusebox = { group: fb, lever, slot: fbSlot, pos: new THREE.Vector3(13, BY + 1.45, 26.6) };
-    this.register('fusebox', 'fusebox', [fbBody, lever, fbSlot], this.fusebox.pos);
-    const fuseVisual = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.12, 10), M.brass);
-    fuseVisual.position.set(-0.15, 0.1, -0.15);
-    fuseVisual.visible = false;
-    fb.add(fuseVisual);
-    this.fusebox.fuseVisual = fuseVisual;
-
-    // ===== Notes (clues)
-    this.note('note_start', 12.4, 0.22, 16.0, 0.3,
-      'Day 41.\n\nHe came back again last night. I could hear him BREATHING behind the walls.\n\nHe follows noise. Walk slowly. Don\'t talk. Don\'t run unless he has already seen you.\n\nThe front door key is locked in the security room - the electric lock won\'t open without power.');
-    this.note('note_living', 2.3, 0.45, 15.0, -0.4,
-      'The breaker blew when the storm hit.\n\nThere is a spare FUSE somewhere upstairs. The fuse box is in the BASEMENT, and I hid the basement key in one of the rooms so he couldn\'t get down there.');
-    this.note('note_kitchen', 23.0, 0.76, 15.6, 0.8,
-      'If he sees you, break line of sight and HIDE.\n\nWardrobes. The pantry. The locker downstairs.\n\nHe forgets fast. He doesn\'t forget if he watches you climb in.');
-    this.note('note_base', 15.4, BY + 0.9, 26.3, 0.2,
-      'Fuse goes in the left slot. Then pull the lever.\n\nThe security door and the cameras run on the same circuit.');
   }
 
   // ----------------------------------------------------------------- doors
@@ -668,30 +539,47 @@ export class House {
       const panel = bx(d.line === 'x' ? d.w - 0.02 : 0.05, DOOR_H - 0.02, d.line === 'x' ? 0.05 : d.w - 0.02, mat);
       const knob = bx(0.05, 0.05, 0.05, this.M.brass);
       if (d.line === 'x') {
-        pivot.position.set(d.a0, 0, d.c);
+        pivot.position.set(d.a0, d.y, d.c);
         panel.position.set(d.w / 2, DOOR_H / 2, 0);
         knob.position.set(d.w - 0.12, 1.0, 0.05 * -d.swing);
       } else {
-        pivot.position.set(d.c, 0, d.a0);
+        pivot.position.set(d.c, d.y, d.a0);
         panel.position.set(0, DOOR_H / 2, d.w / 2);
         knob.position.set(0.05 * -d.swing, 1.0, d.w - 0.12);
       }
       const knob2 = knob.clone();
       if (d.line === 'x') knob2.position.z *= -1; else knob2.position.x *= -1;
       pivot.add(panel, knob, knob2);
-      if (d.exit) {
-        // a few boards / chain to make the front door read as "the way out"
-        const chain = bx(d.line === 'x' ? d.w * 0.8 : 0.03, 0.04, d.line === 'x' ? 0.03 : d.w * 0.8, this.M.metal);
-        chain.position.set(d.w / 2, 1.1, -0.04 * d.swing);
+      if (d.lock && d.lock !== 'power') {
+        // A padlock plate on both faces so locked doors read as locked.
+        for (const s of [-1, 1]) {
+          const plate = bx(d.line === 'x' ? 0.1 : 0.03, 0.14, d.line === 'x' ? 0.03 : 0.1, this.M.brass);
+          if (d.line === 'x') plate.position.set(d.w - 0.12, 1.22, 0.04 * s);
+          else plate.position.set(0.04 * s, 1.22, d.w - 0.12);
+          pivot.add(plate);
+        }
+        pivot.userData.lockPlates = true;
+      }
+      if (d.chain) {
+        const chain = new THREE.Group();
+        for (let i = 0; i < 9; i++) {
+          const link = new THREE.Mesh(new THREE.TorusGeometry(0.035, 0.01, 6, 10), this.M.metal);
+          link.position.set(d.w * 0.12 + i * d.w * 0.095, 1.05 - Math.sin(i / 8 * Math.PI) * 0.12, 0.06 * d.swing);
+          link.rotation.y = i % 2 ? Math.PI / 2 : 0;
+          chain.add(link);
+        }
+        const lock = bx(0.08, 0.1, 0.04, this.M.brass);
+        lock.position.set(d.w / 2, 0.88, 0.07 * d.swing);
+        chain.add(lock);
         pivot.add(chain);
         this.exitChain = chain;
       }
       this.group.add(pivot);
       const col = d.line === 'x'
-        ? this.collider(d.a0, d.c - 0.05, d.a0 + d.w, d.c + 0.05, 0, DOOR_H, { occlude: true, door: d.id })
-        : this.collider(d.c - 0.05, d.a0, d.c + 0.05, d.a0 + d.w, 0, DOOR_H, { occlude: true, door: d.id });
-      const center = d.line === 'x' ? new THREE.Vector3(d.a0 + d.w / 2, 1.1, d.c) : new THREE.Vector3(d.c, 1.1, d.a0 + d.w / 2);
-      const door = { ...d, pivot, panel, collider: col, angle: 0, target: 0, open: false, locked: !!d.lock, center };
+        ? this.collider(d.a0, d.c - 0.05, d.a0 + d.w, d.c + 0.05, d.y, d.y + DOOR_H, { occlude: true, door: d.id })
+        : this.collider(d.c - 0.05, d.a0, d.c + 0.05, d.a0 + d.w, d.y, d.y + DOOR_H, { occlude: true, door: d.id });
+      const center = d.line === 'x' ? new THREE.Vector3(d.a0 + d.w / 2, d.y + 1.1, d.c) : new THREE.Vector3(d.c, d.y + 1.1, d.a0 + d.w / 2);
+      const door = { ...d, pivot, panel, collider: col, angle: 0, target: 0, open: false, locked: !!d.lock, chained: !!d.chain, center };
       this.doors.set(d.id, door);
       this.register(d.id, 'door', [panel], center, { door });
     }
@@ -720,8 +608,7 @@ export class House {
   buildLights() {
     const add = (room, x, y, z, color = 0xffc98a, intensity = 7, distance = 9, opts = {}) => {
       // Fixtures only hold data; a small pool of real PointLights is assigned to
-      // the fixtures nearest the camera each frame (constant light count = no
-      // shader recompiles, and cheap on weak GPUs).
+      // the fixtures nearest the camera each frame.
       const light = { position: new THREE.Vector3(x, y, z), color: new THREE.Color(color), distance, intensity: 0 };
       let bulb = null;
       if (!opts.noFixture) {
@@ -733,23 +620,24 @@ export class House {
         shade.position.set(x, y + 0.08, z);
         this.group.add(cord, bulb, shade);
       }
-      const L = { light, bulb, room, base: intensity, powered: !opts.always, always: !!opts.always, flicker: opts.flicker ?? 0.15, seed: Math.random() * 100 };
+      const L = { light, bulb, room, base: intensity, always: !!opts.always, flicker: opts.flicker ?? 0.15, seed: Math.random() * 100 };
       this.lights.push(L);
       return L;
     };
-    add('bed1', 4, 2.55, 4);
-    add('bath', 10.5, 2.55, 4, 0xe8f0ff, 5);
-    add('bed2', 17, 2.55, 4);
-    add('sec', 25.5, 2.55, 4, 0xd8e8ff, 6);
-    add('hall', 7, 2.55, 9.5, 0xffc98a, 6, 10);
-    add('hall', 22, 2.55, 9.5, 0xffc98a, 6, 10, { flicker: 0.5 });
-    add('living', 5.5, 2.55, 16, 0xffc98a, 8, 11);
-    add('start', 14, 2.55, 14, 0xffc98a, 6);
-    add('kitchen', 23.5, 2.55, 16, 0xf0ffe0, 8, 11, { flicker: 0.35 });
-    add('stair', 16.5, 2.6, 19.2, 0xffc98a, 4, 8);
-    add('base', 6, BC - 0.35, 22, 0xffb070, 6, 10, { flicker: 0.4 });
-    add('base', 13, BC - 0.35, 24, 0xffb070, 6, 10);
-    // Always-on candles in the start room so the spawn is never pitch black.
+    const G = 2.55, U = 5.95, B = -0.6;
+    add('bed1', 4, G, 4); add('bath', 10.5, G, 4, 0xe8f0ff, 5); add('bed2', 17, G, 4); add('sec', 25.5, G, 4, 0xd8e8ff, 6);
+    add('office', 35, G, 4, 0xffd8a0, 6, 9, { flicker: 0.3 });
+    add('hall', 7, G, 9.5, 0xffc98a, 6, 10); add('hall', 22, G, 9.5, 0xffc98a, 6, 10, { flicker: 0.5 }); add('hall', 33, G, 9.5, 0xffc98a, 5, 9);
+    add('living', 5.5, G, 16, 0xffc98a, 8, 11); add('start', 14, G, 14, 0xffc98a, 6);
+    add('kitchen', 23.5, G, 16, 0xf0ffe0, 8, 11, { flicker: 0.35 }); add('dining', 32.5, G, 17, 0xffc080, 6, 9);
+    add('stairB', 16.5, 2.6, 19.2, 0xffc98a, 4, 8); add('stairU', 38, 5.9, 16, 0xffc98a, 6, 11, { flicker: 0.3 });
+    add('master', 5, U, 4); add('ubath', 12.5, U, 4, 0xe8f0ff, 4, 7, { flicker: 0.7 }); add('guest', 19, U, 4);
+    add('storage', 26.5, U, 4, 0xffffff, 3, 7, { flicker: 0.6 }); add('ajanroom', 35, U, 4, 0xff5030, 3, 8, { flicker: 0.2 });
+    add('uhall', 6, U, 9.5, 0xffc98a, 5, 10); add('uhall', 18, U, 9.5, 0xffc98a, 5, 10, { flicker: 0.4 }); add('uhall', 30, U, 9.5, 0xffc98a, 5, 10);
+    add('nursery', 5, U, 16, 0xffd0d0, 4, 9, { flicker: 0.3 }); add('library', 15, U, 16, 0xffc98a, 6, 10); add('music', 29, U, 16, 0xffc98a, 6, 11);
+    add('base', 6, B, 22, 0xffb070, 6, 10, { flicker: 0.4 }); add('base', 13, B, 24, 0xffb070, 6, 10);
+    add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('workshop', 35, B, 20, 0xfff0d0, 6, 11);
+    // Always-on: candles in the back room, emergency light, Ajan's red lamp, attic lamps.
     const cl = add('start', 16.25, 1.0, 11.6, 0xff9a40, 4, 7, { always: true, noFixture: true, flicker: 1 });
     cl.candle = true;
     for (const [dx, dz, h] of [[-0.15, 0.05, 0.14], [0.05, -0.08, 0.1], [0.2, 0.1, 0.18]]) {
@@ -759,8 +647,12 @@ export class House {
       f.position.set(16.25 + dx, 0.7 + h + 0.02, 11.6 + dz);
       this.group.add(c, f);
     }
-    // Dim emergency light in the basement so it's navigable before power returns.
-    add('base', 3.0, BY + 2.2, 18.5, 0xff3020, 1.4, 7, { always: true, noFixture: true, flicker: 0.2 });
+    add('base', 3.0, -1.0, 18.5, 0xff3020, 1.4, 7, { always: true, noFixture: true, flicker: 0.2 });
+    add('ajanroom', 37.5, 4.2, 6.5, 0xff2010, 1.6, 6, { always: true, noFixture: true, flicker: 0.4 });
+    add('attic', 30, 8.7, 15, 0xffb070, 4, 10, { always: true });
+    add('attic', 22, 8.7, 10, 0xffb070, 3, 8, { always: true, flicker: 0.2 });
+    add('attic', 37, 8.7, 18, 0xffb070, 3, 8, { always: true });
+    add('stairA', 22, 8.4, 17, 0xffb070, 2.5, 7, { always: true });
   }
 
   createLightPool(n) {
@@ -775,7 +667,7 @@ export class House {
 
   updateLights(dt, time, viewer) {
     for (const L of this.lights) {
-      let on = L.always || (this.power && this.blackout <= 0);
+      const on = L.always || (this.power && this.blackout <= 0);
       let k = 1;
       if (L.candle) k = 0.75 + Math.sin(time * 9 + L.seed) * 0.12 + Math.sin(time * 23 + L.seed) * 0.08;
       else if (on && L.flicker > 0) {
@@ -788,10 +680,10 @@ export class House {
     }
     if (this.blackout > 0) this.blackout -= dt;
     if (!this.pool || !viewer) return;
-    // Pick the most relevant lit fixtures for the pool.
+    const vl = levelIndex(viewer.y);
     const ranked = this.lights
       .filter(L => L.light.intensity > 0.02)
-      .map(L => ({ L, d: L.light.position.distanceTo(viewer) - (L.always ? 3 : 0) }))
+      .map(L => ({ L, d: L.light.position.distanceTo(viewer) + Math.abs(levelIndex(L.light.position.y - 2) - vl) * 8 - (L.always ? 2 : 0) }))
       .filter(o => o.d < 22)
       .sort((a, b) => a.d - b.d)
       .slice(0, this.pool.length)
@@ -815,15 +707,16 @@ export class House {
 
   // --------------------------------------------------------------- windows
   buildWindows() {
+    // line, wall coordinate (inner face), along, sill y, width, height, normal sign
     const W = [
-      ['x', 0.11, 4.4, 1.0, 1.4, 1.2, 1], // bed1 north
-      ['x', 0.11, 16.0, 1.0, 1.4, 1.2, 1], // bed2 north
-      ['x', 0.11, 22.3, 1.0, 1.4, 1.2, 1], // security north
-      ['z', 0.11, 18.2, 1.0, 1.4, 1.2, 1], // living west
-      ['x', 20.89, 8.2, 1.0, 1.4, 1.2, -1], // living south
-      ['z', 29.89, 16.8, 1.25, 1.4, 1.0, -1], // kitchen east (above counter)
-      ['x', 20.89, 19.5, 1.0, 1.4, 1.2, -1], // kitchen south
-      ['z', 0.11, 9.5, 1.0, 1.0, 1.3, 1], // hallway west end
+      ['x', 0.11, 4.4, 1.0, 1.4, 1.2, 1], ['x', 0.11, 16.0, 1.0, 1.4, 1.2, 1], ['x', 0.11, 22.3, 1.0, 1.4, 1.2, 1],
+      ['x', 0.11, 36.5, 1.0, 1.4, 1.2, 1],
+      ['z', 0.11, 18.2, 1.0, 1.4, 1.2, 1], ['x', 20.89, 8.2, 1.0, 1.4, 1.2, -1], ['x', 20.89, 19.5, 1.0, 1.4, 1.2, -1],
+      ['x', 20.89, 32.5, 1.0, 1.4, 1.2, -1],
+      ['z', 0.11, 9.5, 1.0, 1.0, 1.3, 1],
+      ['x', 0.11, 5.0, 4.4, 1.4, 1.2, 1], ['x', 0.11, 19.5, 4.4, 1.4, 1.2, 1], ['x', 0.11, 37.0, 4.4, 1.4, 1.2, 1],
+      ['z', 0.11, 16.0, 4.4, 1.4, 1.2, 1], ['x', 20.89, 15.0, 4.4, 1.4, 1.2, -1], ['x', 20.89, 29.0, 4.4, 1.4, 1.2, -1],
+      ['z', 39.89, 9.5, 4.4, 1.0, 1.3, -1],
     ];
     for (const [line, c, a, y, w, h, n] of W) {
       const g = new THREE.Group();
@@ -833,7 +726,6 @@ export class House {
       bar(w + 0.12, 0.08, 0, h / 2 + 0.04); bar(w + 0.12, 0.1, 0, -h / 2 - 0.05);
       bar(0.07, h, -w / 2 - 0.03, 0); bar(0.07, h, w / 2 + 0.03, 0);
       bar(0.05, h, 0, 0); bar(w, 0.05, 0, 0);
-      // a couple of nailed boards across
       const board = bx(w + 0.2, 0.14, 0.03, this.M.wood);
       board.position.set(0, h * 0.18, 0.05);
       board.rotation.z = 0.25;
@@ -846,56 +738,71 @@ export class House {
   }
 
   // -------------------------------------------------------------------- nav
+  /**
+   * Ajan's waypoint graph, generated from the layout: nodes on a grid inside
+   * every room he may enter, nodes either side of each door/opening, and chains
+   * along the two staircases he can use. The attic, its stairs and the elevator
+   * are deliberately absent, so he can never plan a path into them.
+   */
   buildNav() {
     const N = [];
-    const node = (id, x, z, room, y = 0) => { N.push({ id, x, z, y, room, edges: [] }); };
-    // Bedroom 1
-    node('b1a', 4, 4, 'bed1'); node('b1b', 1.6, 6.2, 'bed1'); node('b1c', 5.0, 2.2, 'bed1'); node('b1d', 6.4, 6.5, 'bed1'); node('b1door', 3.55, 7.3, 'bed1');
-    // Bathroom
-    node('baa', 10.5, 3.6, 'bath'); node('badoor', 10.55, 7.3, 'bath'); node('bab', 9.2, 5.5, 'bath');
-    // Bedroom 2
-    node('b2a', 17, 4, 'bed2'); node('b2b', 15, 5.6, 'bed2'); node('b2c', 18.6, 6.4, 'bed2'); node('b2door', 16.55, 7.3, 'bed2');
-    // Security
-    node('sa', 25.5, 4, 'sec'); node('sb', 23, 5.5, 'sec'); node('sc', 28, 5.6, 'sec'); node('sdoor', 25.55, 7.3, 'sec');
-    // Hallway
-    const hx = [1.0, 3.55, 5.55, 8.0, 10.55, 14.05, 16.55, 19.2, 22.55, 25.55, 28.6];
-    hx.forEach((x, i) => node('h' + i, x, 9.5, 'hall'));
-    // Living room
-    node('ldoor', 5.55, 11.9, 'living'); node('la', 3, 12.8, 'living'); node('lb', 8.4, 13.2, 'living'); node('lc', 6.2, 16.2, 'living');
-    node('ld', 2.6, 20.0, 'living'); node('le', 8.4, 19.6, 'living'); node('lw', 9.9, 14.05, 'living'); node('lf', 5.0, 19.8, 'living'); node('lg', 2.3, 17.2, 'living');
-    // Start room
-    node('sn', 14.05, 11.9, 'start'); node('sw', 12.0, 14.05, 'start'); node('se', 16.1, 14.05, 'start'); node('sm', 14.2, 14.2, 'start'); node('ss', 14.2, 15.8, 'start');
-    // Kitchen
-    node('kn', 22.55, 11.9, 'kitchen'); node('kw', 17.9, 14.05, 'kitchen'); node('kb', 17.9, 19.15, 'kitchen');
-    node('ka', 20, 13.2, 'kitchen'); node('kc', 20.4, 18.4, 'kitchen'); node('kd', 25.6, 13.6, 'kitchen'); node('ke', 25.8, 18.2, 'kitchen'); node('kf', 28.2, 15.6, 'kitchen');
-    // Stairs
-    node('st0', 16.5, 19.15, 'stair'); node('st1', 13.75, 19.0, 'stair', -1.6); node('st2', 11.3, 19.0, 'stair', BY);
-    // Basement
-    node('ba', 9.4, 19.0, 'base', BY); node('bb', 5.2, 19.6, 'base', BY); node('bc', 5.0, 22.5, 'base', BY);
-    node('bd', 8.9, 23.7, 'base', BY); node('be', 12.5, 23.4, 'base', BY); node('bf', 14.0, 25.0, 'base', BY); node('bg', 11.5, 21.8, 'base', BY);
-    node('ua', 7.1, 23.7, 'util', BY); node('ub', 4.6, 24.8, 'util', BY); node('uc', 3.6, 22.5, 'util', BY);
-
-    const byId = Object.fromEntries(N.map(n => [n.id, n]));
-    const link = (a, b, door = null) => {
-      const A = byId[a], B = byId[b];
-      const len = Math.hypot(A.x - B.x, A.z - B.z);
-      A.edges.push({ to: b, door, len });
-      B.edges.push({ to: a, door, len });
+    const solid = this.colliders.filter(c => !c.door && !c.playerOnly);
+    const clear = (x, z, y, r = 0.5) => !solid.some(c => !c.off && c.minY < y + 1.5 && c.maxY > y + 0.3 && x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r);
+    let k = 0;
+    const node = (x, z, y, room) => { const n = { id: 'n' + (k++), x, z, y, room, edges: [] }; N.push(n); return n; };
+    this.roomNodes = {};
+    for (const r of ROOMS) {
+      if (r.safe) continue;
+      const y = LEVELS[r.L].y;
+      const list = [];
+      for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) {
+        const nx = Math.max(1, Math.round((x1 - x0 - 0.9) / 2.0)), nz = Math.max(1, Math.round((z1 - z0 - 0.9) / 2.0));
+        for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
+          const x = x0 + 0.45 + (x1 - x0 - 0.9) * (i + 0.5) / nx, z = z0 + 0.45 + (z1 - z0 - 0.9) * (j + 0.5) / nz;
+          for (const [ox, oz] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [0.6, 0.6], [-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6]]) {
+            const px = x + ox, pz = z + oz;
+            if (px < x0 + 0.45 || px > x1 - 0.45 || pz < z0 + 0.45 || pz > z1 - 0.45) continue;
+            if (clear(px, pz, y)) { list.push(node(px, pz, y, r.id)); break; }
+          }
+        }
+      }
+      this.roomNodes[r.id] = list;
+    }
+    const portals = [];
+    const addPortal = (d, y, doorId) => {
+      const cx = d.line === 'x' ? d.a0 + d.w / 2 : d.c, cz = d.line === 'x' ? d.c : d.a0 + d.w / 2;
+      const nx = d.line === 'x' ? 0 : 1, nz = d.line === 'x' ? 1 : 0;
+      const a = node(cx - nx * 0.75, cz - nz * 0.75, y, roomAt(cx - nx * 0.75, cz - nz * 0.75, y + 0.5)?.id);
+      const b = node(cx + nx * 0.75, cz + nz * 0.75, y, roomAt(cx + nx * 0.75, cz + nz * 0.75, y + 0.5)?.id);
+      portals.push([a, b, doorId]);
     };
-    // Automatic links inside each room when the straight line is clear.
+    for (const d of DOORS) if (!d.exit && !d.ajanBlocked) addPortal(d, d.y, d.id);
+    for (const o of OPENINGS) addPortal(o, o.y0, null);
+    const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
+    const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
+
+    const byId = {};
+    N.forEach(n => { byId[n.id] = n; });
+    const link = (A, B, door = null) => {
+      if (A.edges.some(e => e.to === B.id)) return;
+      const len = Math.hypot(A.x - B.x, A.z - B.z) + Math.abs(A.y - B.y);
+      A.edges.push({ to: B.id, door, len });
+      B.edges.push({ to: A.id, door, len });
+    };
     for (let i = 0; i < N.length; i++) for (let j = i + 1; j < N.length; j++) {
       const a = N[i], b = N[j];
-      if (a.room !== b.room || a.room === 'stair') continue;
-      const blocked = segmentBlockers(a.x, a.z, b.x, b.z, a.y + 0.6, this.colliders.filter(c => !c.door), { pad: 0.38, occludeOnly: false, max: 1 });
-      if (!blocked) link(a.id, b.id);
+      if (!a.room || a.room !== b.room || Math.abs(a.y - b.y) > 0.4) continue;
+      if (Math.hypot(a.x - b.x, a.z - b.z) > 4.6) continue;
+      // only test colliders near the segment
+      const mnx = Math.min(a.x, b.x) - 0.5, mxx = Math.max(a.x, b.x) + 0.5, mnz = Math.min(a.z, b.z) - 0.5, mxz = Math.max(a.z, b.z) + 0.5;
+      const near = solid.filter(c => c.maxX > mnx && c.minX < mxx && c.maxZ > mnz && c.minZ < mxz);
+      const blocked = segmentBlockers(a.x, a.z, b.x, b.z, a.y + 0.6, near, { pad: 0.42, occludeOnly: false, max: 1, who: 'ajan' });
+      if (!blocked) link(a, b);
     }
-    link('b1door', 'h1', 'd_bed1'); link('badoor', 'h4', 'd_bath'); link('b2door', 'h6', 'd_bed2'); link('sdoor', 'h9', 'd_sec');
-    link('h2', 'ldoor', 'd_living'); link('h5', 'sn', 'd_start_n'); link('h8', 'kn', 'd_kitchen');
-    link('sw', 'lw', 'd_start_w'); link('se', 'kw', 'd_start_e'); link('kb', 'st0', 'd_basement');
-    link('st0', 'st1'); link('st1', 'st2'); link('st2', 'ba'); link('bd', 'ua');
+    for (const [a, b, d] of portals) link(a, b, d);
+    for (const chain of [s1, s2]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
     this.nav = { nodes: N, byId };
-    // Rooms Ajan patrols between (one representative node each)
-    this.patrolNodes = ['b1a', 'baa', 'b2a', 'sa', 'h3', 'h7', 'h10', 'lc', 'ld', 'sm', 'kd', 'kc', 'bc', 'be', 'ub'];
+    this.patrolNodes = ROOMS.filter(r => !r.safe && this.roomNodes[r.id]?.length).map(r => this.roomNodes[r.id][0].id);
   }
 
   // ------------------------------------------------------------- per frame
@@ -914,7 +821,7 @@ export class House {
       }
     }
     for (const h of this.hides.values()) {
-      if (Math.abs(h.open - h.target) > 0.001) {
+      if (h.doors.length && Math.abs(h.open - h.target) > 0.001) {
         h.open += (h.target - h.open) * Math.min(1, dt * 8);
         for (const dd of h.doors) dd.pivot.rotation.y = dd.side * h.open * 1.4;
       }
@@ -927,10 +834,7 @@ export class House {
     const avail = textures.filter(Boolean);
     let pool = [];
     this.paintingSlots.forEach((slot, i) => {
-      if (!avail.length) {
-        slot.mesh.material.color.set(0x2a2622);
-        return;
-      }
+      if (!avail.length) { slot.mesh.material.color.set(0x2a2622); return; }
       if (!pool.length) pool = shuffle(avail.map((_, k) => k), rnd);
       const tex = avail[pool.pop()];
       slot.mesh.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75, color: 0xbbbbbb });
@@ -939,7 +843,7 @@ export class House {
   }
 }
 
-/** Item meshes (keys, fuse). */
+/** Item meshes (keys, fuse, bolt cutters). */
 export function makeItemMesh(type, M) {
   const g = new THREE.Group();
   if (type === 'fuse') {
@@ -951,9 +855,20 @@ export function makeItemMesh(type, M) {
     g.add(glass, c1, c2);
     g.rotation.z = Math.PI / 2;
     g.position.y = 0.025;
+  } else if (type === 'bolt_cutters') {
+    const red = new THREE.MeshStandardMaterial({ color: 0x9a1a10, roughness: 0.6, emissive: 0x200000 });
+    for (const s of [-1, 1]) {
+      const h = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.02, 0.025), red);
+      h.position.set(-0.12, 0.012, s * 0.03);
+      h.rotation.y = s * 0.08;
+      const jaw = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.025, 0.03), M.metal);
+      jaw.position.set(0.15, 0.014, s * 0.012);
+      g.add(h, jaw);
+    }
   } else {
+    const tint = { exit_key: 0x301008, office_key: 0x102030, storage_key: 0x103010, elevator_key: 0x202020 }[type] ?? 0x201505;
     const mat = M.brass.clone();
-    mat.emissive = new THREE.Color(type === 'exit_key' ? 0x301008 : 0x201505);
+    mat.emissive = new THREE.Color(tint);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.009, 8, 16), mat);
     ring.rotation.x = Math.PI / 2;
     const shaft = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.012, 0.014), mat);
@@ -963,46 +878,37 @@ export function makeItemMesh(type, M) {
     const t2 = t1.clone();
     t2.position.x = 0.1;
     g.add(ring, shaft, t1, t2);
-    if (type === 'exit_key') {
-      const tag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.004, 0.04), new THREE.MeshStandardMaterial({ color: 0xaa1515, emissive: 0x330000 }));
+    const tagColor = { exit_key: 0xaa1515, office_key: 0x2050a0, storage_key: 0x2a8a2a, elevator_key: 0xd0b020 }[type];
+    if (tagColor) {
+      const tag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.004, 0.04), new THREE.MeshStandardMaterial({ color: tagColor, emissive: new THREE.Color(tagColor).multiplyScalar(0.25) }));
       tag.position.set(-0.055, 0, 0.0);
       g.add(tag);
-      g.scale.setScalar(1.3);
     }
+    if (type === 'exit_key') g.scale.setScalar(1.3);
     g.position.y = 0.008;
   }
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return g;
 }
 
-/** Candidate spawn spots for progression items. */
+/** Candidate spawn spots for progression items (one is picked per session). */
 export const ITEM_SPAWNS = {
-  basement_key: [
-    { container: 'c_ns1' },
-    { pos: [8.5, 1.36, 11.33], room: 'living' }, // bookshelf
-    { pos: [19.6, 0.8, 8.33], room: 'hall' }, // hallway side table
-  ],
-  fuse: [
-    { container: 'c_bath' },
-    { container: 'c_kit1' },
-    { container: 'c_desk2' },
-    { container: 'c_kit2' },
-  ],
-  exit_key: [
-    { pos: [23.75, 0.78, 0.95], room: 'sec' },
-    { pos: [28.3, 0.78, 0.9], room: 'sec' },
-  ],
+  office_key: [{ pos: [8.5, 1.36, 11.33] }, { pos: [19.6, 0.8, 8.33] }, { container: 'c_side' }],
+  basement_key: [{ container: 'c_office' }],
+  storage_key: [{ container: 'c_ns_m' }, { container: 'c_guest' }, { container: 'c_nursery' }],
+  fuse: [{ container: 'c_storage' }],
+  bolt_cutters: [{ pos: [37.2, -2.3, 26.3] }, { pos: [26.0, -2.4, 26.3] }],
+  exit_key: [{ pos: [23.75, 0.78, 0.95] }, { pos: [28.3, 0.78, 0.9] }],
+  elevator_key: [{ container: 'c_kit1' }, { container: 'c_kit2' }, { container: 'c_desk2' }, { container: 'c_bath' }, { container: 'c_ns1' }],
 };
-
-export const SPAWN_POINTS = [
-  [13.6, 13.4], [14.6, 13.4], [13.6, 14.4], [14.6, 14.4], [13.2, 12.6], [15.4, 12.6], [15.4, 14.6], [12.6, 13.8],
-];
 
 export const CAMERAS = [
   { label: 'CAM 01  HALLWAY W', pos: [0.4, 2.75, 8.4], look: [9, 0.8, 10] },
-  { label: 'CAM 02  HALLWAY E', pos: [29.6, 2.75, 10.6], look: [20, 0.8, 9] },
+  { label: 'CAM 02  HALLWAY E', pos: [39.6, 2.75, 10.6], look: [28, 0.8, 9] },
   { label: 'CAM 03  KITCHEN', pos: [29.6, 2.75, 20.6], look: [21, 0.6, 14] },
   { label: 'CAM 04  LIVING RM', pos: [10.6, 2.75, 20.6], look: [2.5, 0.6, 13.5] },
   { label: 'CAM 05  BASEMENT', pos: [16.6, -0.55, 26.6], look: [6, -2.9, 19.5] },
   { label: 'CAM 06  BACK ROOM', pos: [16.7, 2.75, 11.3], look: [12.5, 0.4, 16] },
+  { label: 'CAM 07  UPSTAIRS', pos: [0.4, 6.15, 8.4], look: [12, 3.6, 10] },
+  { label: 'CAM 08  WORKSHOP', pos: [39.6, -0.55, 26.6], look: [32, -2.9, 16] },
 ];

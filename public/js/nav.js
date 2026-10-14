@@ -2,18 +2,21 @@
 import { segmentBlockers, levelOf, inStairs } from './physics.js';
 
 export function nearestNode(nav, p, colliders, requireLOS = true) {
-  let best = null, bestD = Infinity;
   const lvl = levelOf(p.y);
+  const cands = [];
   for (const n of nav.nodes) {
-    const sameLevel = n.room === 'stair' ? inStairs(p) || Math.abs(n.y - p.y) < 1.8 : levelOf(n.y) === lvl;
+    if (!n.edges.length) continue;
+    const sameLevel = n.room?.startsWith('stair') ? inStairs(p) || Math.abs(n.y - p.y) < 1.8 : levelOf(n.y) === lvl;
     if (!sameLevel) continue;
-    const d = Math.hypot(n.x - p.x, n.z - p.z) + Math.abs(n.y - p.y);
-    if (d >= bestD) continue;
-    if (requireLOS && segmentBlockers(p.x, p.z, n.x, n.z, n.y + 1.0, colliders, { max: 1, occludeOnly: true }) > 0) continue;
-    best = n; bestD = d;
+    cands.push([Math.hypot(n.x - p.x, n.z - p.z) + Math.abs(n.y - p.y), n]);
   }
-  if (!best && requireLOS) return nearestNode(nav, p, colliders, false);
-  return best;
+  cands.sort((a, b) => a[0] - b[0]);
+  if (!requireLOS) return cands[0]?.[1] || null;
+  for (let i = 0; i < Math.min(10, cands.length); i++) {
+    const n = cands[i][1];
+    if (segmentBlockers(p.x, p.z, n.x, n.z, n.y + 1.0, colliders, { max: 1, occludeOnly: true }) === 0) return n;
+  }
+  return cands[0]?.[1] || null;
 }
 
 export function findPath(nav, fromId, toId, passable) {

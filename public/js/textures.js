@@ -255,6 +255,8 @@ export function buildMaterials() {
   M.wallBase = std(concrete(51, [80, 78, 72]));
   M.floorWood = std(planks(61, [92, 62, 38]));
   M.floorWoodDark = std(planks(67, [62, 42, 28]));
+  // Creaky boards: a little darker and more worn than the floor around them.
+  M.boardCreak = std(planks(69, [50, 33, 22]), { roughness: 0.98, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   M.floorTile = std(tiles(71, [150, 146, 130], [40, 40, 38], 'rgba(20,20,15,0.9)', 8), { roughness: 0.6 });
   M.floorBath = std(tiles(73, [110, 130, 128], [90, 110, 108], 'rgba(30,30,25,0.9)', 12), { roughness: 0.5 });
   M.floorConcrete = std(concrete(79));

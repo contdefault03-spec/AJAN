@@ -9,7 +9,8 @@ export const DEFAULTS = {
   sfx: 0.8,
   voice: 1.0,
   micId: '',
-  micSensitivity: 0.55, // 0..1, higher = picks up quieter speech
+  micSensitivity: 0.55, // 0..1, higher = picks up quieter speech (voice detection)
+  micVolume: 1.0, // 0..2, gain applied to the voice other players hear
   micMuted: false,
   micConfigured: false,
   mouse: 1.0,

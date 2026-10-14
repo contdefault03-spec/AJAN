@@ -19,6 +19,9 @@ export const ASSETS = {
   menuVideo: { names: ['menu.mp4'], webm: 'menu.webm' },
   introVideo: { names: ['intro.mp4'], webm: 'intro.webm' },
   escapeVideo: { names: ['escape.mp4'], webm: 'escape.webm' },
+  cinemaVideo: { names: ['cinema.mp4'] },
+  objectModel: { names: ['object.glb'] },
+  sleep: { names: ['sleep.mp3'] },
   image1: { names: ['image1.png', '1.png'] },
   image2: { names: ['image2.png', '2.png'] },
   image3: { names: ['image3.png', '3.png'] },
@@ -38,10 +41,18 @@ export const ASSETS = {
 };
 
 export const ITEM_INFO = {
-  basement_key: { name: 'Basement Key', short: 'Basement Key' },
-  fuse: { name: 'Fuse', short: 'Fuse' },
-  exit_key: { name: 'Front Door Key', short: 'Front Door Key' },
+  office_key: { name: 'Office Key' },
+  basement_key: { name: 'Basement Key' },
+  storage_key: { name: 'Storage Room Key' },
+  fuse: { name: 'Fuse' },
+  bolt_cutters: { name: 'Bolt Cutters' },
+  exit_key: { name: 'Front Door Key' },
+  elevator_key: { name: 'Elevator Key' },
 };
+
+// Per-character death-sound gain (1 = unchanged). Boosted sounds go through a
+// limiter so they get louder without clipping.
+export const DEATH_GAIN = {};
 
 export const PLAYER = {
   height: 1.75,

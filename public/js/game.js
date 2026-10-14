@@ -12,9 +12,11 @@ import { VoiceChat, mic } from './voice.js';
 import { audio } from './audio.js';
 import { loadGLTF, loadTexture } from './assets.js';
 import { settings } from './settings.js';
-import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER } from './config.js';
+import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN } from './config.js';
+import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
+import { isSafeZone, levelIndex, LEVELS } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
-import { lineOfSight, segmentBlockers, levelOf, inStairs } from './physics.js';
+import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission } from './physics.js';
 import { roomAt } from './house.js';
 
 const $ = id => document.getElementById(id);
@@ -76,7 +78,7 @@ export class Game {
     scene.add(this.ambient);
 
     progress(0.1, 'Building the house...');
-    this.house = new House();
+    this.house = new House(mulberry32(this.seed ^ 0x51ed));
     this.house.createLightPool(settings.quality === 'low' ? 4 : settings.quality === 'high' ? 7 : 6);
     scene.add(this.house.group);
 
@@ -89,6 +91,8 @@ export class Game {
     this.house.assignPaintings(tex, this.rnd);
     this.placeItems();
     this.screens = new Screens(this.house, tex);
+    this.props = new Props(this);
+    await this.props.init();
 
     progress(0.7, 'Waking him up...');
     this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 70);
@@ -271,7 +275,11 @@ export class Game {
   }
 
   lockPointer() {
-    try { const p = this.canvas.requestPointerLock(); p?.catch?.(() => {}); } catch { /* not allowed yet */ }
+    // Raw (unaccelerated) mouse input where supported avoids OS acceleration spikes.
+    try {
+      const p = this.canvas.requestPointerLock({ unadjustedMovement: true });
+      p?.catch?.(() => { try { this.canvas.requestPointerLock()?.catch?.(() => {}); } catch { /* not allowed yet */ } });
+    } catch { try { this.canvas.requestPointerLock(); } catch { /* not allowed yet */ } }
   }
 
   isSpectating() { return !!((this.localDead || this.localEscaped) && this.spectate.active); }
@@ -363,6 +371,12 @@ export class Game {
       case 'door': {
         const d = H.doors.get(r.id);
         if (!d) return;
+        if (d.chained) {
+          if (!this.playerHas(pid, 'bolt_cutters')) { this.broadcast({ k: 'need', what: 'bolt_cutters' }, pid); return; }
+          this.broadcast({ k: 'chain', id: d.id, by: pid });
+          this.hostNoise(d.center, 7, 'chain');
+          return;
+        }
         if (d.locked) {
           if (d.lock === 'power') { this.broadcast({ k: 'need', what: 'power' }, pid); return; }
           if (!this.playerHas(pid, d.lock)) { this.broadcast({ k: 'need', what: d.lock }, pid); return; }
@@ -413,7 +427,9 @@ export class Game {
         if (r.enter) {
           if (h.occupant || p.hidden) return;
           const b = this.brain;
-          const seen = !!b && (b.state === 'chase' && b.target === pid && b.lastSeenT < 0.6 && b.pos.distanceTo(p.pos) < 8);
+          // He knows where you are if he was chasing you a moment ago or is looking right at you.
+          const seen = !!b && b.state !== 'sleep' && b.state !== 'dormant' && b.pos.distanceTo(p.pos) < 9 &&
+            ((b.state === 'chase' && b.target === pid && b.lastSeenT < 0.6) || b.canSee(p));
           h.occupant = pid;
           p.hideSeen = seen;
           this.broadcast({ k: 'hide', pid, id: r.id, on: true });
@@ -424,14 +440,79 @@ export class Game {
         }
         return;
       }
-      case 'noise':
-        if (this.brain) this.brain.hear({ pos: V(r.x, r.y, r.z), radius: Math.min(r.r, 25), kind: r.kind, pid });
+      case 'noise': {
+        const pos = V(r.x, r.y, r.z);
+        if (isSafeZone(pos)) return; // nothing in the attic reaches him
+        if (this.brain) this.brain.hear({ pos, radius: Math.min(r.r, 25), kind: r.kind, pid });
         return;
+      }
+      case 'board': {
+        const b = H.floorboards[r.i];
+        if (!b) return;
+        const now = this.time;
+        if ((b.lastHost || -9) > now - 2.5) return; // per-board cooldown
+        b.lastHost = now;
+        this.broadcast({ k: 'creak', i: r.i, pid });
+        if (this.brain) this.brain.hear({ pos: V(b.x, b.y, b.z), radius: 17, kind: 'board', pid, exact: true });
+        return;
+      }
+      case 'elev': {
+        const P = this.props, st = P.elev, now = this.net.serverNow();
+        if (P.elevatorMoving(now)) return;
+        if (!st.unlocked) {
+          if (!this.playerHas(pid, 'elevator_key')) { this.broadcast({ k: 'need', what: 'elevator_key' }, pid); return; }
+          this.broadcast({ k: 'elevUnlock', by: pid });
+        }
+        if (r.to === 0 && H.doors.get('d_basement').locked && !this.playerHas(pid, 'basement_key')) { this.broadcast({ k: 'need', what: 'basement_key' }, pid); return; }
+        const curY = P.elevatorY(now);
+        if (Math.abs(curY - LEVELS[r.to].y) < 0.05) return;
+        // Nobody may be standing in a doorway when the doors close.
+        const blocked = [...this.players.values()].some(q => q.alive && !q.escaped && Math.abs(q.pos.x - 34.6) < 0.8 && (Math.abs(q.pos.z - 11) < 0.35 || Math.abs(q.pos.z - 13.4) < 0.35));
+        if (blocked) { this.broadcast({ k: 'msg', text: 'Someone is standing in the elevator doors.' }, pid); return; }
+        this.broadcast({ k: 'elev', fromY: curY, to: r.to, at: now + 1300 });
+        this.elevNoiseT = 0;
+        return;
+      }
+      case 'radio': {
+        const radio = this.props.radios.get(r.id);
+        if (!radio) return;
+        const on = !radio.on;
+        this.broadcast({ k: 'radio', id: r.id, on });
+        if (on) { radio.offAt = this.time + 25; radio.noiseT = 0; }
+        return;
+      }
+      case 'boom': {
+        const bb = this.props.boombox;
+        if (!bb || performance.now() < bb.until) return;
+        const keys = DEATH_KEYS.filter(k => audio.buffers[k]);
+        if (!keys.length) return;
+        this.broadcast({ k: 'boom', key: keys[Math.floor(this.rnd() * keys.length)] });
+        return;
+      }
+      case 'cinema': {
+        const now = this.net.serverNow();
+        const P = this.props;
+        const cur = Math.max(0, P.cinemaTime(now));
+        const s = P.cinema.state;
+        let next;
+        if (r.a === 'restart') next = { playing: true, pos: 0, at: now + 300 };
+        else next = s.playing ? { playing: false, pos: cur, at: now } : { playing: true, pos: cur, at: now + 300 };
+        this.broadcast({ k: 'cinema', ...next });
+        return;
+      }
+      case 'jelly': {
+        if ((this.jellyHostT || 0) > this.time - 0.25) return;
+        this.jellyHostT = this.time;
+        this.broadcast({ k: 'jelly', ix: clamp(r.ix, -1.5, 1.5), iz: clamp(r.iz, -1.5, 1.5) });
+        return;
+      }
       case 'escape': {
         const d = H.doors.get('d_front');
         if (!d || d.locked || !d.open) return;
         const group = [...this.players.values()].filter(q => q.alive && !q.escaped && !q.dying && Math.hypot(q.pos.x - 4.65, q.pos.z - 21.2) < 3.2).map(q => q.id);
         if (!group.includes(pid)) group.push(pid);
+        // Anything they still carry stays inside for the others.
+        group.forEach(id => this.dropItems(id, V(4.65, 0, 19.8)));
         this.broadcast({ k: 'escape', pids: group, at: this.net.serverNow() + 600 });
         return;
       }
@@ -445,13 +526,17 @@ export class Game {
     this.hostNoise(d.center, by === 'ajan' ? 14 : 8, 'door', by === 'ajan' ? 'ajan' : by);
   }
 
-  hostNoise(pos, radius, kind, pid = null) {
-    if (this.brain && pid !== 'ajan') this.brain.hear({ pos: pos.clone ? pos.clone() : V(pos.x, pos.y, pos.z), radius, kind, pid });
+  hostNoise(pos, radius, kind, pid = null, exact = false) {
+    if (!this.brain || pid === 'ajan') return;
+    const p = pos.clone ? pos.clone() : V(pos.x, pos.y, pos.z);
+    if (isSafeZone(p)) return;
+    this.brain.hear({ pos: p, radius, kind, pid, exact });
   }
 
   hostStartKill(pid) {
     const p = this.players.get(pid);
     if (!p || !p.alive || p.dying || this.kills.has(pid)) return;
+    if (isSafeZone(p.pos)) return; // the attic is sacred
     p.dying = true;
     const b = this.brain;
     b.setState('kill');
@@ -480,6 +565,7 @@ export class Game {
   }
 
   dropItems(pid, pos) {
+    if (pos.x > 33.2 && pos.x < 36 && pos.z > 10.8 && pos.z < 13.6) pos = V(34.6, pos.y, pos.y < -1.4 ? 14.3 : 10.0);
     for (const it of this.items.values()) {
       if (it.holder === pid && !it.used) {
         this.broadcast({ k: 'drop', id: it.id, x: pos.x + (this.rnd() - 0.5) * 0.6, y: pos.y, z: pos.z + (this.rnd() - 0.5) * 0.6 });
@@ -517,8 +603,7 @@ export class Game {
     const me = this.me;
     switch (e.k) {
       case 'need': {
-        const what = e.what === 'power' ? 'power' : (ITEM_INFO[e.what]?.name || e.what);
-        this.message(e.what === 'power' ? 'You need power for that' : `You need a ${what} for that`);
+        this.message(this.needText(e.what));
         audio.play('rattle', { vol: 0.5 });
         break;
       }
@@ -535,7 +620,6 @@ export class Game {
         if (!d) break;
         d.locked = false;
         audio.play('clunk', { pos: d.center, vol: 0.7 });
-        if (d.exit && H.exitChain) H.exitChain.visible = false;
         const it = this.items.get(e.item);
         if (it && e.item !== 'basement_key') it.used = true;
         if (e.by === this.localId) this.message(`Unlocked: ${d.name}`);
@@ -615,7 +699,45 @@ export class Game {
       case 'ajs': {
         const pos = this.ajanVis.pos.clone().add(V(0, 1.9, 0));
         if (e.s === 'roar') { audio.play('roar', { pos, vol: 1.0, ref: 3 }); this.post?.glitch(0.6); }
+        else if (e.s === 'laugh') audio.play('sleep', { pos, vol: 0.9, ref: 2.5, duration: 3 }); // first 3 s of sleep.mp3
+        else if (e.s === 'whisper') audio.play('ajan', { pos, vol: 0.45, ref: 1.6, rolloff: 1.6, rate: 0.92 });
         else audio.play('growl', { pos, vol: 0.8, ref: 2.5, rate: 0.9 + Math.random() * 0.2 });
+        break;
+      }
+      case 'msg': this.message(e.text); break;
+      case 'chain': {
+        const d = H.doors.get(e.id);
+        if (!d) break;
+        d.chained = false;
+        if (H.exitChain) H.exitChain.visible = false;
+        const it = this.items.get('bolt_cutters');
+        if (it) it.used = true;
+        audio.play('clunk', { pos: d.center, vol: 0.9, rate: 1.4 });
+        audio.play('rattle', { pos: d.center, vol: 0.7 });
+        this.markAct(e.by);
+        if (e.by === this.localId) this.message('You cut the chain.');
+        this.updateHUD();
+        break;
+      }
+      case 'elevUnlock':
+        this.props.elev.unlocked = true;
+        { const it = this.items.get('elevator_key'); if (it) it.used = true; }
+        if (e.by === this.localId) this.message('The elevator key turns. The elevator is working.');
+        this.updateHUD();
+        break;
+      case 'elev':
+        this.props.elevatorMove(e);
+        audio.play('clunk', { pos: V(34.6, e.fromY + 1, 12.2), vol: 0.6 });
+        break;
+      case 'radio': this.props.setRadio(e.id, e.on); break;
+      case 'boom': this.props.playBoombox(e.key); break;
+      case 'phone': this.props.phoneRecording(e.offset); break;
+      case 'cinema': this.props.setCinema({ playing: e.playing, pos: e.pos, at: e.at }); break;
+      case 'jelly': this.props.pokeJelly(e.ix, e.iz); break;
+      case 'mirror': this.props.setMirror(e.i); break;
+      case 'creak': {
+        const b = H.floorboards[e.i];
+        if (b && e.pid !== this.localId) audio.play('boardCreak', { pos: V(b.x, b.y + 0.1, b.z), vol: 1.0, ref: 2.5, rate: 0.9 + (e.i % 3) * 0.06, muffle: this.muffleFor(V(b.x, b.y, b.z)) });
         break;
       }
       case 'flash': this.lightning(); break;
@@ -625,6 +747,13 @@ export class Game {
         break;
       case 'end': this.onEnd(e.results); break;
     }
+  }
+
+  needText(what) {
+    if (what === 'power') return 'You need power for that';
+    if (what === 'bolt_cutters') return 'You need Bolt Cutters for that';
+    const name = ITEM_INFO[what]?.name || what;
+    return `You need ${/^[AEIOU]/i.test(name) ? 'an' : 'a'} ${name} for that`;
   }
 
   markAct(pid) {
@@ -650,7 +779,8 @@ export class Game {
       p.hideId = e.id;
       h.occupant = e.pid;
       h.target = 1;
-      setTimeout(() => { if (h.occupant === e.pid) h.target = 0.22; }, 650);
+      // closets shut again behind you — you watch the room through the louvers
+      setTimeout(() => { if (h.occupant === e.pid) h.target = 0; }, 650);
       audio.play('creak', { pos: h.inside, vol: 0.35, rate: 1.4 });
       if (p.isLocal) {
         this.local.hidden = h;
@@ -694,7 +824,10 @@ export class Game {
     p.avatar.group.visible = true;
     p.avatar.state.mode = 'grabbed';
     if (p.label) p.label.style.opacity = 0;
-    if (seq.isAjanChar) audio.play('ajandie', seq.local ? { vol: 1 } : { pos: seq.start.clone().add(V(0, 1.5, 0)), vol: 1, ref: 3 });
+    if (seq.isAjanChar) {
+      const gain = DEATH_GAIN.AJAN ?? 1;
+      audio.play('ajandie', seq.local ? { vol: gain, limit: gain > 1 } : { pos: seq.start.clone().add(V(0, 1.5, 0)), vol: gain, ref: 3, limit: gain > 1 });
+    }
     audio.play('growl', { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1, ref: 3 });
     if (seq.local) {
       this.local.frozen = true;
@@ -738,7 +871,10 @@ export class Game {
       if (t >= EAT_START) {
         if (s.stage === 0) {
           s.stage = 1;
-          if (s.sound) audio.play(s.sound, s.local ? { vol: 1 } : { pos: av.group.position.clone().add(V(0, 1.4, 0)), vol: 1, ref: 3 });
+          if (s.sound) {
+            const gain = DEATH_GAIN[s.p.character] ?? 1;
+            audio.play(s.sound, s.local ? { vol: gain, limit: gain > 1 } : { pos: av.group.position.clone().add(V(0, 1.4, 0)), vol: gain, ref: 3, limit: gain > 1 });
+          }
         }
         const k = clamp((t - EAT_START) / s.eatDur, 0, 1);
         av.setDissolve(k);
@@ -919,6 +1055,8 @@ export class Game {
     this.lockPointer();
     this.message('Find a way out. Stay quiet.', 6);
     this.wind = audio.play('wind', { loop: true, vol: 0.12 });
+    this.amb = {};
+    for (const k of ['ambBase', 'ambHouse', 'ambUp', 'ambAttic']) this.amb[k] = audio.play(k, { loop: true, vol: 0 });
   }
 
   updateMusic() {
@@ -943,14 +1081,15 @@ export class Game {
     switch (it.kind) {
       case 'door': {
         const d = it.door;
-        if (d.locked) {
-          if (d.lock === 'power') { this.message('You need power for that'); audio.play('rattle', { pos: d.center, vol: 0.5 }); this.request({ k: 'noise', x: d.center.x, y: 0, z: d.center.z, r: 4, kind: 'rattle' }); return; }
-          if (!this.playerHas(me, d.lock)) {
-            this.message(`You need a ${ITEM_INFO[d.lock].name} for that`);
-            audio.play('rattle', { pos: d.center, vol: 0.5 });
-            this.request({ k: 'noise', x: d.center.x, y: 0, z: d.center.z, r: 4, kind: 'rattle' });
-            return;
-          }
+        const rattle = what => {
+          this.message(this.needText(what));
+          audio.play('rattle', { pos: d.center, vol: 0.5 });
+          this.request({ k: 'noise', x: d.center.x, y: d.y, z: d.center.z, r: 4, kind: 'rattle' });
+        };
+        if (d.chained && !this.playerHas(me, 'bolt_cutters')) { rattle('bolt_cutters'); return; }
+        if (!d.chained && d.locked) {
+          if (d.lock === 'power') { rattle('power'); return; }
+          if (!this.playerHas(me, d.lock)) { rattle(d.lock); return; }
         }
         L.act();
         this.request({ k: 'door', id: d.id });
@@ -976,6 +1115,26 @@ export class Game {
         this.request({ k: 'mon', i: it.monitor.index });
         break;
       case 'note': L.act(); this.openNote(it.text); break;
+      case 'elevbtn':
+      case 'elevcall': {
+        const st = this.props.elev;
+        if (!st.unlocked && !this.playerHas(me, 'elevator_key')) { this.message(this.needText('elevator_key')); audio.play('rattle', { vol: 0.3, rate: 2 }); return; }
+        L.act();
+        audio.play('pickup', { vol: 0.4, rate: 0.7 });
+        this.request({ k: 'elev', to: it.level });
+        break;
+      }
+      case 'radio': L.act(); this.request({ k: 'radio', id: it.id }); break;
+      case 'boombox': L.act(); this.request({ k: 'boom' }); break;
+      case 'cinema': L.act(); this.request({ k: 'cinema', a: 'toggle' }); break;
+      case 'vcr': L.act(); this.request({ k: 'cinema', a: 'restart' }); break;
+      case 'jelly': {
+        L.act();
+        const j = this.props.jelly;
+        const dx = j.pos.x - L.pos.x, dz = j.pos.z - L.pos.z, d = Math.hypot(dx, dz) || 1;
+        this.request({ k: 'jelly', ix: dx / d, iz: dz / d });
+        break;
+      }
     }
   }
 
@@ -995,20 +1154,28 @@ export class Game {
     switch (it.kind) {
       case 'door': {
         const d = it.door;
+        if (d.chained) return this.playerHas(me, 'bolt_cutters') ? 'E — CUT THE CHAIN' : 'E — OPEN  <span class="dim">[CHAINED]</span>';
         if (d.locked) {
           if (d.lock !== 'power' && this.playerHas(me, d.lock)) return `E — UNLOCK (${ITEM_INFO[d.lock].name})`;
-          return `E — OPEN  <span class="dim">[LOCKED]</span>`;
+          return `E — OPEN  <span class="dim">[LOCKED — ${d.lock === 'power' ? 'NO POWER' : ITEM_INFO[d.lock].name.toUpperCase()}]</span>`;
         }
         if (d.exit && d.open) return 'GET OUT!';
         return d.open ? 'E — CLOSE' : 'E — OPEN';
       }
       case 'container': return it.container.target > 0.5 ? `E — CLOSE ${it.name.toUpperCase()}` : `E — OPEN ${it.name.toUpperCase()}`;
       case 'item': return `E — PICK UP ${ITEM_INFO[it.item.type].name.toUpperCase()}`;
-      case 'hide': return it.spot.occupant ? '<span class="dim">OCCUPIED</span>' : 'E — HIDE';
+      case 'hide': return it.spot.occupant ? '<span class="dim">OCCUPIED</span>' : `E — ${it.spot.label}`;
       case 'fusebox': return this.house.power ? '<span class="dim">POWER RESTORED</span>' : this.playerHas(me, 'fuse') ? 'E — USE FUSE' : 'E — USE';
       case 'tv': return this.screens.tv.mode === 'off' ? 'E — TURN ON' : 'E — TURN OFF';
       case 'monitor': return 'E — SWITCH CAMERA';
       case 'note': return 'E — READ';
+      case 'elevbtn': return `E — FLOOR ${['B', '1', '2', 'A'][it.level]}${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS KEY]</span>'}`;
+      case 'elevcall': return `E — CALL ELEVATOR${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS KEY]</span>'}`;
+      case 'radio': return it.radio.on ? 'E — TURN OFF RADIO' : 'E — TURN ON RADIO';
+      case 'boombox': return 'E — PRESS PLAY';
+      case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
+      case 'vcr': return 'E — RESTART FILM';
+      case 'jelly': return 'E — POKE';
     }
     return '';
   }
@@ -1072,23 +1239,27 @@ export class Game {
       const h = this.items.get(type)?.holder;
       return h && h !== me ? this.players.get(h)?.name : null;
     };
-    const base = H.doors.get('d_basement');
+    const has = t => this.playerHas(me, t);
+    const step = (type, haveMsg, findMsg, otherMsg) => {
+      if (has(type)) return haveMsg;
+      const n = holderName(type);
+      return n ? `${n} ${otherMsg}` : findMsg;
+    };
+    const office = H.doors.get('d_office'), base = H.doors.get('d_basement'), storage = H.doors.get('d_storage');
+    const front = H.doors.get('d_front');
     if (base.locked) {
-      if (this.playerHas(me, 'basement_key')) return 'Unlock the basement door in the kitchen.';
-      const n = holderName('basement_key');
-      return n ? `${n} has the basement key. Get to the kitchen.` : 'Find the basement key.';
+      if (office.locked) return step('office_key', 'Unlock the office at the east end of the hallway.', 'Search the ground floor for the office key.', 'has the office key.');
+      return step('basement_key', 'Unlock the basement door in the kitchen.', 'Find the basement key in the office.', 'has the basement key.');
     }
     if (!H.power) {
-      if (this.playerHas(me, 'fuse')) return 'Put the fuse in the fuse box in the basement.';
-      const n = holderName('fuse');
-      return n ? `${n} has the fuse. Restore the power in the basement.` : 'Find a fuse to restore the power.';
+      if (has('fuse')) return 'Put the fuse in the fuse box in the basement.';
+      if (holderName('fuse')) return `${holderName('fuse')} has the fuse. Restore the power in the basement.`;
+      if (storage.locked) return step('storage_key', 'Unlock the storage room upstairs.', 'Find the storage room key in an upstairs bedroom.', 'has the storage room key.');
+      return 'Find the spare fuse in the storage room upstairs.';
     }
-    const front = H.doors.get('d_front');
-    if (front.locked) {
-      if (this.playerHas(me, 'exit_key')) return 'Unlock the front door in the living room.';
-      const n = holderName('exit_key');
-      return n ? `${n} has the front door key.` : 'Find the front door key in the security room.';
-    }
+    if (front.locked && !has('exit_key')) return step('exit_key', '', 'Find the front door key in the security room.', 'has the front door key.');
+    if (front.chained) return step('bolt_cutters', 'Cut the chain on the front door.', 'Find bolt cutters for the front door chain (basement).', 'has the bolt cutters.');
+    if (front.locked) return step('exit_key', 'Unlock the front door in the living room.', 'Find the front door key in the security room.', 'has the front door key.');
     return 'The front door is open. ESCAPE!';
   }
 
@@ -1116,6 +1287,39 @@ export class Game {
   // ============================================================== director
   hostDirector(dt) {
     const D = this.directorT;
+    const P = this.props;
+    // Radios: noisy until switched off; Ajan turns them off when he arrives.
+    for (const r of P.radios.values()) {
+      if (!r.on) continue;
+      r.noiseT = (r.noiseT || 0) - dt;
+      if (r.noiseT <= 0) { r.noiseT = 2; this.hostNoise(r.pos, 48, 'radio', null, true); }
+      const b = this.brain;
+      const ajanNear = b && b.state !== 'dormant' && b.pos.distanceTo(r.pos) < 2.2;
+      if (this.time > r.offAt || ajanNear) {
+        this.broadcast({ k: 'radio', id: r.id, on: false });
+        if (ajanNear) this.ajanSound('growl');
+      }
+    }
+    // The elevator is loud while it moves.
+    if (P.elevatorMoving(this.net.serverNow())) {
+      this.elevNoiseT = (this.elevNoiseT || 0) - dt;
+      if (this.elevNoiseT <= 0) { this.elevNoiseT = 1.5; this.hostNoise(V(34.6, elevatorState.y, 12.2), 22, 'elevator'); }
+    }
+    // The phone in the guest room: when someone is in there, sometimes it plays.
+    D.phone = (D.phone ?? 12) - dt;
+    if (D.phone <= 0) {
+      D.phone = 15;
+      const someone = [...this.players.values()].some(p => p.alive && !p.escaped && roomAt(p.pos.x, p.pos.z, p.pos.y + 0.5)?.id === 'guest');
+      if (someone && !P.phone?.playing && this.rnd() < 0.3) this.broadcast({ k: 'phone', offset: +(this.rnd() * 190).toFixed(1) });
+    }
+    // The bathroom mirror changes its message between visits.
+    const inBath = [...this.players.values()].some(p => p.alive && !p.escaped && roomAt(p.pos.x, p.pos.z, p.pos.y + 0.5)?.id === 'ubath');
+    if (inBath && !this.bathOccupied) {
+      this.bathVisits = (this.bathVisits || 0) + 1;
+      if (this.bathVisits > 1 && this.time - (this.bathLeftT || 0) > 3) this.broadcast({ k: 'mirror', i: (this.bathVisits - 1) % MIRROR_TEXTS.length });
+    }
+    if (!inBath && this.bathOccupied) this.bathLeftT = this.time;
+    this.bathOccupied = inBath;
     D.flash -= dt;
     if (D.flash <= 0) { D.flash = 25 + this.rnd() * 40; this.broadcast({ k: 'flash' }); }
     const tvMode = this.screens.tv.mode;
@@ -1206,7 +1410,7 @@ export class Game {
     this.voiceNoiseT -= dt;
     if (spk && this.voiceNoiseT <= 0 && this.phase === 'play' && !this.localDead && !this.localEscaped && !(me?.dying)) {
       this.voiceNoiseT = 0.45;
-      const r = 5 + mic.level * 12;
+      const r = (4 + mic.level * 9) * Math.min(2, settings.micVolume ?? 1);
       this.emitNoise(L.hidden ? L.hidden.inside : L.pos, L.hidden ? r * 0.6 : r, 'voice');
     }
 
@@ -1238,6 +1442,10 @@ export class Game {
     this.updateKills(dt);
     this.fx.update(dt);
     this.updateDust(dt);
+    this.props.update(dt, this.net.serverNow());
+    this.updateFloorboards(dt);
+    this.updateJellyTouch(dt);
+    this.updateSleepAudio();
     H.update(dt, this.time, this.camera.position);
 
     // Lightning flash
@@ -1330,7 +1538,8 @@ export class Game {
     aj.group.visible = v.st !== 'dormant';
     aj.group.position.copy(v.pos);
     aj.group.rotation.y = v.ry;
-    aj.state = { speed: v.sp, mode: v.m === 'search' ? 'search' : 'move', modeT: v.mt, headYaw: v.m === 'search' ? undefined : v.hy };
+    const ajMode = ['search', 'sleep', 'sit', 'inspect'].includes(v.m) ? v.m : 'move';
+    aj.state = { speed: v.sp, mode: ajMode, modeT: v.mt, headYaw: v.m === 'search' ? undefined : v.hy };
     aj.update(dt);
     // Heavy footsteps
     if (v.st !== 'dormant' && v.sp > 0.2) {
@@ -1393,8 +1602,66 @@ export class Game {
     }
   }
 
+  /** Creaky boards: trigger once when the local player steps onto one (edge-triggered + cooldown). */
+  updateFloorboards(dt) {
+    const L = this.local;
+    if (this.phase !== 'play' || this.localDead || this.localEscaped || L.hidden || L.frozen || this.me?.dying) { this.onBoard = -1; return; }
+    let on = -1;
+    for (const b of this.house.floorboards) {
+      if (Math.abs(L.pos.y - b.y) < 0.4 && Math.abs(L.pos.x - b.x) < 0.5 && Math.abs(L.pos.z - b.z) < 0.5) { on = b.i; break; }
+    }
+    if (on >= 0 && on !== this.onBoard) {
+      const b = this.house.floorboards[on];
+      const now = this.time;
+      if ((b.lastLocal || -9) < now - 2.5) {
+        b.lastLocal = now;
+        audio.play('boardCreak', { pos: V(b.x, b.y + 0.1, b.z), vol: L.crouch ? 0.7 : 1.0, ref: 2.5, rate: 0.9 + (on % 3) * 0.06 });
+        this.request({ k: 'board', i: on });
+      }
+    }
+    this.onBoard = on;
+  }
+
+  /** Bumping into the wobbly thing makes it bounce (no noise for Ajan). */
+  updateJellyTouch(dt) {
+    const j = this.props.jelly;
+    if (!j || this.phase !== 'play' || this.localDead || this.localEscaped) return;
+    const L = this.local;
+    j.cool -= dt;
+    const dx = j.pos.x - L.pos.x, dz = j.pos.z - L.pos.z, d = Math.hypot(dx, dz);
+    if (d < 1.0 && Math.abs(L.pos.y - (j.pos.y - 1.3)) < 0.5 && L.speed > 0.6 && j.cool <= 0) {
+      const vx = L.vel.x, vz = L.vel.z, vl = Math.hypot(vx, vz) || 1;
+      if ((vx * dx + vz * dz) / (vl * (d || 1)) > 0.3) {
+        j.cool = 0.6;
+        this.request({ k: 'jelly', ix: (vx / vl) * Math.min(1.5, L.speed / 3), iz: (vz / vl) * Math.min(1.5, L.speed / 3) });
+      }
+    }
+  }
+
+  /** sleep.mp3 loops at his bed while he naps (from the replicated state). */
+  updateSleepAudio() {
+    const sleeping = this.ajanVis.st === 'sleep';
+    if (sleeping && !this.sleepSound) {
+      const pos = this.ajanVis.pos.clone().add(V(0, 1.2, 0));
+      this.sleepSound = audio.play('sleep', { pos, loop: true, vol: 0.85, ref: 2.2, rolloff: 1.2 });
+    } else if (!sleeping && this.sleepSound) {
+      this.sleepSound.stop(0.6);
+      this.sleepSound = null;
+    }
+  }
+
+  /** Per-area ambience loops crossfaded by the floor you're on. */
+  updateAreaAmbience(cp) {
+    if (!this.amb) return;
+    const room = roomAt(cp.x, cp.z, cp.y);
+    const L = levelIndex(cp.y);
+    const want = room?.id === 'attic' || room?.id === 'stairA' ? 'ambAttic' : L === 0 ? 'ambBase' : L === 2 ? 'ambUp' : 'ambHouse';
+    for (const [k, h] of Object.entries(this.amb)) h?.setVol(k === want ? (k === 'ambAttic' ? 0.5 : 0.22) : 0);
+  }
+
   ambience(dt, cp) {
     if (this.phase !== 'play') return;
+    this.updateAreaAmbience(cp);
     this.ambientT -= dt;
     if (this.ambientT <= 0) {
       this.ambientT = 6 + Math.random() * 12;
@@ -1454,6 +1721,9 @@ export class Game {
     this.voice?.stop();
     this.tvSound?.stop();
     this.wind?.stop();
+    this.sleepSound?.stop();
+    if (this.amb) Object.values(this.amb).forEach(h => h?.stop());
+    this.props?.dispose();
     for (const p of this.players.values()) p.label?.remove();
     $('labels').innerHTML = '';
     $('hud').classList.remove('show', 'dying');

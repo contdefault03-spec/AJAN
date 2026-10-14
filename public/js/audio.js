@@ -26,6 +26,7 @@ class AudioEngine {
     this.applyVolumes();
     onSettingChange(() => this.applyVolumes());
     this.synthesize();
+    this.synthesizeExtra();
     return c;
   }
 
@@ -104,13 +105,23 @@ class AudioEngine {
       node = filter;
     }
     node.connect(gain);
+    // Optional brick-wall limiter for boosted sounds so extra gain doesn't clip.
+    let out = gain;
+    if (opts.limit) {
+      const comp = c.createDynamicsCompressor();
+      comp.threshold.value = -3; comp.knee.value = 2; comp.ratio.value = 20;
+      comp.attack.value = 0.002; comp.release.value = 0.12;
+      gain.connect(comp);
+      out = comp;
+    }
     let panner = null;
     if (opts.pos) {
       panner = this.makePanner(opts.pos, opts.ref ?? 1.5, opts.max ?? 40, opts.rolloff ?? 1.2);
-      gain.connect(panner);
+      out.connect(panner);
       panner.connect(opts.bus || this.sfxBus);
-    } else gain.connect(opts.bus || this.sfxBus);
-    src.start(0, opts.offset || 0);
+    } else out.connect(opts.bus || this.sfxBus);
+    if (opts.duration) src.start(0, opts.offset || 0, opts.duration);
+    else src.start(0, opts.offset || 0);
     const h = {
       src, gain, panner, filter, ended: false,
       stop: (fade = 0.05) => {
@@ -165,6 +176,101 @@ class AudioEngine {
       h.stop(4);
       this.nextAmbient();
     }, fadeAt * 1000);
+  }
+
+  // ------------------------------------------- extra sounds for the expansion
+  synthesizeExtra() {
+    const c = this.ctx;
+    const sr = c.sampleRate;
+    const mk = (secs, fn, ch = 1) => {
+      const b = c.createBuffer(ch, Math.max(1, Math.floor(secs * sr)), sr);
+      for (let k = 0; k < ch; k++) fn(b.getChannelData(k), sr, k);
+      return b;
+    };
+    const rnd = () => Math.random() * 2 - 1;
+    // Loud, distinctive two-stage floorboard groan
+    this.buffers.boardCreak = mk(1.3, (d, sr) => {
+      let ph = 0, lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = t < 0.45 ? 140 + t * 260 + Math.sin(t * 40) * 30 : 95 + Math.sin(t * 23) * 25;
+        ph += f / sr;
+        const saw = (ph % 1) * 2 - 1;
+        const stick = Math.sin(t * 2 * Math.PI * (t < 0.45 ? 31 : 17)) > 0.1 ? 1 : 0.2;
+        lp += (rnd() - lp) * 0.3;
+        const env = Math.min(1, t * 25) * (t < 0.45 ? 1 : Math.exp(-(t - 0.45) * 3.2));
+        d[i] = (saw * stick * 0.55 + lp * 0.25) * env;
+      }
+    });
+    this.buffers.boing = mk(1.1, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = 90 + 260 * Math.exp(-t * 5) + Math.sin(t * 38) * 22 * Math.exp(-t * 2);
+        ph += f / sr;
+        d[i] = Math.sin(ph * 2 * Math.PI) * Math.exp(-t * 3.2) * 0.8;
+      }
+    });
+    this.buffers.ding = mk(1.6, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        d[i] = (Math.sin(t * 2 * Math.PI * 880) + Math.sin(t * 2 * Math.PI * 1320) * 0.4) * Math.exp(-t * 2.5) * 0.35;
+      }
+    });
+    this.buffers.elevHum = mk(2, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.05;
+        d[i] = (Math.sin(t * 2 * Math.PI * 55) * 0.4 + Math.sin(t * 2 * Math.PI * 110) * 0.2 + lp * 1.2) * (0.85 + 0.15 * Math.sin(t * 2 * Math.PI * 3)) * 0.5;
+      }
+    });
+    this.buffers.ring = mk(2.4, (d, sr) => {
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const on = (t % 1.2) < 0.8 ? 1 : 0;
+        const trill = Math.sin(t * 2 * Math.PI * 20) > 0 ? 1 : 0.3;
+        d[i] = (Math.sin(t * 2 * Math.PI * 440) + Math.sin(t * 2 * Math.PI * 480)) * 0.18 * on * trill;
+      }
+    });
+    // Area ambiences (loops)
+    this.buffers.ambBase = mk(8, (d, sr) => {
+      let lp = 0;
+      const drips = [0.7, 2.9, 4.1, 6.6];
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.01;
+        let v = lp * 2.5 + Math.sin(t * 2 * Math.PI * 41) * 0.08;
+        for (const dt of drips) if (t > dt && t < dt + 0.12) v += Math.sin((t - dt) * 2 * Math.PI * (900 - (t - dt) * 3000)) * Math.exp(-(t - dt) * 40) * 0.4;
+        d[i] = v;
+      }
+    });
+    this.buffers.ambHouse = mk(8, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.02;
+        const tick = (t % 1) < 0.006 ? Math.sin(t * 2 * Math.PI * 2400) * 0.25 : 0;
+        d[i] = lp * 0.9 + tick;
+      }
+    });
+    this.buffers.ambUp = mk(8, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const k = 0.008 + 0.03 * (0.5 + 0.5 * Math.sin(t * 0.8));
+        lp += (rnd() - lp) * k;
+        d[i] = lp * 2.2 * (0.6 + 0.4 * Math.sin(t * Math.PI / 4));
+      }
+    });
+    this.buffers.ambAttic = mk(8, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        lp += (rnd() - lp) * 0.45;
+        const drop = Math.random() < 0.0009 ? 1 : 0;
+        d[i] = (rnd() - lp) * 0.12 + drop * rnd() * 0.5;
+      }
+    });
   }
 
   // --------------------------------------------------------- synthesis

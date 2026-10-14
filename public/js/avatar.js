@@ -226,6 +226,30 @@ export class Avatar {
     const mode = st.mode || 'move';
     const mt = st.modeT || 0;
 
+    if (mode === 'sleep' || mode === 'sit') {
+      // Seated: thighs forward, hips lowered onto the seat. Asleep he leans back
+      // against the headboard with legs out and breathes slowly.
+      const kk = 1 - Math.exp(-4 * dt);
+      const sleep = mode === 'sleep';
+      const br = Math.sin(t * (sleep ? 1.15 : 1.6));
+      this._set('thighL', -1.5, 0, 0.12, kk);
+      this._set('thighR', -1.5, 0, -0.12, kk);
+      this._set('shinL', sleep ? 0.05 : 1.45, 0, 0, kk);
+      this._set('shinR', sleep ? 0.05 : 1.45, 0, 0, kk);
+      this._set('hips', sleep ? -0.15 : 0, 0, 0, kk);
+      this._set('spine', (sleep ? -0.32 : 0.05) + br * 0.025, 0, 0, kk);
+      this._set('chest', (sleep ? -0.18 : 0.05) + br * 0.035, 0, 0, kk);
+      this._set('head', sleep ? 0.35 + br * 0.03 : -0.05, sleep ? 0.35 : Math.sin(t * 0.3) * 0.1, sleep ? 0.2 : 0, kk);
+      this._set('upperL', -0.55, -0.15, -0.85 - br * 0.03, kk);
+      this._set('upperR', -0.55, 0.15, 0.85 + br * 0.03, kk);
+      this._set('foreL', 0, -1.15, 0, kk);
+      this._set('foreR', 0, 1.15, 0, kk);
+      this.body.position.y = damp(this.body.position.y, -0.42 + (sleep ? br * 0.012 : 0), 6, dt);
+      this.body.scale.set(1 + br * (sleep ? 0.012 : 0.005), 1, 1 + br * (sleep ? 0.018 : 0.006));
+      return;
+    }
+    this.body.scale.set(1, 1, 1);
+
     // Legs: heavy waddle
     const legA = (0.32 + runK * 0.35) * walkK;
     this._set('thighL', -s * legA - 0.12, 0, 0.06, k);
@@ -257,6 +281,20 @@ export class Avatar {
       this._set('foreL', 0, -1.1, 0, k * 2);
       lean = 0.18 + 0.05 * chewK * Math.sin(t * 7);
       headX = -0.25 * r + chewK * (0.25 + Math.sin(t * 9) * 0.2);
+    } else if (mode === 'inspect') {
+      // Leans right in to the closet/bed with his head cocked, grinning.
+      const r = clamp(mt / 0.8, 0, 1);
+      this._set('upperL', -0.6 * r, 0, -DOWN + 0.2, k);
+      this._set('upperR', -0.6 * r, 0, DOWN - 0.2, k);
+      this._set('foreL', 0, -0.6, 0, k);
+      this._set('foreR', 0, 0.6, 0, k);
+      lean = 0.15 + 0.4 * r;
+      headX = 0.15 * r;
+      this._set('head', headX, Math.sin(t * 0.7) * 0.15, 0.35 * r, k);
+      this._set('spine', lean * 0.5, 0, 0, k);
+      this._set('chest', lean * 0.5, 0, 0, k);
+      this.body.position.y = damp(this.body.position.y, -0.12 * r, 6, dt);
+      return;
     } else if (mode === 'roar') {
       this._set('upperL', 0, -0.4, -0.2 + Math.sin(t * 20) * 0.05, k);
       this._set('upperR', 0, 0.4, 0.2 + Math.sin(t * 20) * 0.05, k);

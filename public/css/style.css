@@ -209,3 +209,7 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 #pause, #endScreen { z-index: 30; }
 #settingsScreen { z-index: 35; }
 #endScreen .logo { font-size: clamp(70px, 10vw, 130px); text-align: center; margin-bottom: 10px; }
+
+.meter.out { height: 8px; }
+.meter.out > div:first-child { background: linear-gradient(90deg, #2a6a8a, #40a0d0 70%, #d02010); }
+.pct { font-family: var(--vhs); font-size: 18px; color: var(--ink); font-weight: 400; }
