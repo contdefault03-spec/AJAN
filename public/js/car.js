@@ -17,7 +17,7 @@ const BY = -3.2;
 export const CAR_START = new THREE.Vector3(35.0, BY, 21.0);
 const HEADING = Math.PI / 2;        // car-space +z (forward) → world +x
 const LEN = 3.9;                    // metres, bumper to bumper
-const MODEL_FLIP = true;            // the Tripo model's nose points along −z
+const MODEL_FLIP = false;           // turned 180° so the model's own steering wheel lines up with the driver's seat
 export const CAR_PARTS = ['engine', 'oil', 'battery'];
 export const PART_NAMES = { engine: 'engine', oil: 'oil', battery: 'battery' };
 

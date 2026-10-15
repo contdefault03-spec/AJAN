@@ -34,7 +34,7 @@ export class LocalPlayer {
     this.turnRate = 0;
 
     // Flashlight
-    this.light = new THREE.SpotLight(0xfff0d8, 0, 26, 0.6, 0.55, 1.5);
+    this.light = new THREE.SpotLight(0xfff0d8, 0, 42, 0.6, 0.55, 1.15); // reaches further down halls
     this.light.position.set(0.18, -0.15, 0.1);
     this.light.target.position.set(0.1, -0.3, -5);
     camera.add(this.light, this.light.target);

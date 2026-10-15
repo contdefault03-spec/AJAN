@@ -631,6 +631,7 @@ export class Game {
       case 'shoot': this.hostShoot(pid, r); return;
       case 'stairplace': this.attic.hostPlace(pid); return;
       case 'dropitem': this.hostDropItem(pid, r); return;
+      case 'drink': { const it = this.items.get(r.id); if (it && it.holder === pid && !it.used && DRINKS[it.type]) { it.used = true; this.broadcast({ k: 'drank', id: r.id, by: pid }); } return; }
       case 'fai': this.club.hostTalk(pid); return;
       case 'faidrink': this.club.hostDrink(pid, r.drink); return;
       case 'faicancel': if (this.club.fai.customer === pid && this.club.fai.mode !== 'serve') this.broadcast({ k: 'faidone' }); return;
@@ -927,6 +928,9 @@ export class Game {
 
   tryShoot() {
     const L = this.local;
+    const held = this.selectedItem();
+    // a drink in hand: left click drinks it
+    if (held && DRINKS[held.type] && !this.localDead && !L.frozen && !this.me?.dying) { this.request({ k: 'drink', id: held.id }); return true; }
     if (!this.playerHas(this.localId, 'revolver') || this.localDead || this.localEscaped || L.hidden || L.frozen || this.me?.dying) return false;
     if (this.selectedItem()?.type !== 'revolver') {
       // the gun is in your pocket: the first click draws it
@@ -1139,6 +1143,19 @@ export class Game {
       case 'faidone': this.club.applyDone(e); break;
       case 'rain': this.club.applyRain(e); break;
       case 'lap': this.club.applyLap(e); break;
+      case 'drank': {
+        const it = this.items.get(e.id);
+        if (it) it.used = true;
+        audio.play('pickup', { vol: 0.5, rate: 0.5 });
+        if (e.by === this.localId) {
+          // a short, woozy spell: vodka hits hardest
+          const k = { vodka: 1, wine: 0.75, beer: 0.6 }[it?.type] ?? 0.6;
+          this.dizzy = Math.min(1.4, (this.dizzy || 0) + k);
+          this.message(`You drink the ${ITEM_INFO[it?.type]?.name.toLowerCase() || 'drink'}. The room starts to sway…`, 3);
+        }
+        this.updateHUD();
+        break;
+      }
       case 'clubsnd': this.club.applySound(e); break;
       case 'hatch': this.attic.applyHatch(e); break;
       case 'carfix': {
@@ -1855,7 +1872,7 @@ export class Game {
     const inv = this.heldList(), sel = this.selectedItem();
     $('inventory').innerHTML = inv.length
       ? inv.map(i => `<div class="slot${i === sel ? ' sel' : ''}"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('') +
-        `<div class="hint">${this.slotsUsed(this.localId)}/${INV_SLOTS} SLOTS  ·  IN HAND: ${escapeHtml(ITEM_INFO[sel.type].name)}  ·  ${inv.length > 1 ? 'WHEEL — switch  ·  ' : ''}G — drop</div>`
+        `<div class="hint">${this.slotsUsed(this.localId)}/${INV_SLOTS} SLOTS  ·  IN HAND: ${escapeHtml(ITEM_INFO[sel.type].name)}  ·  ${DRINKS[sel.type] ? 'CLICK — drink  ·  ' : ''}${inv.length > 1 ? 'WHEEL — switch  ·  ' : ''}G — drop</div>`
       : '<div class="slot empty">— empty —</div>';
     $('money').textContent = `$${this.club ? this.club.balance(this.localId) : 500}`;
     $('micState').classList.toggle('muted', settings.micMuted || !mic.stream);
@@ -2044,6 +2061,14 @@ export class Game {
     this.club.update(dt, this.net.serverNow());
     if (this.club.music ? !this.clubDuckOn : this.clubDuckOn) { this.clubDuckOn = !!this.club.music; this.updateMusic(); }
     this.updateHeld();
+    if (this.dizzy > 0) {
+      // wobbling view and a soft blur that fade out over ~20 s
+      this.dizzy = Math.max(0, this.dizzy - dt / 20);
+      const d = Math.min(1, this.dizzy), t = this.time;
+      this.camera.rotation.z += Math.sin(t * 1.3) * 0.07 * d;
+      this.camera.rotation.x += Math.sin(t * 0.9 + 1) * 0.03 * d;
+      this.canvas.style.filter = d > 0.01 ? `blur(${(d * 1.6).toFixed(2)}px) saturate(${1 + d * 0.6}) hue-rotate(${Math.sin(t * 0.7) * 25 * d}deg)` : '';
+    } else if (this.canvas.style.filter) this.canvas.style.filter = '';
     this.updateFalling(dt);
     if (!this.cineAjan) this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 400);
     if (this.glints) { const t = performance.now() / 1000; for (const g of this.glints) { const k = 0.55 + 0.45 * Math.sin(t * 3 + g.userData.ph); g.material.opacity = k; g.scale.setScalar(0.24 + k * 0.14); g.material.rotation = t * 0.6 + g.userData.ph; } }
@@ -2125,9 +2150,21 @@ export class Game {
       p.actT += dt;
       const av = p.avatar;
       if (p.dying) continue; // posed by the kill sequence
-      const visible = p.alive && !p.escaped && !p.hidden && p.seen;
+      // hiding under a bed/table or sitting (car, club chair): still visible to others; closets stay shut
+      const hs = p.hidden ? this.house.hides.get(p.hideId) : null;
+      const shown = hs && hs.type !== 'closet' && !(hs.type === 'seat' && this.car.state !== 'parked');
+      const visible = p.alive && !p.escaped && (!p.hidden || shown) && p.seen;
       av.group.visible = visible;
       if (!visible) continue;
+      if (shown) {
+        const face = hs.yaw + Math.PI, prone = hs.type === 'under';
+        // lying under furniture: feet in, head at the edge he looks out of
+        av.group.position.copy(hs.inside).addScaledVector(V(Math.sin(face), 0, Math.cos(face)), prone ? -1.25 : 0);
+        av.group.rotation.y = face;
+        av.state = { speed: 0, crouch: 0, run: false, flash: p.flash, interactT: 9, pitch: 0, turn: 0, mode: prone ? 'prone' : 'sit' };
+        av.update(dt);
+        continue;
+      }
       p.pos.lerp(p.target, 1 - Math.exp(-dt * 12));
       if (p.pos.distanceTo(p.target) > 4) p.pos.copy(p.target);
       p.yaw = angleLerp(p.yaw, p.tyaw, 1 - Math.exp(-dt * 12));

@@ -196,6 +196,20 @@ export class Avatar {
     const breath = Math.sin(t * 1.7) * 0.025;
     const P = this.spec;
 
+    if (st.mode !== 'prone') this.body.rotation.x = 0;
+    if (st.mode === 'sit' || st.mode === 'prone') {
+      // seen by others while hiding/sitting: on a chair or car seat, or flat on the floor under furniture
+      const sit = st.mode === 'sit';
+      this._set('thighL', sit ? -1.5 : 0, 0, 0.05, k); this._set('thighR', sit ? -1.5 : 0, 0, -0.05, k);
+      this._set('shinL', sit ? 1.5 : 0.1, 0, 0, k); this._set('shinR', sit ? 1.5 : 0.1, 0, 0, k);
+      this._set('upperL', sit ? -0.5 : -2.6, 0, sit ? -1.1 : -0.2, k); this._set('upperR', sit ? -0.5 : -2.6, 0, sit ? 1.1 : 0.2, k);
+      this._set('foreL', 0, sit ? -0.6 : 0, 0, k); this._set('foreR', 0, sit ? 0.6 : 0, 0, k);
+      for (const n of ['hips', 'spine', 'chest']) this._set(n, 0, 0, 0, k);
+      this._set('head', sit ? 0 : -0.9, 0, 0, k);
+      this.body.rotation.x = sit ? 0 : Math.PI / 2;
+      this.body.position.y = damp(this.body.position.y, sit ? -0.42 : 0.14, 10, dt);
+      return;
+    }
     if (st.mode === 'grabbed') {
       const f = t * 13;
       this._set('upperL', Math.sin(f) * 0.5, -0.3, -0.2 + Math.sin(f * 1.3) * 0.5, k);
