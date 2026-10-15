@@ -521,6 +521,8 @@ export class AjanBrain {
 
   /** Follow a list of [x, z] waypoints; true when the last one is reached. */
   walkRoute(route, dt, sp) {
+    const r3 = RAMPS.find(q => q.id === 'R3');
+    if (this.pos.x > r3.x0 - 0.1 && this.pos.x < r3.x1 + 0.1 && this.pos.z > r3.z0 && this.pos.z < r3.z1) sp *= 0.35; // climbing the ladder
     const [tx, tz] = route[this.clubWp];
     const dx = tx - this.pos.x, dz = tz - this.pos.z, d = Math.hypot(dx, dz);
     if (d < 0.08) { this.clubWp++; if (this.clubWp >= route.length) return true; }
@@ -557,15 +559,12 @@ export class AjanBrain {
     }
     if (this.clubPhase === 'dance') {
       this.danceT += dt;
-      // shuffle round the pole; ease in from the walk so there's no snap
-      const want = AJAN_POLE_R;
-      this.danceA += dt * 0.35;
-      const cur = Math.hypot(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
-      const r = cur + (want - cur) * Math.min(1, dt * 2);
-      this.pos.set(POLE_A.x + Math.sin(this.danceA) * r, 6.8, POLE_A.z + Math.cos(this.danceA) * r);
-      // he faces out to the room, pole at his right hand
-      const face = this.danceA + Math.PI / 2 - 0.5;
-      this.ry = this.ry + clamp(angleDiff(this.ry, face), -dt * 3, dt * 3);
+      // in front of his pole, facing the room (dance2.fbx plays on the client avatar)
+      const spot = { x: POLE_A.x, z: POLE_A.z - 0.85 };
+      this.pos.x += (spot.x - this.pos.x) * Math.min(1, dt * 3);
+      this.pos.z += (spot.z - this.pos.z) * Math.min(1, dt * 3);
+      this.pos.y = 6.8;
+      this.ry = this.ry + clamp(angleDiff(this.ry, Math.PI), -dt * 3, dt * 3);
       this.speed = 0;
       this.anim = 'dance';
       this.animT = this.danceT;

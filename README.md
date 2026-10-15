@@ -230,6 +230,7 @@ Everything lives in `assets/`. These files were found and are used:
 | `object.glb` | same | The jelly in a bedroom, and (shrunk to hand size) the revolver. |
 | `car.glb` | same | The car in the garage. The model has no interior you could sit in, so the cockpit (seats, dashboard, wheel, headliner) is built around the camera; its shell gives the windows and pillars. |
 | `noise.mp3` | same | The creaky floorboard sound. |
+| `dance1.fbx`, `dance2.fbx`, `dance3.fbx` | same | Mixamo dances: Yasmin's private dance, AJAN's dance, Yasmin's normal dance. Loaded with three.js's FBXLoader, which ships with three, so no new dependency. |
 | logo image (uploaded) | `logo.png` | The game logo on the splash screen and main menu. It's the uploaded artwork as-is: transparent background, cropped. |
 | `song1.mp3` | same | The club music (looped). `song2.mp3` and `song3.mp3` are never used for the club. |
 | `fai.mp3` | same | Fai's line when you talk to her. |
@@ -270,3 +271,11 @@ Saved to localStorage:
 - Inside the attic and club, AJAN's visit follows one scripted route (hall stairs → attic → club door → pole, and back). He uses the nav graph only for the house part, because the attic is outside his normal navigation.
 - The browser can't close its own tab, so **QUIT** shows a goodbye screen.
 - Development testing ran in headless Chromium with software rendering. Everything worked, but frame rates there are not representative, and the game hasn't been profiled on real GPUs.
+
+### Update: dances, private dance, ladder, 3-slot inventory
+
+- **Dances (Mixamo FBX, retargeted at runtime onto the auto-rigs):** AJAN dances `dance2.fbx` in front of his pole. Yasmin's normal dance is `dance3.fbx`, in front of her pole facing her chair. All players see the same moment of the dance (it follows server time). If a file is missing, the old procedural dance is used and the file is reported.
+- **Private dance ($50):** while seated at either club chair, press **Q**. Yasmin walks over, dances `dance1.fbx` right in front of your chair, then walks back. The host checks your money, and only one private dance runs at a time. The little tables in front of the chairs are gone.
+- **Jiggle:** stronger springs and a higher cap (about 4.4 cm on her body), driven by her real dance motion.
+- **Inventory:** each player carries at most **3 slots**. A ladder section takes **2**. Picking up beyond that is refused ("Your hands are full"), and the HUD shows `n/3 SLOTS`.
+- **Attic ladder:** the staircase is now a steep ladder (rails and rungs) in the same spot under the trapdoor, made from the same two sections (*Ladder Section I/II*). Walk into it to climb up or down.

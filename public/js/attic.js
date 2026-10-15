@@ -15,64 +15,49 @@ const SPLIT = (R.a + R.b) / 2;         // where the two sections meet (x)
 const HATCH = ATTIC_OPENING;
 const ZC = (R.z0 + R.z1) / 2, ZW = R.z1 - R.z0;
 
-/** One section of the attic staircase (rises along +x), as a group pivoting on its own centre. */
-function buildSection(M, x0, x1) {
+/** One section of the attic ladder (rises along +x), as a group pivoting on its own centre. */
+function buildSection(M, x0, x1, top = false) {
   const g = new THREE.Group();
   const pivot = new THREE.Vector3((x0 + x1) / 2, rampHeight(R, (x0 + x1) / 2, ZC), ZC);
   g.position.copy(pivot);
   g.userData.pivot = pivot.clone();
   const add = (mesh, x, y, z) => { mesh.position.set(x - pivot.x, y - pivot.y, z - pivot.z); g.add(mesh); return mesh; };
-  const steps = Math.round((x1 - x0) / 0.29);
-  const wood = M.floorWoodDark, side = M.woodDark;
-  for (let i = 0; i < steps; i++) {
-    const a = x0 + (x1 - x0) * (i / steps), b = x0 + (x1 - x0) * ((i + 1) / steps);
-    const top = rampHeight(R, b, ZC) + 0.02;
-    add(new THREE.Mesh(new THREE.BoxGeometry(b - a + 0.03, 0.05, ZW), wood), (a + b) / 2, top - 0.025, ZC);
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.03, top - rampHeight(R, a, ZC) + 0.02, ZW), side), a, (top + rampHeight(R, a, ZC)) / 2 - 0.02, ZC);
+  const rail = M.woodDark, rung = M.floorWoodDark;
+  const y0 = rampHeight(R, x0, ZC), y1 = rampHeight(R, x1, ZC) + (top ? 1.0 : 0); // the top rails reach up past the hatch as handholds
+  const xe = top ? x1 + 1.0 * (x1 - x0) / (rampHeight(R, x1, ZC) - y0) : x1;
+  const len = Math.hypot(xe - x0, y1 - y0), ang = Math.atan2(y1 - y0, xe - x0);
+  for (const z of [ZC - 0.38, ZC + 0.38]) {
+    const r = add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.08, 0.05), rail), (x0 + xe) / 2, (y0 + y1) / 2, z);
+    r.rotation.z = ang;
   }
-  // closed stringers along both sides, and a handrail on the open (hall) side
-  const y0 = rampHeight(R, x0, ZC), y1 = rampHeight(R, x1, ZC);
-  const len = Math.hypot(x1 - x0, y1 - y0), ang = Math.atan2(y1 - y0, x1 - x0);
-  for (const z of [R.z0 + 0.03, R.z1 - 0.03]) {
-    const st = add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.34, 0.06), side), (x0 + x1) / 2, (y0 + y1) / 2 - 0.12, z);
-    st.rotation.z = ang;
+  // rungs every ~28 cm of height
+  const n = Math.max(1, Math.round((rampHeight(R, x1, ZC) - y0) / 0.28));
+  for (let i = 0; i < n; i++) {
+    const x = x0 + (x1 - x0) * ((i + 0.5) / n);
+    add(new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.76, 8), rung), x, rampHeight(R, x, ZC), ZC).rotation.x = Math.PI / 2;
   }
-  const rail = add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.06, 0.07), side), (x0 + x1) / 2, (y0 + y1) / 2 + 0.92, R.z0 + 0.02);
-  rail.rotation.z = ang;
-  const n = Math.max(2, Math.round((x1 - x0) / 0.45));
-  for (let i = 0; i <= n; i++) {
-    const x = x0 + (x1 - x0) * (i / n) - (i === n ? 0.05 : 0), y = rampHeight(R, x, ZC);
-    add(new THREE.Mesh(new THREE.BoxGeometry(0.035, 0.92, 0.035), side), x, y + 0.46, R.z0 + 0.02);
-  }
-  // the dark underside, so the stairs read as solid from the hall
-  const under = add(new THREE.Mesh(new THREE.BoxGeometry(len, 0.02, ZW - 0.1), side), (x0 + x1) / 2, (y0 + y1) / 2 - 0.27, ZC);
-  under.rotation.z = ang;
   g.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   return g;
 }
 
-/** Item mesh for a loose staircase section lying on the floor (≈1.6 m long). */
+/** Item mesh for a loose ladder section lying on the floor (≈1.7 m long). */
 export function makeStairPieceMesh(M, upper) {
   const g = new THREE.Group();
-  const n = 5, run = 0.3, rise = 0.16;
-  for (let i = 0; i < n; i++) {
-    const t = new THREE.Mesh(new THREE.BoxGeometry(run + 0.02, 0.04, 0.82), M.floorWoodDark);
-    t.position.set(-0.75 + i * run + run / 2, 0.14 + i * rise, 0);
-    const r = new THREE.Mesh(new THREE.BoxGeometry(0.03, rise, 0.82), M.woodDark);
-    r.position.set(-0.75 + i * run, 0.07 + i * rise, 0);
-    g.add(t, r);
+  for (const z of [-0.36, 0.36]) {
+    const r = new THREE.Mesh(new THREE.BoxGeometry(1.7, 0.08, 0.05), M.woodDark);
+    r.position.set(0, 0.04, z);
+    g.add(r);
   }
-  for (const z of [-0.4, 0.4]) {
-    const s = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.07, 0.06), M.woodDark);
-    s.position.set(0.05, 0.12 + n * rise / 2, z);
-    s.rotation.z = Math.atan2(n * rise, n * run);
-    g.add(s);
+  for (let i = 0; i < 6; i++) {
+    const c = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.72, 8), M.floorWoodDark);
+    c.rotation.x = Math.PI / 2; c.position.set(-0.7 + i * 0.28, 0.05, 0);
+    g.add(c);
   }
   // a painted number so the two sections are told apart: I lower, II upper
   const cv = document.createElement('canvas'); cv.width = 128; cv.height = 64;
   const x = cv.getContext('2d'); x.fillStyle = '#d8d0b8'; x.font = 'bold 54px serif'; x.textAlign = 'center'; x.fillText(upper ? 'II' : 'I', 64, 52);
   const label = new THREE.Mesh(new THREE.PlaneGeometry(0.22, 0.11), new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(cv), transparent: true }));
-  label.position.set(-0.6, 0.2, 0.425);
+  label.position.set(-0.6, 0.1, 0.39);
   g.add(label);
   g.traverse(o => { if (o.isMesh) o.castShadow = true; });
   return g;
@@ -98,7 +83,7 @@ export class AtticPuzzle {
     const H = this.house, M = H.M;
     this.sections = {
       lower: buildSection(M, R.a, SPLIT),
-      upper: buildSection(M, SPLIT, R.b),
+      upper: buildSection(M, SPLIT, R.b, true),
     };
     for (const g of Object.values(this.sections)) { g.visible = false; H.group.add(g); }
     // brackets on the wall and a chalk outline on the floor show where the staircase goes
@@ -159,7 +144,7 @@ export class AtticPuzzle {
     this.hatch = hatch;
     this.hatchAngle = 0;
     // while it's shut, nobody gets further up the stairs than just under it (close enough to reach the lock)
-    this.hatchCol = H.collider(HATCH.x0 + 0.15, R.z0 - 0.05, HATCH.x0 + 0.35, R.z1 + 0.05, U + 0.6, AY + 0.05);
+    this.hatchCol = H.collider(R.a + 0.55, R.z0 - 0.05, R.a + 0.75, R.z1 + 0.05, U + 0.3, AY + 0.05);
     // standing open, the hatch is the railing on that side
     this.hatchWall = H.collider(HATCH.x0, HATCH.z1, HATCH.x1, HATCH.z1 + 0.14, AY, AY + 1.4);
     this.hatchWall.off = true;
@@ -174,8 +159,8 @@ export class AtticPuzzle {
     const G = this.game, me = G.localId;
     if (this.assembled) return '';
     const hasL = G.playerHas(me, 'stair_lower'), hasU = G.playerHas(me, 'stair_upper');
-    if (!this.placed.lower) return hasL ? 'E — FIT THE LOWER STAIR SECTION (I)' : `ATTIC STAIRS  <span class="dim">— missing: section I${hasU ? ' (fit I first)' : ''}, section II</span>`;
-    return hasU ? 'E — FIT THE UPPER STAIR SECTION (II)' : 'ATTIC STAIRS  <span class="dim">— missing: section II</span>';
+    if (!this.placed.lower) return hasL ? 'E — FIT THE LOWER LADDER SECTION (I)' : `ATTIC LADDER  <span class="dim">— missing: section I${hasU ? ' (fit I first)' : ''}, section II</span>`;
+    return hasU ? 'E — FIT THE UPPER LADDER SECTION (II)' : 'ATTIC LADDER  <span class="dim">— missing: section II</span>';
   }
 
   hatchPrompt() {
@@ -188,7 +173,7 @@ export class AtticPuzzle {
   hostPlace(pid) {
     const G = this.game;
     if (!this.placed.lower) {
-      if (!G.playerHas(pid, 'stair_lower')) { G.broadcast({ k: 'msg', text: G.playerHas(pid, 'stair_upper') ? 'That\'s the upper section (II). The lower one (I) has to go in first.' : 'The attic staircase is missing. Both sections are lying in the basement.' }, pid); return; }
+      if (!G.playerHas(pid, 'stair_lower')) { G.broadcast({ k: 'msg', text: G.playerHas(pid, 'stair_upper') ? 'That\'s the upper section (II). The lower one (I) has to go in first.' : 'The attic ladder is missing. Both sections are lying in the basement.' }, pid); return; }
       G.broadcast({ k: 'stairs', part: 'lower', by: pid });
     } else if (!this.placed.upper) {
       if (!G.playerHas(pid, 'stair_upper')) { G.broadcast({ k: 'msg', text: 'Now the upper section (II).' }, pid); return; }
@@ -231,7 +216,7 @@ export class AtticPuzzle {
       this.mark.visible = false;
       this.house.interactables.delete('stairframe');
     }
-    if (e.by === G.localId) G.message(this.assembled ? 'The staircase is complete. A trapdoor at the top is locked.' : 'Lower section in. Now fit the upper section (II) on top.');
+    if (e.by === G.localId) G.message(this.assembled ? 'The ladder is up. A trapdoor at the top is locked.' : 'Lower section in. Now fit the upper section (II) on top.');
     G.updateHUD();
   }
 

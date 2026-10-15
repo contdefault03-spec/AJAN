@@ -28,6 +28,7 @@ export const ASSETS = {
   fai: { names: ['fai.mp3'] },
   yasmin: { names: ['yasmin.mp3'] },
   yasminModel: { names: ['yasmin.glb'] },
+  dance1: { names: ['dance1.fbx'] }, dance2: { names: ['dance2.fbx'] }, dance3: { names: ['dance3.fbx'] },
   faiModel: { names: ['bartender.glb'] },
   image1: { names: ['image1.png', '1.png'] },
   image2: { names: ['image2.png', '2.png'] },
@@ -47,6 +48,10 @@ export const ASSETS = {
   musicchase: { names: ['musicchase.mp3'] },
 };
 
+// Inventory: everyone carries at most INV_SLOTS slots; bulky things take more than one.
+export const INV_SLOTS = 3;
+export const itemSlots = type => (type === 'stair_lower' || type === 'stair_upper' ? 2 : 1);
+
 export const ITEM_INFO = {
   office_key: { name: 'Office Key' },
   basement_key: { name: 'Basement Key' },
@@ -58,8 +63,8 @@ export const ITEM_INFO = {
   weapon_key: { name: 'Weapon Key' },
   revolver: { name: 'Revolver' },
   bullet: { name: 'Bullet' },
-  stair_lower: { name: 'Stair Section I (lower)' },
-  stair_upper: { name: 'Stair Section II (upper)' },
+  stair_lower: { name: 'Ladder Section I (lower)' },
+  stair_upper: { name: 'Ladder Section II (upper)' },
   attic_key: { name: 'Attic Key' },
   vodka: { name: 'Vodka' },
   beer: { name: 'Beer' },

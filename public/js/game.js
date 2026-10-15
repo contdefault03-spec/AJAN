@@ -12,14 +12,14 @@ import { VoiceChat, mic } from './voice.js';
 import { audio } from './audio.js';
 import { loadGLTF, loadTexture } from './assets.js';
 import { settings } from './settings.js';
-import { CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf } from './config.js';
+import { INV_SLOTS, itemSlots, CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf } from './config.js';
 
 const GUN_CAPACITY = 2; // the revolver holds two rounds; more lie around the house
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
 import { Spider } from './spider.js';
 import { Car, DRIVE_TOTAL, CAR_PARTS } from './car.js';
 import { AtticPuzzle } from './attic.js';
-import { Club, inClub, DRINKS, RAIN_COST, makeDrinkMesh } from './club.js';
+import { Club, inClub, DRINKS, RAIN_COST, LAP_COST, makeDrinkMesh } from './club.js';
 import { isSafeZone, levelIndex, LEVELS, inElevator } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
 import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission, groundAt } from './physics.js';
@@ -317,6 +317,7 @@ export class Game {
         if (e.code === 'Escape') { this.closeDrinkMenu(true); return; }
       }
       if (e.code === 'KeyG' && !e.repeat && !this.drinkMenuOpen && !$('noteView').classList.contains('show')) this.dropSelected();
+      if (e.code === 'KeyQ' && this.local.hidden?.type === 'clubseat' && !e.repeat) { this.request({ k: 'lapdance' }); return; }
       if (e.code === 'Space' && this.local.hidden?.type === 'clubseat' && !e.repeat) { this.request({ k: 'hide', id: this.local.hidden.id, enter: false }); return; }
       // In the driver's seat: W floors it (if the car is fixed).
       if (e.code === 'KeyW' && !e.repeat && this.local.hidden?.seat === 'driver' && this.car.state === 'parked' && !this.localDead) this.request({ k: 'drive' });
@@ -519,6 +520,11 @@ export class Game {
           this.broadcast({ k: 'ammo', id: r.id, by: pid, ammo: gun.ammo + 1 });
           return;
         }
+        const used = this.slotsUsed(pid);
+        if (used + itemSlots(it.type) > INV_SLOTS) {
+          this.broadcast({ k: 'msg', text: `Your hands are full (${used}/${INV_SLOTS}${itemSlots(it.type) > 1 ? `; the ${ITEM_INFO[it.type].name} takes ${itemSlots(it.type)}` : ''}). Drop something with G.` }, pid);
+          return;
+        }
         it.holder = pid; // claim immediately so a second request is rejected
         this.broadcast({ k: 'item', id: r.id, holder: pid });
         return;
@@ -629,6 +635,7 @@ export class Game {
       case 'faidrink': this.club.hostDrink(pid, r.drink); return;
       case 'faicancel': if (this.club.fai.customer === pid && this.club.fai.mode !== 'serve') this.broadcast({ k: 'faidone' }); return;
       case 'rain': this.club.hostRain(pid, r.target); return;
+      case 'lapdance': this.club.hostLap(pid); return;
       case 'hatch': this.attic.hostHatch(pid); return;
       case 'carfix': {
         const car = this.car;
@@ -751,6 +758,13 @@ export class Game {
   }
 
   // ============================================================ inventory
+  /** Inventory slots a player is using (bulky items take two). */
+  slotsUsed(pid) {
+    let n = 0;
+    for (const i of this.items.values()) if (i.holder === pid && !i.used) n += itemSlots(i.type);
+    return n;
+  }
+
   /** The local player's items, in the order they were picked up. */
   heldList() {
     return [...this.items.values()].filter(i => i.holder === this.localId && !i.used).sort((a, b) => (a.order || 0) - (b.order || 0));
@@ -1124,6 +1138,7 @@ export class Game {
       case 'faiserve': this.club.applyServe(e); break;
       case 'faidone': this.club.applyDone(e); break;
       case 'rain': this.club.applyRain(e); break;
+      case 'lap': this.club.applyLap(e); break;
       case 'clubsnd': this.club.applySound(e); break;
       case 'hatch': this.attic.applyHatch(e); break;
       case 'carfix': {
@@ -1334,7 +1349,7 @@ export class Game {
         this.local.hideLook = 0;
         this.local.pitch = 0;
         $('hideOverlay').classList.toggle('car', h.type === 'seat' || h.type === 'clubseat');
-        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? (h.id === 'club_seat2' ? 'AT AJAN\'S POLE' : 'AT YASMIN\'S TABLE') + ' — aim and press [E] to make it rain  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
+        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? (h.id === 'club_seat2' ? 'AT AJAN\'S POLE' : 'AT YASMIN\'S TABLE') + ' — [E] make it rain  ·  [Q] private dance ($50)  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
         $('hideOverlay').classList.add('show');
       }
     } else {
@@ -1753,7 +1768,7 @@ export class Game {
 
   updateFocus() {
     const L = this.local;
-    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : L.hidden.type === 'clubseat' ? `E — MAKE IT RAIN ($${RAIN_COST})  ·  SPACE — STAND UP  <span class="dim">$${this.club.balance(this.localId)} left</span>` : 'E — LEAVE'); this.focus = null; return; }
+    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : L.hidden.type === 'clubseat' ? `E — MAKE IT RAIN ($${RAIN_COST})  ·  Q — PRIVATE DANCE ($${LAP_COST})  ·  SPACE — STAND UP  <span class="dim">$${this.club.balance(this.localId)} left</span>` : 'E — LEAVE'); this.focus = null; return; }
     if (L.frozen || this.localDead || this.localEscaped) { this.setPrompt(''); this.focus = null; return; }
     const rc = this.raycaster || (this.raycaster = new THREE.Raycaster());
     this.camera.updateMatrixWorld();
@@ -1840,7 +1855,7 @@ export class Game {
     const inv = this.heldList(), sel = this.selectedItem();
     $('inventory').innerHTML = inv.length
       ? inv.map(i => `<div class="slot${i === sel ? ' sel' : ''}"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('') +
-        `<div class="hint">IN HAND: ${escapeHtml(ITEM_INFO[sel.type].name)}  ·  ${inv.length > 1 ? 'WHEEL — switch  ·  ' : ''}G — drop</div>`
+        `<div class="hint">${this.slotsUsed(this.localId)}/${INV_SLOTS} SLOTS  ·  IN HAND: ${escapeHtml(ITEM_INFO[sel.type].name)}  ·  ${inv.length > 1 ? 'WHEEL — switch  ·  ' : ''}G — drop</div>`
       : '<div class="slot empty">— empty —</div>';
     $('money').textContent = `$${this.club ? this.club.balance(this.localId) : 500}`;
     $('micState').classList.toggle('muted', settings.micMuted || !mic.stream);

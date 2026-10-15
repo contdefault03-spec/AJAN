@@ -22,8 +22,8 @@ export const RAMPS = [
   { id: 'R2', x0: 36.15, x1: 39.85, z0: 13, z1: 19.5, axis: 'z', a: 19.5, ya: GY, b: 13, yb: UY },
   // driveway outside the garage door: basement level up to the ground outside
   { id: 'R4', x0: 40.0, x1: 49, z0: 19.4, z1: 22.6, axis: 'x', a: 40.6, ya: BY, b: 49, yb: GY, outside: true },
-  // attic stairs: in the middle of the upstairs hall, along its south wall, rising eastward
-  { id: 'R3', puzzle: true, x0: 20.0, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 20.0, ya: UY, b: 25.5, yb: AY },
+  // attic ladder: in the middle of the upstairs hall, against its south wall, up through the trapdoor (rises eastward, steep)
+  { id: 'R3', puzzle: true, x0: 23.4, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 23.4, ya: UY, b: 25.5, yb: AY },
 ];
 // The hole in the attic floor above the attic stairs (closed by the trapdoor).
 export const ATTIC_OPENING = { x0: 21.8, x1: 25.5, z0: 9.5, z1: 11 };

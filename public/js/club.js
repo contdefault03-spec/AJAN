@@ -10,7 +10,8 @@
 // sees the same thing.
 import * as THREE from 'three';
 import { audio } from './audio.js';
-import { loadGLTF } from './assets.js';
+import { loadGLTF, assetUrl } from './assets.js';
+import { loadDance, DancePlayer } from './fbxanim.js';
 import { Avatar } from './avatar.js';
 import { GeoBuilder } from './house.js';
 import { mulberry32, clamp, damp, angleLerp } from './util.js';
@@ -27,6 +28,10 @@ const SEAT = new THREE.Vector3(5.0, AY, 15.3);
 const TABLE = new THREE.Vector3(5.0, AY, 16.05);
 // a second table and chair, right in front of AJAN's pole
 const SEAT2 = new THREE.Vector3(8.8, AY, 15.3);
+// where Yasmin dances (in front of her pole, facing her chair), and the private dance
+const YAS_SPOT = new THREE.Vector3(5.0, AY, 17.35);
+const LAP_WALK = 2.2;
+export const LAP_COST = 50;
 const TABLE2 = new THREE.Vector3(8.8, AY, 16.05);
 export const CLUB_SEATS = ['club_seat', 'club_seat2'];
 const FAI_HOME = new THREE.Vector3(8.0, AY, 9.3);
@@ -35,7 +40,7 @@ const COUNTER_Y = AY + 1.1, COUNTER_Z = 10.3;
 // up the stairs in the upstairs hall, across the attic, through the club door and
 // across the dance floor to his pole. He leaves the same way, reversed.
 export const AJAN_ROUTE = [
-  [19.2, 10.25], [20.0, 10.25], [25.9, 10.25], [26.6, 10.25], [26.6, 12.3], [19.6, 14.55], [18.6, 14.55], [17.2, 14.55], [14.2, 15.8], [11.0, 17.2], [9.4, 17.6],
+  [19.2, 10.25], [23.3, 10.25], [25.9, 10.25], [26.6, 10.25], [26.6, 12.3], [19.6, 14.55], [18.6, 14.55], [17.2, 14.55], [14.2, 15.8], [11.0, 17.2], [9.4, 17.6],
 ];
 export const AJAN_POLE_R = 0.72;
 
@@ -103,6 +108,14 @@ export class Club {
     pick.position.y = 0.85;
     this.faiAv.group.add(pick);
     this.house.register('fai', 'fai', [pick], FAI_HOME.clone().add(new THREE.Vector3(0, 1.3, 0)), { club: this });
+    // FBX dances (Mixamo), retargeted onto the auto-rigs: Yasmin's dance, her private dance, AJAN's dance
+    const [d1, d2, d3] = await Promise.all(['dance1', 'dance2', 'dance3'].map(k => assetUrl(k) ? loadDance(assetUrl(k)) : null));
+    ['dance1.fbx', 'dance2.fbx', 'dance3.fbx'].forEach((n, i) => { if (![d1, d2, d3][i]) this.missing.push(n); });
+    try {
+      if (d3) this.yasDance = new DancePlayer(d3, this.yasmin, { maxDrift: 0.35 });
+      if (d1) this.lapPlayer = new DancePlayer(d1, this.yasmin, { maxDrift: 0.2 });
+      this.ajanDanceFbx = d2; // attached to AJAN's avatar once it exists (see update)
+    } catch (e) { console.warn('dance retarget failed', e); }
     this.yasJig = { c: new THREE.Vector3(), cv: new THREE.Vector3(), b: new THREE.Vector3(), bv: new THREE.Vector3(), last: null, lastV: new THREE.Vector3() };
   }
 
@@ -171,11 +184,7 @@ export class Club {
     }
     // ---- a table with a chair in front of each pole (Yasmin's, and AJAN's)
     for (const [T, S] of [[TABLE, SEAT], [TABLE2, SEAT2]]) {
-      const tbl = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 24), M.woodDark); tbl.position.set(T.x, AY + 0.74, T.z);
-      const tleg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.12, 0.74, 10), M.metal); tleg.position.set(T.x, AY + 0.37, T.z);
-      this.group.add(tbl, tleg);
-      col(T.x - 0.36, T.z - 0.36, T.x + 0.36, T.z + 0.36, 0.76);
-      const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 10), new THREE.MeshStandardMaterial({ color: 0xff3060, emissive: 0x801030 })); candle.position.set(T.x + 0.15, AY + 0.795, T.z); this.group.add(candle);
+      // (no table: the space in front of the chair is where Yasmin dances for you)
       G.box(S.x - 0.25, AY + 0.45, S.z - 0.25, S.x + 0.25, AY + 0.52, S.z + 0.25, 'fabricRed');
       for (const [dx, dz] of [[-0.22, -0.22], [0.18, -0.22], [-0.22, 0.18], [0.18, 0.18]]) G.box(S.x + dx, AY, S.z + dz, S.x + dx + 0.04, AY + 0.45, S.z + dz + 0.04, 'metal');
       G.box(S.x - 0.25, AY + 0.52, S.z - 0.27, S.x + 0.25, AY + 1.1, S.z - 0.22, 'fabricRed');
@@ -258,7 +267,54 @@ export class Club {
     return { theta, spin: u > 9 && u < 12 ? Math.sin((u - 9) / 3 * Math.PI) : 0, pause };
   }
 
+  /** Yasmin: her dance (dance3.fbx) in front of her pole, or a private dance (dance1.fbx) at a customer's chair. */
   animYasmin(dt) {
+    const av = this.yasmin, now = this.game.net.serverNow(), T = now / 1000;
+    const beat = T * Math.PI * 2 * 1.65;
+    const L = this.lap && now < this.lap.end ? this.lap : (this.lap = null);
+    if (L && this.lapPlayer) {
+      const t = (now - L.at) / 1000, W = LAP_WALK, D = L.dance;
+      if (t < W || t > W + D) {
+        // walking to the chair, or back to her spot
+        const out = t > W + D, k = clamp(out ? (t - W - D) / W : t / W, 0, 1), e = k * k * (3 - 2 * k);
+        const a = out ? L.spot : YAS_SPOT, b = out ? YAS_SPOT : L.spot;
+        av.group.position.lerpVectors(a, b, e);
+        av.group.rotation.y = angleLerp(av.group.rotation.y, k < 1 ? Math.atan2(b.x - a.x, b.z - a.z) : Math.PI, Math.min(1, dt * 8));
+        this.walkPose(av, t * 9, k > 0 && k < 1);
+      } else {
+        // right in front of the customer, facing them
+        av.group.position.copy(L.spot);
+        av.group.rotation.y = angleLerp(av.group.rotation.y, Math.PI, Math.min(1, dt * 8));
+        this.lapPlayer.seek(t - W);
+        this.lapPlayer.apply();
+      }
+      av.body.position.y = 0;
+      this.jiggle(dt, beat, false);
+      return;
+    }
+    if (this.yasDance) {
+      av.group.position.copy(YAS_SPOT);
+      av.group.rotation.y = angleLerp(av.group.rotation.y, Math.PI, Math.min(1, dt * 8));
+      av.body.position.y = 0;
+      this.yasDance.seek(T);
+      this.yasDance.apply();
+      this.jiggle(dt, beat, false);
+      return;
+    }
+    this.animYasminPole(dt);
+  }
+
+  /** Plain walk cycle (between her spot and a chair). */
+  walkPose(av, ph, moving) {
+    const s = moving ? Math.sin(ph) : 0;
+    for (const n of ['hips', 'spine', 'chest', 'head', 'foreL', 'foreR']) av._set(n, 0, 0, 0, 1);
+    av._set('thighL', -0.45 * s, 0, 0, 1); av._set('thighR', 0.45 * s, 0, 0, 1);
+    av._set('shinL', 0.5 * Math.max(0, s), 0, 0, 1); av._set('shinR', 0.5 * Math.max(0, -s), 0, 0, 1);
+    av._set('upperL', 0.3 * s, 0, -1.25, 1); av._set('upperR', -0.3 * s, 0, 1.25, 1);
+  }
+
+  /** Fallback when dance3.fbx is missing: the procedural pole dance. */
+  animYasminPole(dt) {
     const av = this.yasmin, T = this.game.net.serverNow() / 1000;
     const { theta, spin, pause } = this.yasminPose(T);
     const R = 0.44;
@@ -287,8 +343,12 @@ export class Club {
     this._set3(av, 'upperL', pause ? 0 : Math.sin(beat / 2) * 0.4, -0.2, pause ? -1.1 : -0.45 + Math.sin(beat / 4) * 0.5, k);
     this._set3(av, 'foreL', 0, pause ? -0.2 : -0.6 - Math.sin(beat / 2) * 0.4, 0, k);
     av.body.position.y = damp(av.body.position.y, -0.02 - Math.abs(step) * 0.035 + spin * 0.02, 10, dt);
-    // soft-tissue follow-through: springs driven by the body's vertical/lateral motion
-    const J = this.yasJig;
+    this.jiggle(dt, beat, pause);
+  }
+
+  /** Soft-tissue follow-through on Yasmin's chest and seat: springs driven by her hips' motion and the beat. */
+  jiggle(dt, beat, pause) {
+    const av = this.yasmin, J = this.yasJig;
     av.mesh.updateMatrixWorld(true);
     const hp = av.bones.hips.getWorldPosition(new THREE.Vector3());
     if (J.last && dt > 0) {
@@ -297,19 +357,19 @@ export class Club {
       J.lastV.copy(v);
       // her steps land on the beat: a bounce on every step, a softer sway with the hips
       const drive = pause ? 0.35 : 1;
-      acc.y += drive * 1.8 * Math.sin(beat);
+      acc.y += drive * 2.4 * Math.sin(beat);
       acc.x += drive * 0.9 * Math.cos(beat / 2);
       // to the mesh's local frame (the avatar only rotates about y)
       const c = Math.cos(-av.group.rotation.y), s = Math.sin(-av.group.rotation.y);
       const ax = acc.x * c - acc.z * s, az = acc.x * s + acc.z * c;
       // softer, bouncier springs (less damping, more drive) for a livelier follow-through
       // (gain is metres of sway per m/s² of hip acceleration; her dance bob is ~5 m/s²)
-      for (const [o, ov, K, D, gain] of [[J.c, J.cv, 95, 3.2, 0.0024], [J.b, J.bv, 80, 3.0, 0.0028]]) {
+      for (const [o, ov, K, D, gain] of [[J.c, J.cv, 85, 2.4, 0.0042], [J.b, J.bv, 72, 2.2, 0.0048]]) {
         ov.x += (-K * o.x - D * ov.x - ax * gain * K) * dt;
         ov.y += (-K * o.y - D * ov.y - acc.y * gain * K) * dt;
         ov.z += (-K * o.z - D * ov.z - az * gain * K) * dt;
         o.addScaledVector(ov, dt);
-        o.clampLength(0, 0.016); // capped at ~2.7 cm on the real character: bouncy, never deforming
+        o.clampLength(0, 0.026); // capped at ~4.4 cm on the real character: very bouncy, never tearing
       }
     }
     J.last = hp;
@@ -598,6 +658,25 @@ export class Club {
     }
   }
 
+  /** Host: a seated customer pays for a private dance; Yasmin comes to their chair. */
+  hostLap(pid) {
+    const G = this.game, p = G.players.get(pid), now = G.net.serverNow();
+    if (!p || !p.alive || !p.hidden || !CLUB_SEATS.includes(p.hideId) || !this.yasmin) return;
+    if (this.lap && now < this.lap.end) { G.broadcast({ k: 'msg', text: 'Yasmin is busy with someone else.' }, pid); return; }
+    const bal = this.balance(pid);
+    if (bal < LAP_COST) { G.broadcast({ k: 'msg', text: `A private dance is $${LAP_COST}. You have $${bal}.` }, pid); return; }
+    const dance = Math.min(30, Math.max(12, this.lapPlayer?.duration || 20));
+    G.broadcast({ k: 'lap', pid, seat: p.hideId, at: now + 200, dance, money: bal - LAP_COST });
+  }
+
+  applyLap(e) {
+    const S = e.seat === 'club_seat2' ? SEAT2 : SEAT;
+    this.money.set(e.pid, e.money);
+    this.lap = { pid: e.pid, at: e.at, dance: e.dance, end: e.at + (LAP_WALK * 2 + e.dance) * 1000, spot: new THREE.Vector3(S.x, AY, S.z + 0.62) };
+    if (e.pid === this.game.localId) this.game.message('Yasmin smiles and comes over to your chair…', 3);
+    this.game.updateHUD();
+  }
+
   hostUpdate(dt) {
     const G = this.game, b = G.brain, now = Date.now();
     if (!b) return;
@@ -641,6 +720,8 @@ export class Club {
 
   // ------------------------------------------------------------ per frame
   update(dt, now) {
+    const aj = this.game.ajan;
+    if (this.ajanDanceFbx && aj && !aj.dancePlayer) { try { aj.dancePlayer = new DancePlayer(this.ajanDanceFbx, aj, { maxDrift: 0.3 }); } catch (e) { console.warn('AJAN dance retarget failed', e); } this.ajanDanceFbx = null; }
     if (this.game.isHost && this.game.phase === 'play') this.hostUpdate(dt);
     const G = this.game, cam = G.camera.position;
     const here = inClub(cam);

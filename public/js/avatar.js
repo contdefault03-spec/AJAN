@@ -259,7 +259,12 @@ export class Avatar {
     const mode = st.mode || 'move';
     const mt = st.modeT || 0;
 
-    if (mode === 'dance') { this._danceAjan(dt, t, mt); return; }
+    if (mode === 'dance') {
+      // dance2.fbx (retargeted) when loaded; the procedural routine otherwise
+      if (this.dancePlayer) { this.body.position.y = 0; this.dancePlayer.seek(mt); this.dancePlayer.apply(); }
+      else this._danceAjan(dt, t, mt);
+      return;
+    }
     if (mode === 'sleep' || mode === 'sit' || mode === 'stun' || mode === 'floorsleep') {
       // Seated: thighs forward, hips lowered onto the seat. Asleep he leans back
       // against the headboard with legs out and breathes slowly.
