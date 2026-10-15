@@ -77,11 +77,13 @@ class App {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setSize(innerWidth, innerHeight);
     $('gameRoot').appendChild(this.renderer.domElement);
-    await audio.loadAll(['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'music1', 'music2', 'musicchase', 'sleep', 'noise']);
+    await audio.loadAll(['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'music1', 'music2', 'musicchase', 'sleep', 'noise', 'song1', 'fai', 'yasmin']);
     // creaky floorboards use noise.mp3 (the synthesized creak stays as a fallback)
     if (audio.buffers.noise) audio.buffers.boardCreak = audio.buffers.noise;
     loadGLTF('objectModel');
     loadGLTF('carModel');
+    loadGLTF('yasminModel');
+    loadGLTF('faiModel');
     loadGLTF('playerModel');
     loadGLTF('ajanModel');
     if (!settings.micConfigured) this.openMicSetup(() => this.openCharSelect(() => this.openMenu()));

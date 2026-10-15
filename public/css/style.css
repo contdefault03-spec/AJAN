@@ -226,3 +226,19 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 
 .freePlay { margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(255, 255, 255, 0.12); text-align: center; }
 .freePlay p { margin: 6px 0 0; }
+
+#money { position: absolute; right: 26px; top: 118px; font-size: 24px; color: #9fe08a; text-shadow: 0 0 6px rgba(80,200,80,0.6), 1px 1px 0 #000; }
+#drinkMenu { position: absolute; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(0,0,0,0.35); pointer-events: auto; }
+#drinkMenu.show { display: flex; }
+#drinkMenu .panel { min-width: 320px; text-align: center; }
+#drinkMenu .drinks { display: flex; gap: 12px; justify-content: center; margin: 14px 0; }
+#drinkMenu button { font-family: var(--vhs); font-size: 22px; padding: 10px 16px; background: #1a0a1e; color: #ffd8f0; border: 1px solid #ff4fd0; cursor: pointer; }
+#drinkMenu button:hover { background: #3a1040; }
+#inventory .slot.sel { outline: 2px solid #ffd060; background: rgba(255, 208, 96, 0.12); }
+#inventory .hint { font-size: 15px; color: #c9c0a8; margin-top: 2px; background: rgba(0, 0, 0, 0.45); padding: 2px 8px; }
+#inventory .ico.stair_lower, #inventory .ico.stair_upper { border-radius: 2px; background: #8a6038; box-shadow: 0 0 6px #b08050; }
+#inventory .ico.attic_key { background: #40b0a0; box-shadow: 0 0 6px #40b0a0; }
+#inventory .ico.vodka { border-radius: 3px; background: #dfeff5; box-shadow: 0 0 6px #ffffff; }
+#inventory .ico.beer { border-radius: 3px; background: #7a4510; box-shadow: 0 0 6px #c07020; }
+#inventory .ico.wine { border-radius: 3px; background: #8a1030; box-shadow: 0 0 6px #d02050; }
+#inventory .slot.sel .ico { transform: scale(1.25); }

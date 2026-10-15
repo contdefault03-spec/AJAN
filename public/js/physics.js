@@ -13,6 +13,7 @@ export function groundAt(x, z, y) {
   if (inElevator(x, z)) return elevatorState.y;
   for (let i = 0; i < RAMPS.length; i++) {
     const r = RAMPS[i];
+    if (r.disabled) continue; // e.g. the attic stairs before they're assembled
     if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) {
       const lo = Math.min(r.ya, r.yb), hi = Math.max(r.ya, r.yb);
       if (y >= lo - 1.0 && y <= hi + 1.0) return rampHeight(r, x, z);

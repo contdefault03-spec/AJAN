@@ -18,9 +18,11 @@ const GUN_CAPACITY = 2; // the revolver holds two rounds; more lie around the ho
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
 import { Spider } from './spider.js';
 import { Car, DRIVE_TOTAL, CAR_PARTS } from './car.js';
+import { AtticPuzzle } from './attic.js';
+import { Club, inClub, DRINKS, RAIN_COST, makeDrinkMesh } from './club.js';
 import { isSafeZone, levelIndex, LEVELS, inElevator } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
-import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission } from './physics.js';
+import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission, groundAt } from './physics.js';
 import { roomAt } from './house.js';
 
 const $ = id => document.getElementById(id);
@@ -44,6 +46,9 @@ export class Game {
     this.startAt = startAt;
     this.players = new Map();
     this.items = new Map();
+    this.pickSeq = 0;
+    this.invSel = null;
+    this.falling = [];
     this.kills = new Map();
     this.phase = 'loading';
     this.time = 0;
@@ -108,8 +113,13 @@ export class Game {
     this.props = new Props(this);
     await this.props.init();
     this.spider = new Spider(this);
+    this.attic = new AtticPuzzle(this);
     this.car = new Car(this);
     await this.car.init();
+    this.club = new Club(this);
+    await this.club.init();
+    document.querySelectorAll('#drinkMenu button').forEach(b => { b.onclick = () => this.chooseDrink(b.dataset.drink); });
+    if (this.club.missing.length) this.toast('Missing nightclub assets: ' + this.club.missing.join(', '), 6000);
     await this.fitRevolver();
 
     progress(0.7, 'Waking him up...');
@@ -242,7 +252,7 @@ export class Game {
   }
 
   placeItem(id, type, c) {
-    const mesh = makeItemMesh(type, this.house.M);
+    const mesh = DRINKS[type] ? makeDrinkMesh(type) : makeItemMesh(type, this.house.M);
     const item = { id, type, holder: null, used: false, mesh, container: c.container || null, dropped: null };
     if (c.container) {
       const cont = this.house.containers.get(c.container);
@@ -301,6 +311,13 @@ export class Game {
       if (e.code === 'Escape' && $('noteView').classList.contains('show')) { this.closeNote(); return; }
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if (e.code === 'KeyM' && !e.repeat) { mic.setMuted(!settings.micMuted); this.updateHUD(); }
+      if (this.drinkMenuOpen) {
+        const pick = { Digit1: 'vodka', Digit2: 'beer', Digit3: 'wine' }[e.code];
+        if (pick) { this.chooseDrink(pick); return; }
+        if (e.code === 'Escape') { this.closeDrinkMenu(true); return; }
+      }
+      if (e.code === 'KeyG' && !e.repeat && !this.drinkMenuOpen && !$('noteView').classList.contains('show')) this.dropSelected();
+      if (e.code === 'Space' && this.local.hidden?.type === 'clubseat' && !e.repeat) { this.request({ k: 'hide', id: 'club_seat', enter: false }); return; }
       // In the driver's seat: W floors it (if the car is fixed).
       if (e.code === 'KeyW' && !e.repeat && this.local.hidden?.seat === 'driver' && this.car.state === 'parked' && !this.localDead) this.request({ k: 'drive' });
       // Inside the elevator car, 1–4 pick a floor (B, ground, upstairs, attic).
@@ -314,7 +331,7 @@ export class Game {
     this.onMouseDown = e => {
       if (this.phase !== 'play') return;
       if (document.pointerLockElement !== this.canvas) {
-        if (!this.app.paused && !$('noteView').classList.contains('show')) this.lockPointer();
+        if (!this.app.paused && !$('noteView').classList.contains('show') && !this.drinkMenuOpen) this.lockPointer();
         return;
       }
       if (this.isSpectating()) { this.cycleSpectate(e.button === 2 ? -1 : 1); return; }
@@ -328,9 +345,22 @@ export class Game {
     };
     this.onLockChange = () => {
       if (this.phase !== 'play') return;
-      if (document.pointerLockElement !== this.canvas && !$('noteView').classList.contains('show')) this.app.pause(true);
+      // Notes and Fai's drink menu free the mouse on purpose; anything else means "pause".
+      // (The lock events arrive asynchronously, so allow a moment after the menu closes.)
+      const menu = this.drinkMenuOpen || performance.now() - (this.drinkMenuClosedAt || -1e9) < 1500;
+      if (document.pointerLockElement !== this.canvas && !$('noteView').classList.contains('show') && !menu) this.app.pause(true);
+    };
+    // Mouse wheel: cycle the selected inventory item (only while actually playing).
+    this.onWheel = e => {
+      if (this.phase !== 'play' || this.drinkMenuOpen || this.app.paused || document.pointerLockElement !== this.canvas) return;
+      if ($('noteView').classList.contains('show') || this.isSpectating() || this.localDead || !e.deltaY) return;
+      const now = performance.now();
+      if (now - (this.wheelT || 0) < 80) return; // one notch at a time on free-spinning wheels
+      this.wheelT = now;
+      this.cycleItem(e.deltaY > 0 ? 1 : -1);
     };
     addEventListener('keydown', this.onKeyDown);
+    addEventListener('wheel', this.onWheel, { passive: true });
     this.canvas.addEventListener('mousedown', this.onMouseDown);
     addEventListener('mousemove', this.onMouseMove);
     document.addEventListener('pointerlockchange', this.onLockChange);
@@ -554,6 +584,7 @@ export class Game {
           if (!this.playerHas(pid, 'elevator_key')) { this.broadcast({ k: 'need', what: 'elevator_key' }, pid); return; }
           this.broadcast({ k: 'elevUnlock', by: pid });
         }
+        if (r.to === 3 && !this.attic.accessible) { this.broadcast({ k: 'msg', text: 'The attic button is dead. The attic is sealed off — the stairs up there are missing.' }, pid); return; }
         if (r.to === 0 && H.doors.get('d_basement').locked && !this.playerHas(pid, 'basement_key')) { this.broadcast({ k: 'need', what: 'basement_key' }, pid); return; }
         const curY = P.elevatorY(now);
         if (Math.abs(curY - LEVELS[r.to].y) < 0.05) return;
@@ -592,6 +623,13 @@ export class Game {
         return;
       }
       case 'shoot': this.hostShoot(pid, r); return;
+      case 'stairplace': this.attic.hostPlace(pid); return;
+      case 'dropitem': this.hostDropItem(pid, r); return;
+      case 'fai': this.club.hostTalk(pid); return;
+      case 'faidrink': this.club.hostDrink(pid, r.drink); return;
+      case 'faicancel': if (this.club.fai.customer === pid && this.club.fai.mode !== 'serve') this.broadcast({ k: 'faidone' }); return;
+      case 'rain': this.club.hostRain(pid, r.target); return;
+      case 'hatch': this.attic.hostHatch(pid); return;
       case 'carfix': {
         const car = this.car;
         if (car.state !== 'parked') return;
@@ -712,6 +750,148 @@ export class Game {
     if (it) { const m = holder.clone(); m.position.y = 0.06; it.mesh.add(m); }
   }
 
+  // ============================================================ inventory
+  /** The local player's items, in the order they were picked up. */
+  heldList() {
+    return [...this.items.values()].filter(i => i.holder === this.localId && !i.used).sort((a, b) => (a.order || 0) - (b.order || 0));
+  }
+
+  /** The selected item (or null) — falls back to the first one if the selection was used up or dropped. */
+  selectedItem() {
+    const list = this.heldList();
+    if (!list.some(i => i.id === this.invSel)) this.invSel = list[0]?.id ?? null;
+    return this.items.get(this.invSel) || null;
+  }
+
+  cycleItem(dir) {
+    const list = this.heldList();
+    if (list.length < 2) { if (list.length) this.invSel = list[0].id; return; }
+    const i = Math.max(0, list.findIndex(it => it.id === this.invSel));
+    this.invSel = list[(i + dir + list.length) % list.length].id;
+    audio.play('click', { vol: 0.18, rate: 1.8 });
+    this.updateHUD();
+  }
+
+  /** G: drop the selected item in front of you (the host decides where it lands). */
+  dropSelected() {
+    const L = this.local, it = this.selectedItem();
+    if (this.localDead || this.localEscaped || L.frozen || this.me?.dying || this.isSpectating()) return;
+    if (!it) { this.message('Nothing to drop.', 2); return; }
+    if (L.hidden) { this.message('You can\'t drop things from here.', 2); return; }
+    L.act();
+    this.request({ k: 'dropitem', id: it.id, yaw: L.yaw });
+  }
+
+  /** Host: validate a drop, find a free spot on the floor in front of the player, tell everyone. */
+  hostDropItem(pid, r) {
+    const p = this.players.get(pid), it = this.items.get(r.id);
+    if (!p || !it || it.holder !== pid || it.used) return;
+    if (!p.alive || p.dying || p.escaped || p.hidden || this.kills.has(pid)) return;
+    const now = Date.now();
+    this.lastDrop ||= new Map();
+    if (now - (this.lastDrop.get(pid) || 0) < 300) return;
+    const base = p.pos;
+    // The elevator car moves: anything left in it would ride off into the shaft.
+    if (inElevator(base.x, base.z)) { this.broadcast({ k: 'msg', text: 'Not in the elevator — step out first.' }, pid); return; }
+    this.lastDrop.set(pid, now);
+    const yaw = Number.isFinite(r.yaw) ? r.yaw : 0;
+    const fx = -Math.sin(yaw), fz = -Math.cos(yaw);
+    const cols = this.house.colliders;
+    let x = base.x + fx * 0.6, z = base.z + fz * 0.6, y = groundAt(x, z, base.y);
+    const blocked = segmentBlockers(base.x, base.z, base.x + fx * 0.78, base.z + fz * 0.78, base.y + 0.3, cols, { occludeOnly: false, who: 'player' }) > 0;
+    if (blocked || Math.abs(y - base.y) > 0.45 || inElevator(x, z)) {
+      // up against a wall, furniture, a stairwell or the elevator: drop it at your feet
+      x = base.x + fx * 0.12; z = base.z + fz * 0.12; y = groundAt(x, z, base.y);
+    }
+    it.holder = null; // claimed by the floor now; nobody can drop it twice
+    it.container = null;
+    const fy = base.y + 1.15;
+    this.broadcast({ k: 'drop', id: it.id, x, y, z, by: pid, fx: base.x + fx * 0.3, fy, fz: base.z + fz * 0.3, ry: this.rnd() * 6.28 });
+    // He hears it land (once) and comes to look at that exact spot — not at whoever dropped it.
+    const heavy = ['engine', 'battery', 'stair_lower', 'stair_upper', 'bolt_cutters', 'revolver', 'wrench'].includes(it.type);
+    const glass = DRINKS[it.type] || it.type === 'oil';
+    const radius = heavy ? 15 : glass ? 11 : 7.5;
+    const land = V(x, y, z);
+    setTimeout(() => { if (!this.disposed && !this.ended) this.hostNoise(land, radius, 'drop', null, true); }, Math.sqrt(2 * (fy - y) / 9.8) * 1000);
+  }
+
+  /** Dropped items fall out of the hand onto the floor; a thud when they land. */
+  updateFalling(dt) {
+    if (!this.falling?.length) return;
+    const now = performance.now();
+    for (const f of this.falling) {
+      // wall-clock, so a slow client still sees it land on time, where everyone else does
+      const k = Math.min(1, (now - f.t0) / 1000 / f.dur);
+      const m = f.it.mesh;
+      m.position.set(f.from.x + (f.to.x - f.from.x) * k, f.from.y + (f.to.y - f.from.y) * k * k, f.from.z + (f.to.z - f.from.z) * k);
+      m.rotation.x = (1 - k) * 0.6;
+      if (k >= 1) {
+        f.done = true;
+        const heavy = ['engine', 'battery', 'stair_lower', 'stair_upper', 'bolt_cutters', 'wrench'].includes(f.it.type);
+        audio.play('thud', { pos: f.to, vol: heavy ? 1.0 : 0.65, rate: heavy ? 0.75 : DRINKS[f.it.type] ? 1.5 : 1.15, ref: 2.5, muffle: this.muffleFor(f.to) });
+        if (DRINKS[f.it.type]) audio.play('ding', { pos: f.to, vol: 0.12, rate: 2.2, ref: 2 });
+        m.updateMatrixWorld(true);
+      }
+    }
+    this.falling = this.falling.filter(f => !f.done);
+  }
+
+  /** A small copy of an item to carry in the first-person hand. */
+  heldModel(type) {
+    const m = DRINKS[type] ? makeDrinkMesh(type) : makeItemMesh(type, this.house.M);
+    const box = new THREE.Box3().setFromObject(m), size = box.getSize(V()), c = box.getCenter(V());
+    const big = type === 'stair_lower' || type === 'stair_upper' || type === 'engine';
+    const k = Math.min(1.5, (big ? 0.3 : 0.15) / Math.max(0.01, size.x, size.y, size.z));
+    const g = new THREE.Group();
+    m.position.sub(c);
+    g.add(m);
+    g.scale.setScalar(k);
+    g.rotation.y = 0.5;
+    return g;
+  }
+
+  /** Keep the first-person hand in sync with the selected item. */
+  updateHeld() {
+    const it = this.selectedItem();
+    const want = it && !this.localDead && !this.localEscaped ? it.type : null;
+    if (want === this.heldShown && (want !== 'revolver' || !!this.revolverModel === !!this.heldGunModel)) return;
+    this.heldShown = want;
+    this.heldGunModel = want === 'revolver' && !!this.revolverModel;
+    if (want === 'revolver') {
+      this.local.setWeapon(this.revolverModel ? this.revolverModel.clone() : this.heldModel('revolver'), true);
+      if (!this.gunHinted) { this.gunHinted = true; this.message(`Revolver (${this.gunStatus()} rounds). LEFT CLICK to shoot. It holds 2 — bullets lie around on every floor.`, 6); }
+    } else this.local.setWeapon(want ? this.heldModel(want) : null, false);
+  }
+
+  // ============================================================ nightclub
+  makeItRain() {
+    const L = this.local;
+    if (this.club.balance(this.localId) < RAIN_COST) { this.message(`Out of money ($${this.club.balance(this.localId)}).`, 3); audio.play('click', { vol: 0.4 }); return; }
+    if ((L.throwT ?? 9) < 0.55) return; // still throwing the last handful
+    this.request({ k: 'rain', target: this.club.aimTarget() });
+  }
+
+  openDrinkMenu() {
+    this.drinkMenuOpen = true;
+    $('drinkMenu').classList.add('show');
+    try { document.exitPointerLock?.(); } catch { /* fine */ }
+  }
+
+  closeDrinkMenu(cancel = false) {
+    if (!this.drinkMenuOpen) return;
+    this.drinkMenuOpen = false;
+    this.drinkMenuClosedAt = performance.now();
+    $('drinkMenu')?.classList.remove('show');
+    if (cancel) this.request({ k: 'faicancel' });
+    if (this.phase === 'play' && !this.app.paused) this.lockPointer();
+  }
+
+  chooseDrink(drink) {
+    if (!this.drinkMenuOpen) return;
+    this.request({ k: 'faidrink', drink });
+    this.closeDrinkMenu();
+  }
+
   carPrompt() {
     const car = this.car, me = this.localId;
     if (car.ready) return 'THE CAR IS READY  <span class="dim">— get in the driver\'s seat</span>';
@@ -734,6 +914,13 @@ export class Game {
   tryShoot() {
     const L = this.local;
     if (!this.playerHas(this.localId, 'revolver') || this.localDead || this.localEscaped || L.hidden || L.frozen || this.me?.dying) return false;
+    if (this.selectedItem()?.type !== 'revolver') {
+      // the gun is in your pocket: the first click draws it
+      this.invSel = 'revolver';
+      this.updateHUD();
+      audio.play('click', { vol: 0.3, rate: 1.2 });
+      return true;
+    }
     if (this.gunAmmo() <= 0) {
       audio.play('click', { vol: 0.35, rate: 1.5 });
       this.message('Click. Out of bullets. There are a few lying around on every floor.', 3);
@@ -932,6 +1119,13 @@ export class Game {
         break;
       }
       case 'shot': this.applyShot(e); break;
+      case 'stairs': this.attic.applyStairs(e); break;
+      case 'faitalk': this.club.applyTalk(e); break;
+      case 'faiserve': this.club.applyServe(e); break;
+      case 'faidone': this.club.applyDone(e); break;
+      case 'rain': this.club.applyRain(e); break;
+      case 'clubsnd': this.club.applySound(e); break;
+      case 'hatch': this.attic.applyHatch(e); break;
       case 'carfix': {
         const it = this.items.get(e.part);
         if (it) it.used = true;
@@ -961,8 +1155,11 @@ export class Game {
         const it = this.items.get(e.id);
         if (!it) break;
         it.holder = e.holder;
+        it.order = ++this.pickSeq;
         it.mesh.parent?.remove(it.mesh);
         H.interactables.delete('item_' + e.id);
+        this.falling = this.falling?.filter(f => f.it !== it);
+        if (e.holder === this.localId) this.invSel = e.id; // a fresh pickup goes straight to hand
         const who = this.players.get(e.holder);
         this.markAct(e.holder);
         if (e.holder === this.localId) {
@@ -993,6 +1190,15 @@ export class Game {
         it.mesh.position.set(e.x, e.y + 0.02, e.z);
         H.group.add(it.mesh);
         H.register('item_' + e.id, 'item', [it.mesh], V(e.x, e.y, e.z), { item: it });
+        if (e.by) {
+          // dropped on purpose: it falls out of the hand and hits the floor
+          const from = V(e.fx, e.fy, e.fz);
+          it.mesh.position.copy(from);
+          if (Number.isFinite(e.ry)) it.mesh.rotation.y = e.ry;
+          (this.falling ||= []).push({ it, from, to: V(e.x, e.y + 0.02, e.z), t0: performance.now(), dur: Math.sqrt(2 * Math.max(0.05, from.y - e.y) / 9.8) });
+          if (e.by === this.localId) this.message(`Dropped: ${ITEM_INFO[it.type].name}`, 2.5);
+          else { const who = this.players.get(e.by); if (who) this.toast(`${who.name} dropped the ${ITEM_INFO[it.type].name}.`); }
+        }
         this.updateHUD();
         break;
       }
@@ -1127,8 +1333,8 @@ export class Game {
         this.local.hidden = h;
         this.local.hideLook = 0;
         this.local.pitch = 0;
-        $('hideOverlay').classList.toggle('car', h.type === 'seat');
-        $('hideOverlay').querySelector('p').textContent = h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
+        $('hideOverlay').classList.toggle('car', h.type === 'seat' || h.type === 'clubseat');
+        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? 'AT YASMIN\'S TABLE — aim and press [E] to make it rain  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
         $('hideOverlay').classList.add('show');
       }
     } else {
@@ -1415,7 +1621,8 @@ export class Game {
 
   updateMusic() {
     if (this.phase !== 'play' || this.app.cinemaPlaying) return;
-    audio.setMusic(this.chase ? 'chase' : 'ambient');
+    // inside the club, song1 replaces the house music (club.js plays it)
+    audio.setMusic(this.clubDuckOn ? 'off' : this.chase ? 'chase' : 'ambient');
   }
 
   emitNoise(pos, radius, kind) {
@@ -1427,7 +1634,12 @@ export class Game {
     const L = this.local;
     if (this.localDead || this.localEscaped || L.frozen) return;
     if ($('noteView').classList.contains('show')) { this.closeNote(); return; }
-    if (L.hidden) { if (L.hidden.type === 'seat' && this.car.state !== 'parked') return; this.request({ k: 'hide', id: L.hidden.id, enter: false }); return; }
+    if (L.hidden) {
+      if (L.hidden.type === 'clubseat') { this.makeItRain(); return; }
+      if (L.hidden.type === 'seat' && this.car.state !== 'parked') return;
+      this.request({ k: 'hide', id: L.hidden.id, enter: false });
+      return;
+    }
     const f = this.focus;
     if (!f) return;
     const it = f.it;
@@ -1474,6 +1686,11 @@ export class Game {
       case 'elevbtn':
       case 'elevcall': this.pressElevator(it.level); break;
       case 'carhood': L.act(); this.request({ k: 'carfix' }); break;
+      case 'stairframe': L.act(); this.request({ k: 'stairplace' }); break;
+      case 'fai': if (!this.club.fai.busy) { L.act(); this.request({ k: 'fai' }); } break;
+      case 'trapdoor':
+        if (!this.attic.unlocked && !this.playerHas(me, 'attic_key')) { this.message(this.needText('attic_key')); audio.play('rattle', { pos: V(22, 6.8, 18), vol: 0.4 }); return; }
+        L.act(); this.request({ k: 'hatch' }); break;
       case 'radio': L.act(); this.request({ k: 'radio', id: it.id }); break;
       case 'boombox': L.act(); this.request({ k: 'boom' }); break;
       case 'cinema': L.act(); this.request({ k: 'cinema', a: 'toggle' }); break;
@@ -1519,9 +1736,12 @@ export class Game {
       case 'tv': return this.screens.tv.mode === 'off' ? 'E — TURN ON' : 'E — TURN OFF';
       case 'monitor': return 'E — SWITCH CAMERA';
       case 'note': return 'E — READ';
-      case 'elevbtn': return `E — GO TO ${['BASEMENT', 'GROUND FLOOR', 'UPSTAIRS', 'ATTIC'][it.level]}${!this.props.elev.unlocked ? '  <span class="dim">[NEEDS ELEVATOR KEY]</span>' : it.level === 0 && this.house.doors.get('d_basement').locked && !this.playerHas(this.localId, 'basement_key') ? '  <span class="dim">[NEEDS BASEMENT KEY]</span>' : ''}`;
+      case 'elevbtn': return `E — GO TO ${['BASEMENT', 'GROUND FLOOR', 'UPSTAIRS', 'ATTIC'][it.level]}${!this.props.elev.unlocked ? '  <span class="dim">[NEEDS ELEVATOR KEY]</span>' : it.level === 0 && this.house.doors.get('d_basement').locked && !this.playerHas(this.localId, 'basement_key') ? '  <span class="dim">[NEEDS BASEMENT KEY]</span>' : it.level === 3 && !this.attic.accessible ? '  <span class="dim">[DEAD BUTTON — ATTIC SEALED]</span>' : ''}`;
       case 'elevcall': return `E — CALL ELEVATOR${this.props.elev.unlocked ? '' : '  <span class="dim">[NEEDS ELEVATOR KEY]</span>'}`;
       case 'carhood': return this.carPrompt();
+      case 'stairframe': return this.attic.framePrompt();
+      case 'fai': return this.club.faiPrompt();
+      case 'trapdoor': return this.attic.hatchPrompt();
       case 'radio': return it.radio.on ? 'E — TURN OFF RADIO' : 'E — TURN ON RADIO';
       case 'boombox': return 'E — PRESS PLAY';
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
@@ -1533,7 +1753,7 @@ export class Game {
 
   updateFocus() {
     const L = this.local;
-    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : 'E — LEAVE'); this.focus = null; return; }
+    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : L.hidden.type === 'clubseat' ? `E — MAKE IT RAIN ($${RAIN_COST})  ·  SPACE — STAND UP  <span class="dim">$${this.club.balance(this.localId)} left</span>` : 'E — LEAVE'); this.focus = null; return; }
     if (L.frozen || this.localDead || this.localEscaped) { this.setPrompt(''); this.focus = null; return; }
     const rc = this.raycaster || (this.raycaster = new THREE.Raycaster());
     this.camera.updateMatrixWorld();
@@ -1617,10 +1837,12 @@ export class Game {
   updateHUD() {
     if (!this.house) return;
     $('objective').textContent = this.localDead ? 'You were eaten.' : this.localEscaped ? 'You escaped.' : (this.freePlay ? '[FREE PLAY — nothing can kill you] ' : '') + this.objective() + (this.car && this.car.state === 'parked' && (Object.values(this.car.parts).some(Boolean) || CAR_PARTS.concat('wrench').some(t => this.playerHas(this.localId, t))) ? `  ·  OR: fix the car in the basement garage (still needs ${this.car.missing().join(', ') || 'nothing — drive!'})` : '');
-    const inv = [...this.items.values()].filter(i => i.holder === this.localId && !i.used);
+    const inv = this.heldList(), sel = this.selectedItem();
     $('inventory').innerHTML = inv.length
-      ? inv.map(i => `<div class="slot"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('')
+      ? inv.map(i => `<div class="slot${i === sel ? ' sel' : ''}"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('') +
+        `<div class="hint">IN HAND: ${escapeHtml(ITEM_INFO[sel.type].name)}  ·  ${inv.length > 1 ? 'WHEEL — switch  ·  ' : ''}G — drop</div>`
       : '<div class="slot empty">— empty —</div>';
+    $('money').textContent = `$${this.club ? this.club.balance(this.localId) : 500}`;
     $('micState').classList.toggle('muted', settings.micMuted || !mic.stream);
     $('micState').title = !mic.stream ? 'No microphone' : settings.micMuted ? 'Muted (M)' : 'Mic on (M to mute)';
     $('spectateHud').classList.toggle('show', this.isSpectating());
@@ -1803,8 +2025,11 @@ export class Game {
     this.props.update(dt, this.net.serverNow());
     this.spider.update(dt);
     this.car.update(dt, this.net.serverNow());
-    const hasGun = !!this.revolverModel && this.playerHas(this.localId, 'revolver');
-    if (hasGun !== !!this.gunShown) { this.local.setWeapon(hasGun ? this.revolverModel.clone() : null); this.gunShown = hasGun; if (hasGun) this.message(`Revolver (${this.gunStatus()} rounds). LEFT CLICK to shoot. It holds 2 — bullets lie around on every floor.`, 6); }
+    this.attic.update(dt);
+    this.club.update(dt, this.net.serverNow());
+    if (this.club.music ? !this.clubDuckOn : this.clubDuckOn) { this.clubDuckOn = !!this.club.music; this.updateMusic(); }
+    this.updateHeld();
+    this.updateFalling(dt);
     if (!this.cineAjan) this.muzzle.intensity = Math.max(0, this.muzzle.intensity - dt * 400);
     if (this.glints) { const t = performance.now() / 1000; for (const g of this.glints) { const k = 0.55 + 0.45 * Math.sin(t * 3 + g.userData.ph); g.material.opacity = k; g.scale.setScalar(0.24 + k * 0.14); g.material.rotation = t * 0.6 + g.userData.ph; } }
     this.updateSpiderDeath(dt);
@@ -1817,7 +2042,7 @@ export class Game {
     if (this.lightningK > 0) this.lightningK = Math.max(0, this.lightningK - dt * 2.2);
     const lk = this.lightningK > 0 ? this.lightningK * (0.6 + 0.4 * Math.sin(this.time * 60)) : 0;
     // Hiding: brighten the room in front of the hiding spot (local view only).
-    const hk = this.hideK = damp(this.hideK, L.hidden && !this.localDead ? 1 : 0, 4, dt);
+    const hk = this.hideK = damp(this.hideK, L.hidden && L.hidden.type !== 'clubseat' && !this.localDead ? 1 : 0, 4, dt);
     if (L.hidden && !this.cineAjan) {
       const h = L.hidden, r = roomAt(h.exit.x, h.exit.z, h.exit.y + 0.5);
       const fx = h.exit.x - h.inside.x, fz = h.exit.z - h.inside.z, fl = Math.hypot(fx, fz) || 1;
@@ -1927,7 +2152,7 @@ export class Game {
     aj.group.visible = v.st !== 'dormant';
     aj.group.position.copy(v.pos);
     aj.group.rotation.y = v.ry;
-    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun'].includes(v.m) ? v.m : 'move';
+    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun', 'dance', 'floorsleep'].includes(v.m) ? v.m : 'move';
     aj.state = { speed: v.sp, mode: ajMode, modeT: v.mt, headYaw: v.m === 'search' ? undefined : v.hy };
     aj.update(dt);
     // Heavy footsteps
@@ -2029,7 +2254,7 @@ export class Game {
 
   /** sleep.mp3 loops at his bed while he naps (from the replicated state). */
   updateSleepAudio() {
-    const sleeping = this.ajanVis.st === 'sleep';
+    const sleeping = this.ajanVis.st === 'sleep' || this.ajanVis.m === 'floorsleep';
     if (sleeping && !this.sleepSound) {
       const pos = this.ajanVis.pos.clone().add(V(0, 1.2, 0));
       this.sleepSound = audio.play('sleep', { pos, loop: true, vol: 1.7, ref: 3.5, rolloff: 1.0, limit: true });
@@ -2044,7 +2269,7 @@ export class Game {
     if (!this.amb) return;
     const room = roomAt(cp.x, cp.z, cp.y);
     const L = levelIndex(cp.y);
-    const want = room?.id === 'attic' || room?.id === 'stairA' ? 'ambAttic' : L === 0 ? 'ambBase' : L === 2 ? 'ambUp' : 'ambHouse';
+    const want = room?.id === 'club' ? 'none' : room?.id === 'attic' || room?.id === 'stairA' ? 'ambAttic' : L === 0 ? 'ambBase' : L === 2 ? 'ambUp' : 'ambHouse';
     for (const [k, h] of Object.entries(this.amb)) h?.setVol(k === want ? (k === 'ambAttic' ? 0.5 : 0.22) : 0);
   }
 
@@ -2108,6 +2333,7 @@ export class Game {
     this.app.renderer.toneMappingExposure = 1.15;
     this.offs.forEach(o => o());
     removeEventListener('keydown', this.onKeyDown);
+    removeEventListener('wheel', this.onWheel);
     removeEventListener('mousemove', this.onMouseMove);
     removeEventListener('resize', this.onResize);
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
@@ -2118,6 +2344,9 @@ export class Game {
     this.wind?.stop();
     this.clockTick?.stop();
     this.car?.dispose();
+    this.attic?.dispose();
+    this.club?.dispose();
+    this.closeDrinkMenu?.();
     document.getElementById('hud')?.classList.remove('cine');
     document.getElementById('escapeTitle')?.classList.remove('show');
     this.sleepSound?.stop();

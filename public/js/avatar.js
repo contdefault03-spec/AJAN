@@ -50,6 +50,36 @@ gl_FragColor.rgb += dEdge * vec3(1.6, 0.35, 0.08);`);
   mat.customProgramCacheKey = () => 'ajan-avatar-' + (spec.shirt ? 'p' : 'a');
 }
 
+/**
+ * Restrained secondary motion (soft-tissue follow-through) for a dancing
+ * character: small spring-driven offsets applied after skinning to two soft
+ * regions of the rest mesh (upper chest front, seat at the back). The offsets are
+ * a few millimetres, so the mesh, clothing and silhouette are never distorted.
+ * club.js drives uJigC / uJigB (mesh-local units) from the body's motion.
+ */
+function addSecondaryMotion(mat, uniforms) {
+  uniforms.uJigC = { value: new THREE.Vector3() };
+  uniforms.uJigB = { value: new THREE.Vector3() };
+  const prev = mat.onBeforeCompile;
+  mat.onBeforeCompile = sh => {
+    prev(sh);
+    sh.uniforms.uJigC = uniforms.uJigC;
+    sh.uniforms.uJigB = uniforms.uJigB;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 uJigC; uniform vec3 uJigB;')
+      .replace('#include <skinning_vertex>', `#include <skinning_vertex>
+{
+  vec3 p = position;
+  float side = 1.0 - smoothstep(0.075, 0.115, abs(p.x));
+  float mC = smoothstep(0.635, 0.665, p.y) * (1.0 - smoothstep(0.715, 0.745, p.y)) * smoothstep(0.04, 0.08, p.z) * side;
+  float mB = smoothstep(0.415, 0.445, p.y) * (1.0 - smoothstep(0.535, 0.565, p.y)) * smoothstep(-0.02, -0.06, p.z) * side;
+  transformed += uJigC * mC + uJigB * mB;
+}`);
+  };
+  const key = mat.customProgramCacheKey;
+  mat.customProgramCacheKey = () => key() + '-sm';
+}
+
 function findMesh(root) {
   let found = null;
   root?.traverse(o => { if (!found && o.isMesh) found = o; });
@@ -61,7 +91,7 @@ export class Avatar {
    * kind: 'player' | 'ajan'
    * gltf: loaded GLTF (or null → fallback figure)
    */
-  constructor(kind, gltf, { height, shirt, pants } = {}) {
+  constructor(kind, gltf, { height, shirt, pants, jiggle = false } = {}) {
     this.kind = kind;
     const spec = RIG_SPECS[kind];
     this.spec = spec;
@@ -91,6 +121,7 @@ export class Avatar {
       uHeight: { value: spec.height },
     };
     prepareMaterial(material, spec, this.uniforms);
+    if (jiggle) addSecondaryMotion(material, this.uniforms);
     this.material = material;
     this.rig = autoRig(geometry, material, spec);
     this.mesh = this.rig.mesh;
@@ -139,6 +170,8 @@ export class Avatar {
 
   update(dt, st = this.state) {
     this.t += dt;
+    // NPCs (club.js) drive their own bones through _set()
+    if (this.custom) { this.custom(dt, this.t); return; }
     if (this.kind === 'ajan') this._animAjan(dt, st);
     else this._animPlayer(dt, st);
   }
@@ -226,12 +259,14 @@ export class Avatar {
     const mode = st.mode || 'move';
     const mt = st.modeT || 0;
 
-    if (mode === 'sleep' || mode === 'sit' || mode === 'stun') {
+    if (mode === 'dance') { this._danceAjan(dt, t, mt); return; }
+    if (mode === 'sleep' || mode === 'sit' || mode === 'stun' || mode === 'floorsleep') {
       // Seated: thighs forward, hips lowered onto the seat. Asleep he leans back
       // against the headboard with legs out and breathes slowly.
       const kk = 1 - Math.exp(-4 * dt);
-      const sleep = mode === 'sleep' || mode === 'stun';
+      const sleep = mode === 'sleep' || mode === 'stun' || mode === 'floorsleep';
       const stun = mode === 'stun';
+      const onFloor = mode === 'floorsleep';
       const br = Math.sin(t * (sleep ? 1.15 : 1.6));
       this._set('thighL', -1.5, 0, 0.12, kk);
       this._set('thighR', -1.5, 0, -0.12, kk);
@@ -246,7 +281,9 @@ export class Avatar {
       this._set('foreL', 0, -1.15, 0, kk);
       this._set('foreR', 0, 1.15, 0, kk);
       if (stun) { this._set('spine', 0.45, 0.2, 0.15, kk); this._set('head', 0.7, -0.4, 0.3, kk); }
-      this.body.position.y = damp(this.body.position.y, (stun ? -0.95 : -0.42) + (sleep ? br * 0.012 : 0), stun ? 9 : 6, dt);
+      if (onFloor) { this._set('spine', -0.5 + br * 0.03, 0.1, 0.1, kk); this._set('head', 0.55 + br * 0.03, 0.4, 0.35, kk); }
+      // on the floor he sits right down on it and slumps back (slowly, not a drop)
+      this.body.position.y = damp(this.body.position.y, (stun || onFloor ? -0.95 : -0.42) + (sleep ? br * 0.012 : 0), stun ? 9 : onFloor ? 2.5 : 6, dt);
       this.body.scale.set(1 + br * (sleep ? 0.012 : 0.005), 1, 1 + br * (sleep ? 0.018 : 0.006));
       return;
     }
@@ -318,6 +355,47 @@ export class Avatar {
     this.body.position.y = damp(this.body.position.y, bob, 10, dt);
   }
 }
+
+/** AJAN's pole dance: a big, goofy gorilla groove. Distinct from Yasmin's. */
+Avatar.prototype._danceAjan = function (dt, t, mt) {
+  const k = 1 - Math.exp(-7 * dt);
+  const beat = t * Math.PI * 2 * 1.9;
+  const bounce = Math.abs(Math.sin(beat));
+  // three alternating routines, each ~6 s: raise-the-roof, chest drum, the sprinkler
+  const routine = Math.floor(mt / 6) % 3;
+  this._set('thighL', -0.25 - bounce * 0.25, 0, 0.35 + Math.sin(beat) * 0.12, k);
+  this._set('thighR', -0.25 - bounce * 0.25, 0, -0.35 + Math.sin(beat) * 0.12, k);
+  this._set('shinL', 0.45 + bounce * 0.4, 0, 0, k);
+  this._set('shinR', 0.45 + bounce * 0.4, 0, 0, k);
+  this._set('hips', 0, Math.sin(beat / 2) * 0.35, Math.sin(beat) * 0.16, k);
+  this._set('spine', 0.08, -Math.sin(beat / 2) * 0.2, -Math.sin(beat) * 0.08, k);
+  this._set('chest', -0.05 + bounce * 0.05, -Math.sin(beat / 2) * 0.15, 0, k);
+  this._set('head', -0.2 + Math.sin(beat * 2) * 0.1, Math.sin(beat / 2) * 0.3, Math.sin(beat) * 0.12, k);
+  if (routine === 0) {
+    const up = 0.95 + Math.sin(beat) * 0.35;
+    this._set('upperL', 0, -0.2, up, k);
+    this._set('upperR', 0, 0.2, -up, k);
+    this._set('foreL', 0, -0.9 + Math.sin(beat) * 0.4, 0, k);
+    this._set('foreR', 0, 0.9 - Math.sin(beat) * 0.4, 0, k);
+  } else if (routine === 1) {
+    const hit = Math.sin(beat * 2) > 0;
+    this._set('upperL', -0.2, -1.0, -0.4, k * 1.6);
+    this._set('upperR', -0.2, 1.0, 0.4, k * 1.6);
+    this._set('foreL', 0, hit ? -1.7 : -1.2, 0, k * 2);
+    this._set('foreR', 0, hit ? 1.2 : 1.7, 0, k * 2);
+    this._set('chest', -0.15, 0, 0, k);
+    this._set('head', -0.4, Math.sin(beat) * 0.2, 0, k);
+  } else {
+    // one hand on the pole, the other arm sprinkling
+    this._set('upperR', -0.3, 0.7, 0.1, k);
+    this._set('foreR', 0, 0.6, 0, k);
+    const sw = Math.sin(beat / 2);
+    this._set('upperL', -0.1, -0.3 + sw * 0.6, 0.15, k);
+    this._set('foreL', 0, -1.5, 0, k);
+  }
+  this.body.scale.set(1, 1, 1);
+  this.body.position.y = damp(this.body.position.y, -0.12 + bounce * 0.07, 12, dt);
+};
 
 /** Ember/ash particles used while a character disintegrates. */
 export class DissolveFX {

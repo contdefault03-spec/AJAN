@@ -166,12 +166,29 @@ export class LocalPlayer {
     this.camera.remove(this.light, this.light.target, this.fill, this.hands);
   }
 
+  /** First-person money throw (the bills themselves are spawned by club.js). */
+  throwMoney() {
+    if (!this.wad) {
+      const cv = document.createElement('canvas'); cv.width = 32; cv.height = 16;
+      const x = cv.getContext('2d'); x.fillStyle = '#5a8a4a'; x.fillRect(0, 0, 32, 16); x.fillStyle = '#2a4a20'; x.fillRect(12, 0, 3, 16);
+      this.wad = new THREE.Mesh(new THREE.BoxGeometry(0.075, 0.025, 0.16), new THREE.MeshStandardMaterial({ map: new THREE.CanvasTexture(cv), roughness: 0.9 }));
+      this.wad.position.set(0, 0.03, -0.19);
+      this.wad.layers.set(2);
+      this.rightArm.add(this.wad);
+    }
+    this.throwT = 0;
+    this.act();
+  }
+
   /** Put an object (the revolver) in the right hand, or null to empty it. */
-  setWeapon(obj) {
+  /** What's in the right hand: the revolver (`gun`) or any other selected item. */
+  setWeapon(obj, gun = true) {
     if (this.weapon) this.rightArm.remove(this.weapon);
     this.weapon = obj;
+    this.weaponGun = !!obj && gun;
     if (obj) {
-      obj.position.set(0, 0.035, -0.24);
+      if (gun) obj.position.set(0, 0.035, -0.24);
+      else obj.position.set(0, 0.07, -0.21);
       obj.traverse(o => { o.layers.set(2); o.castShadow = false; });
       this.rightArm.add(obj);
     }
@@ -261,7 +278,30 @@ export class LocalPlayer {
     // Right hand only comes up to interact (doors, items, switches, TV, monitors)
     const reach = Math.sin(clamp(this.actT / 0.55, 0, 1) * Math.PI);
     this.recoil = damp(this.recoil || 0, 0, 9, dt);
-    if (this.weapon) {
+    this.throwT = (this.throwT ?? 9) + dt;
+    if (this.throwT < 0.6) {
+      // making it rain: wind back, then fling the handful forward and up
+      const u = this.throwT / 0.6;
+      const wind = u < 0.3 ? u / 0.3 : 1 - (u - 0.3) / 0.7;
+      const fling = u < 0.3 ? 0 : Math.sin(Math.min(1, (u - 0.3) / 0.35) * Math.PI / 2);
+      this.rightArm.position.set(0.2 - fling * 0.08, -0.25 + wind * 0.08 + fling * 0.18, -0.25 + wind * 0.12 - fling * 0.25);
+      this.rightArm.rotation.set(0.6 * wind - 0.9 * fling, -0.2 + fling * 0.25, -0.3 * wind);
+      this.rightArm.visible = true;
+      if (this.weapon) this.weapon.visible = false;
+      this.wad.visible = u < 0.42;
+      this.leftArm.visible = true;
+      this.leftArm.position.set(-0.18, -0.24 - fling * 0.03, -0.3);
+      this.leftArm.rotation.set(0.25, 0.1, 0.1);
+      return;
+    }
+    if (this.wad) this.wad.visible = false;
+    if (this.weapon) this.weapon.visible = true;
+    if (this.weapon && !this.weaponGun) {
+      // Carrying the selected item low in the right hand.
+      this.rightArm.position.set(0.21 - reach * 0.05, -0.3 + reach * 0.12 + hb * 0.8, -0.3 - reach * 0.12);
+      this.rightArm.rotation.set(0.25 + reach * 0.2, -0.12, -0.08);
+      this.rightArm.visible = true;
+    } else if (this.weapon) {
       // Holding the revolver: the right hand stays up, pointing where you look.
       this.rightArm.position.set(0.15 - reach * 0.05, -0.16 + hb * 0.8 + this.recoil * 0.03, -0.32 + this.recoil * 0.06);
       this.rightArm.rotation.set(0.04 + this.recoil * 0.45, -0.04, -0.02);

@@ -36,8 +36,13 @@ Single-player runs entirely in your browser. The server only serves files and re
 | Shift | Run (limited stamina, loud) |
 | C / Ctrl | Crouch (quiet, harder to see) |
 | F | Flashlight |
-| E | Interact: open, pick up, use, hide or leave, read |
-| Left click | Fire the revolver (once you have it) |
+| E | Interact: open, pick up, use, hide or leave, read, talk to Fai |
+| Mouse wheel | Choose the item in your hand (the selected item is highlighted in the inventory) |
+| G | Drop the item in your hand |
+| Left click | Fire the revolver (draws it first if another item is in your hand) |
+| E (at Yasmin's table) | Make it rain ($20 a throw) |
+| Space (at Yasmin's table) | Stand up |
+| 1 / 2 / 3 (Fai's menu) | Vodka / beer / wine (or click; Esc cancels) |
 | W (in the driver's seat) | Drive the car out through the garage door (once it's fixed) |
 | 1 / 2 / 3 / 4 | Inside the elevator: basement / ground / upstairs / attic |
 | M | Mute or unmute the microphone |
@@ -70,16 +75,38 @@ Four levels, connected by real walkable staircases and an elevator:
 - **Room sizes:** the big open rooms were split with interior walls and doors into rooms of a normal size (a bedroom plus a walk-in wardrobe, a bathroom plus a laundry, a kitchen plus a mudroom, and so on). Every room has its own light, wallpaper and furniture arranged around a focal point: the bed against a wall with nightstands, the sofa facing the TV, armchairs around the fireplace.
 - Pictures are never hung over a doorway; the house checks this when it builds.
 - **Grand staircase:** at the east end of the house, from the dining-room side up to the upstairs hallway.
-- **Attic stairs:** behind a door in the upstairs hallway.
+- **Attic stairs:** behind a door in the upstairs hallway, but the staircase itself is **missing** (see *The attic puzzle*).
 - **Elevator:** east side, stops on all four floors. Inside the car is a brass panel with four big labelled buttons (B BASEMENT, 1 GROUND, 2 UPSTAIRS, A ATTIC); aim at one and press E, or press 1–4 while standing in the car. Each landing has a call button next to the doors. It is locked until someone finds the **Elevator Key** in a drawer. The basement stop only works once the basement door is unlocked, or if the rider holds the basement key. It is loud, and Ajan hears it.
 
 ### Dead or spectating
 
 Once you're dead (or escaped and watching), the view brightens: higher exposure, more ambient light and a soft light following the camera, so you can follow what's happening.
 
+### The attic puzzle
+
+The attic can't be reached at the start. Behind the attic door upstairs there is only an empty stairwell with yellow tape and a chalk outline. The elevator's attic button is dead too ("The attic is sealed off").
+
+1. **Two staircase sections** lie side by side in the basement: **Section I (lower)** and **Section II (upper)**. Each is a pickup with a glint.
+2. At the empty stairwell press **E** to fit them. **I** has to go in first, then **II** on top of it. Each section swings in from the hallway and settles onto its brackets with a clank. Ajan hears the work. The prompt says what's still missing and in which order.
+3. With both sections in, the stairs are climbable. At the top, a **locked trapdoor** in the attic floor closes the stairwell.
+4. The **Attic Key** spawns in one of four places around the house. With the key, **E** unlocks the trapdoor (the key is used up) and **E** again swings it open.
+5. Climb into the attic. From then on the elevator stops there too. The attic (TV, VCR, posters and so on) is unchanged, except for an **unmarked door** in its west wall.
+
+### The club
+
+Behind the unmarked door in the attic is **THE CLUB**: a bar with stocked shelves and stools, a lit dance floor that chases colours to the beat, a disco ball, moving coloured lights, booths, a DJ booth and neon. There are two poles on platforms: **Yasmin's**, and an empty one beside it for **AJAN**. A small table with a chair stands right in front of Yasmin's pole. It is part of the attic safe zone.
+
+- **Music:** only `song1.mp3`. It starts when you walk in, loops while you're inside, and fades out and stops when you leave. You can only hear it inside the club, there is only ever one copy playing, and the house music is ducked while it plays.
+- **Fai** (`bartender.glb`) stands behind the bar, wiping the counter and glancing at whoever is closest. **E — TALK TO FAI** plays `fai.mp3`, then a menu opens: **VODKA**, **BEER**, **WINE**. Fai turns, walks to that drink's station on the back bar, picks it up and carries it over in her hand. She sets it on the counter in front of you as a real item you can pick up. Each drink looks different (a clear vodka bottle, a brown beer bottle, a glass of red wine). While she's busy nobody else can order, and talking to her again does nothing.
+- **Yasmin** (`yasmin.glb`) pole-dances continuously: she circles the pole with one hand on it, with hip sway, spins and the odd pause. She has a little restrained secondary motion (non-explicit and small, without distorting the mesh).
+- **Her table:** **E** on the chair sits you down facing her pole, and **Space** stands you up. Seated, aim and press **E** to **make it rain**: your hand throws a wad of bills and seven $20 notes flutter down with gravity and settle on the floor near whoever you aimed at (Yasmin or AJAN). Everyone starts with **$500**, shown bottom right. Each throw costs $20, the host checks your balance, and with less than $20 the throw is refused. Throws are rate-limited.
+- **`yasmin.mp3`** plays exactly **2 s** after the first throw at Yasmin on a visit, once, only for people in the club.
+- **AJAN visits:** about **5 s** after the first money ever thrown at Yasmin, AJAN comes up the attic stairs, walks across the attic, opens the club door himself and goes to his pole. He doesn't attack (the normal chase is suspended), and dances a clumsy routine of his own: raise-the-roof, chest drumming, the sprinkler. Throwing money at him plays the same `sleep.mp3` laugh. **15–20 s** after the first money he gets (the timer is never reset), he slumps down onto the floor asleep, with the sleep sound.
+- **Back to normal:** once nobody is up in the attic or the club any more (3 s after he's asleep, or 30 s otherwise), he leaves the club and reappears later in his own room. The usual AI resumes. The club visit only happens once per game.
+
 ### The attic safe zone
 
-Ajan never paths into the attic or onto the upper part of the attic stairs. He can't see, hear, attack or grab anyone there, and if he chases you up the stairs he gives up at the safe line. Noise you make in the attic doesn't count.
+Ajan never paths into the attic or onto the upper part of the attic stairs (the scripted club visit is the only exception, and he does no harm then). He can't see, hear, attack or grab anyone there, and if he chases you up the stairs he gives up at the safe line. Noise you make in the attic doesn't count.
 
 ## How a round works
 
@@ -142,6 +169,8 @@ The HUD objective always shows the next step. Locked doors say what they need ("
 - **Cinema TV (attic):** press E on the TV to play `cinema.mp4` with its sound, again to pause or resume. Use the VCR to restart. In co-op it is synchronized for everyone, including pause and restart.
 - **Mirror (upstairs bathroom):** a blood message that changes each time you come back.
 - **Jelly:** a big wobbling `object.glb` stands in a random bedroom (the guest room or the child's room). Its base is fixed to the floor and its top half jiggles. Bumping into it makes it bounce with a *boing*. Ajan can't hear it.
+- **Inventory:** everything you carry is listed bottom right. The **mouse wheel** picks which item is in your hand: it's highlighted, its name is shown, and a small copy is visible in your first-person hand. A new pickup goes straight to your hand. Keys, fuses and car parts still work from anywhere in your inventory, so you never have to select a key to open a door. The revolver only fires when it's in your hand, and a left click with something else selected draws it. The wheel is ignored while a menu, a note or the pause screen is open.
+- **Dropping (G):** the item in your hand drops out of it in front of you, falls and lands on the floor with a thud, as a real item again (same item, same identity: the revolver keeps its rounds). Anyone can pick it up. Against a wall, furniture or a stairwell it lands at your feet instead. You can't drop things while hiding, seated, dead, or inside the elevator car (it would ride off with your item). Everything can be dropped, including keys and the stair sections, so a player can hand items to a teammate.
 - **Pickups glint:** anything you can pick up (keys, parts, bullets, the fuse…) has a soft pulsing sparkle, so it stands out in the dark.
 - **Creaky floorboards:** 2–3 per dangerous floor (none in the attic), slightly lighter than the boards around them. Stepping on one plays `noise.mp3`, and Ajan comes to that exact spot. Each board has a 2.5 s cooldown, so it can't be spammed.
 - **Atmosphere:** separate ambience beds for the basement, ground floor, upstairs and attic; blood trails and splatter; bones in Ajan's room; notes.
@@ -156,6 +185,7 @@ His AI is a state machine that runs on the host:
 - **gotobed → sleep** and **gotochair → sit** are his rests.
 
 - **Patrol:** he works through all of his floors (basement, ground floor, upstairs), preferring the rooms he visited least recently, with a bias toward floors players are on. While patrolling he quietly **whispers** (`ajan.mp3`).
+- **Dropped items:** a drop makes one noise when it lands. Heavy things (engine, battery, stair sections, bolt cutters, wrench, revolver) carry about 15 m, bottles about 11 m and keys about 7.5 m, all reduced by walls, closed doors and floors in between. If he hears it he walks to **that exact spot** and searches around it. The noise doesn't point him at whoever dropped it, and it doesn't count in the attic or the club.
 - **Hearing:** footsteps (crouch is almost silent, walking is quiet, running is loud), doors, drawers, locked-door rattles, floorboards, radios, the elevator, gunshots, and your **microphone** (scaled by your microphone volume).
   - **Difficulty** scales every sound's reach: **Easy** ×0.6 (he misses a footstep 3 m away), **Medium** ×1.0, **Hard** ×1.45 (he hears someone talking 12 m away).
   - Each wall or closed door between you and him reduces how far a sound carries. Each floor between you reduces it much more, but less so near a staircase.
@@ -178,7 +208,8 @@ His AI is a state machine that runs on the host:
 
 - `server.js` (Express + Socket.IO) serves the client and `/assets`, manages rooms and host selection, relays messages, and handles WebRTC signalling.
 - The **host's browser is the authority**. It runs Ajan, arbitrates item pickups (so nobody can take the same item twice), doors, kills, escapes, the TV, lightning and blackouts, and the session-level chase-music state. Other clients send requests and apply the host's events.
-- **Replicated state:** positions and animation state at 15 Hz, Ajan at 10 Hz, names and clothing colours, speaking indicators, doors, drawers, items, power, the TV, monitor channels, the elevator (car position from server time), the attic cinema (play/pause position from server time), radios, the boombox, the phone, the mirror message, the jelly, kills, spectators and escapes. The house layout, item spots and painting arrangement come from a shared seed.
+- **Replicated state:** positions and animation state at 15 Hz, Ajan at 10 Hz, names and clothing colours, speaking indicators, doors, drawers, items, power, the TV, monitor channels, the elevator (car position from server time), the attic cinema (play/pause position from server time), radios, the boombox, the phone, the mirror message, the jelly, kills, spectators and escapes. Also replicated: the attic staircase sections and trapdoor, dropped items (with the landing spot chosen by the host), every player's money, who is at Yasmin's table, thrown bills, Fai's serving (on a shared server-time timeline, so the drink is in the same hand at the same moment for everyone), drinks on the counter, and AJAN's club visit.
+- **Host validation:** the host decides every pickup (the first request wins, so two players grabbing the same item never duplicate it), every drop (you must hold it), stair placement (you must hold the right section, in order), the trapdoor (you must hold the key), Fai (one customer at a time; only that customer can order), and money (you must be seated, have the funds and respect the throw rate). The club timers (yasmin.mp3 at 2 s, AJAN at 5 s, his nap at 15–20 s) run on the host only, so they fire once no matter how many players are watching. The house layout, item spots and painting arrangement come from a shared seed.
 - **Host migration:** if the host leaves, the next player takes over Ajan from the last snapshot.
 - Rooms hold up to 8 players. Joining after a round has started isn't supported.
 - **Voice:** a WebRTC mesh feeds Web Audio HRTF panners with distance falloff, plus low-pass muffling and attenuation for each wall or floor between you. Dead and escaped players can talk to each other but not to the living. Spectators hear the living from the camera position. Name labels appear above heads with a mic icon while someone is actually speaking, based on voice activity rather than whether a mic is plugged in. Labels fade with distance and hide behind walls.
@@ -198,6 +229,11 @@ Everything lives in `assets/`. These files were found and are used:
 | `object.glb` | same | The jelly in a bedroom, and (shrunk to hand size) the revolver. |
 | `car.glb` | same | The car in the garage. The model has no interior you could sit in, so the cockpit (seats, dashboard, wheel, headliner) is built around the camera; its shell gives the windows and pillars. |
 | `noise.mp3` | same | The creaky floorboard sound. |
+| `song1.mp3` | same | The club music (looped). `song2.mp3` and `song3.mp3` are never used for the club. |
+| `fai.mp3` | same | Fai's line when you talk to her. |
+| `yasmin.mp3` | same | Yasmin's reaction, 2 s after the first throw. |
+| `bartender.glb` | same | Fai. A static T-pose mesh, **auto-rigged at runtime** like the others (idle, walking, reaching, serving, talking, wiping). |
+| `yasmin.glb` | same | Yasmin. A static T-pose mesh, auto-rigged at runtime and animated procedurally (the pole dance). |
 | `rot.mp3` | not needed | ROT was removed as a character on request. |
 | everything else | same | |
 
@@ -225,6 +261,8 @@ Saved to localStorage:
 - Voice muffling counts walls and floors between players rather than simulating real acoustics.
 - Peer-to-peer voice can fail on restrictive networks without a TURN server (see above).
 - `cinema.mp4` is H.264/AAC, used as delivered with no substitute file. Chrome, Edge, Safari and Firefox play it. A browser build without H.264 support (some Linux Chromium builds, including the headless test browser) shows "VIDEO UNAVAILABLE IN THIS BROWSER" on the attic TV, and the phone stays silent.
-- Players sitting in the car aren't drawn in their seats for other players, so the car looks empty from outside.
+- Players sitting in the car aren't drawn in their seats for other players, so the car looks empty from outside. The same goes for the chair at Yasmin's table: other players see the seated player standing next to it.
+- `yasmin.glb` and `bartender.glb` have no skeleton either. Yasmin's pole dance and Fai's serving are procedural poses on the auto-rig, not motion capture, so they're stylised, especially the hands around the pole and the drink. Yasmin's secondary motion is a small, clamped vertex offset in the shader, not a cloth or soft-body simulation.
+- The club visit is one scripted route (attic stairs → attic → club door → pole). AJAN doesn't use the nav graph for it, because the attic is outside his normal navigation.
 - The browser can't close its own tab, so **QUIT** shows a goodbye screen.
 - Development testing ran in headless Chromium with software rendering. Everything worked, but frame rates there are not representative, and the game hasn't been profiled on real GPUs.

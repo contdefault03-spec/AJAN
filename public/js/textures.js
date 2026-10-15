@@ -346,6 +346,9 @@ export function buildMaterials() {
   M.black = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.6 });
   M.paper = new THREE.MeshStandardMaterial({ color: 0xcfc6a8, roughness: 1 });
   M.safeSteel = std(rust(139), { metalness: 0.65, roughness: 0.45, color: 0x55605a });
+  // nightclub: glossy black floor, deep purple velvet walls
+  M.floorClub = std(tiles(221, [22, 18, 26], [14, 12, 18], 'rgba(120,60,160,0.35)', 6), { roughness: 0.25, metalness: 0.2 });
+  M.wallClub = std(wallpaper(223, '#2a1030', '#0a0410', 'damask', 0.3), { roughness: 0.8 });
   M.sheet = std(fabric(217, [170, 164, 148], 'rgba(60,50,30,0.15)'));
   M.brick = std(brick(219));
   M.brass = new THREE.MeshStandardMaterial({ color: 0xb08a3a, metalness: 0.8, roughness: 0.35 });

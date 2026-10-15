@@ -7,7 +7,8 @@
 import * as THREE from 'three';
 import { AJAN } from './config.js';
 import { collideCircle, groundAt, lineOfSight, levelOf, segmentBlockers, soundTransmission } from './physics.js';
-import { isSafeZone } from './layout.js';
+import { isSafeZone, RAMPS, rampHeight } from './layout.js';
+import { AJAN_ROUTE, POLE_A, AJAN_POLE_R } from './club.js';
 import { nearestNode, findPath } from './nav.js';
 import { angleDiff, clamp } from './util.js';
 
@@ -189,6 +190,7 @@ export class AjanBrain {
     this.animT += dt;
     if (this.cooldown > 0) this.cooldown -= dt;
     this.speed = 0;
+    if (this.state === 'club') { this.updateClub(dt); return; }
     if (this.state === 'dormant') {
       this.dormantLeft -= dt;
       this.pos.set(36.8, -50, 4);
@@ -487,9 +489,97 @@ export class AjanBrain {
     if (this.restLeft <= 0) this.wakeUp();
   }
 
+  // ------------------------------------------------------------ the club visit (scripted, host)
+  /** Lured by the music: comes up the attic stairs, through the club door, to his pole. */
+  startClub() {
+    if (['kill', 'drag'].includes(this.state)) return false;
+    this.standUp();
+    this.target = null; this.path = null; this.inspecting = null;
+    this.setState('club');
+    this.clubPhase = 'enter';
+    this.clubWp = 0;
+    const [x, z] = AJAN_ROUTE[0];
+    this.pos.set(x, this.clubGround(x, z), z);
+    this.ry = 0;
+    this.anim = 'move';
+    this.animT = 0;
+    return true;
+  }
+
+  clubGround(x, z) {
+    const r = RAMPS.find(q => q.id === 'R3');
+    if (x > r.x0 && x < r.x1 && z > r.a && z < r.b) return rampHeight(r, x, z);
+    return 6.8;
+  }
+
+  updateClub(dt) {
+    if (this.clubPhase === 'enter') {
+      const [tx, tz] = AJAN_ROUTE[this.clubWp];
+      const dx = tx - this.pos.x, dz = tz - this.pos.z, d = Math.hypot(dx, dz);
+      const sp = 1.6;
+      if (d < 0.08) {
+        this.clubWp++;
+        if (this.clubWp >= AJAN_ROUTE.length) { this.clubPhase = 'dance'; this.danceT = 0; this.danceA = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z); }
+      } else {
+        const step = Math.min(d, sp * dt);
+        this.pos.x += dx / d * step; this.pos.z += dz / d * step;
+        this.speed = sp;
+        this.ry = this.ry + clamp(angleDiff(this.ry, Math.atan2(dx, dz)), -dt * 6, dt * 6);
+      }
+      this.pos.y = this.clubGround(this.pos.x, this.pos.z);
+      // he opens the club door himself on the way through
+      const door = this.house.doors.get('d_club');
+      if (door && !door.open && Math.hypot(this.pos.x - 18, this.pos.z - 14.55) < 2.2) this.game.broadcast({ k: 'door', id: 'd_club', open: true, by: 'ajan' });
+      this.anim = 'move';
+      return;
+    }
+    if (this.clubPhase === 'dance') {
+      this.danceT += dt;
+      // shuffle round the pole; ease in from the walk so there's no snap
+      const want = AJAN_POLE_R;
+      this.danceA += dt * 0.35;
+      const cur = Math.hypot(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
+      const r = cur + (want - cur) * Math.min(1, dt * 2);
+      this.pos.set(POLE_A.x + Math.sin(this.danceA) * r, 6.8, POLE_A.z + Math.cos(this.danceA) * r);
+      // he faces out to the room, pole at his right hand
+      const face = this.danceA + Math.PI / 2 - 0.5;
+      this.ry = this.ry + clamp(angleDiff(this.ry, face), -dt * 3, dt * 3);
+      this.speed = 0;
+      this.anim = 'dance';
+      this.animT = this.danceT;
+      return;
+    }
+    if (this.clubPhase === 'sleep') {
+      this.anim = 'floorsleep';
+      this.speed = 0;
+    }
+  }
+
+  /** The money (and the song) finally gets to him: down on the floor, asleep. */
+  clubSleep() {
+    if (this.state !== 'club' || this.clubPhase === 'sleep') return;
+    this.clubPhase = 'sleep';
+    // sit down just off the platform, facing the room
+    const a = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
+    this.pos.set(POLE_A.x + Math.sin(a) * 1.0, 6.8, POLE_A.z + Math.cos(a) * 1.0);
+    this.ry = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
+    this.anim = 'floorsleep';
+    this.animT = 0;
+  }
+
+  /** Back to the ordinary horror: he's gone from the club and turns up in his own room later. */
+  endClub(delay = 15) {
+    if (this.state !== 'club') return;
+    this.clubPhase = null;
+    this.anim = 'move';
+    this.setState('dormant');
+    this.dormantLeft = this.game.freePlay ? Infinity : delay;
+    this.sleepTimer = 180 + this.rnd() * 60; // he just slept
+  }
+
   /** Hit by the revolver: knocked down for `sec` seconds. Returns false if it can't take effect. */
   stun(sec) {
-    if (['dormant', 'kill', 'drag'].includes(this.state)) return false;
+    if (['dormant', 'kill', 'drag', 'club'].includes(this.state)) return false;
     this.standUp();
     this.target = null;
     this.path = null;

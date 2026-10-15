@@ -137,8 +137,10 @@ class AudioEngine {
       out.connect(panner);
       panner.connect(opts.bus || this.sfxBus);
     } else out.connect(opts.bus || this.sfxBus);
-    if (opts.duration) src.start(0, opts.offset || 0, opts.duration);
-    else src.start(0, opts.offset || 0);
+    // opts.delay (seconds) schedules it on the audio clock, immune to a busy main thread
+    const when = opts.delay > 0 ? this.ctx.currentTime + opts.delay : 0;
+    if (opts.duration) src.start(when, opts.offset || 0, opts.duration);
+    else src.start(when, opts.offset || 0);
     const h = {
       src, gain, panner, filter, ended: false,
       stop: (fade = 0.05) => {
@@ -217,6 +219,16 @@ class AudioEngine {
         lp += (rnd() - lp) * 0.3;
         const env = Math.min(1, t * 25) * (t < 0.45 ? 1 : Math.exp(-(t - 0.45) * 3.2));
         d[i] = (saw * stick * 0.55 + lp * 0.25) * env;
+      }
+    });
+    // Something dropped on the floor: a dull knock and a smaller bounce.
+    this.buffers.thud = mk(0.7, (d, sr) => {
+      let lp = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.08;
+        const hit = (t2, a) => (t2 < 0 ? 0 : (Math.sin(t2 * 2 * Math.PI * (70 + 90 * Math.exp(-t2 * 30))) * 0.9 + lp * 1.6) * Math.exp(-t2 * 22) * a);
+        d[i] = hit(t, 1) + hit(t - 0.17, 0.35) + hit(t - 0.27, 0.12);
       }
     });
     this.buffers.boing = mk(1.1, (d, sr) => {

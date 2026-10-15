@@ -268,7 +268,7 @@ export function buildDecor(h) {
 
   // ======================================================== global: webs & ceiling stains
   for (const r of ROOMS) {
-    if (r.id.startsWith('hall') || r.id === 'uhall') continue;
+    if (r.id.startsWith('hall') || r.id === 'uhall' || r.id === 'club') continue;
     const top = r.L === 3 ? LEVELS[3].y + 2.2 : LEVELS[r.L].top;
     const corners = [[r.x0 + T / 2, r.z0 + T / 2, 1, 1], [r.x1 - T / 2, r.z0 + T / 2, -1, 1], [r.x0 + T / 2, r.z1 - T / 2, 1, -1], [r.x1 - T / 2, r.z1 - T / 2, -1, -1]];
     const want = r.id === 'nursery' ? 4 : r.L === 0 || r.L === 3 ? 3 : 2;

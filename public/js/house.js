@@ -11,6 +11,7 @@ import {
   roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway } from './layout.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
+import { makeStairPieceMesh } from './attic.js';
 
 export { roomAt, SPAWN_POINTS };
 
@@ -21,11 +22,11 @@ const TEX_SCALE = {
   floorBath: 2, floorConcrete: 4, carpet: 2, carpetB: 2, ceiling: 3, wood: 1.2, woodDark: 1.2, woodPale: 1.2,
   fabricRed: 1, fabricGreen: 1, fabricBed: 1.2, metal: 1, frame: 0.6, boardCreak: 1,
   wallRose: 2.4, wallKids: 2.4, wallStripe: 2.4, wallGreenStripe: 2.4, wallDiamond: 2.4, wallPlain: 2.4, wallPanel: 2.4, wallFilth: 2.4,
-  safeSteel: 1, sheet: 1.5, brick: 1.2,
+  safeSteel: 1, sheet: 1.5, brick: 1.2, floorClub: 2, wallClub: 2.4,
 };
 
 // ---------------------------------------------------------------------------
-class GeoBuilder {
+export class GeoBuilder {
   constructor() { this.buckets = new Map(); }
   bucket(key) {
     let b = this.buckets.get(key);
@@ -290,6 +291,7 @@ export class House {
     const G = this.geo;
     for (const r of RAMPS) {
       if (r.outside) { this.buildDriveway(r); continue; }
+      if (r.puzzle) continue; // the attic staircase is built by attic.js once assembled
       const len = Math.abs(r.b - r.a);
       const steps = Math.round(len / 0.28);
       const lo = Math.min(r.ya, r.yb);
@@ -764,6 +766,12 @@ export class House {
     add('base', 3.0, -1.0, 18.5, 0xff3020, 1.4, 7, { always: true, noFixture: true, flicker: 0.2 });
     add('ajanroom', 37.5, 4.2, 6.5, 0xff2010, 1.6, 6, { always: true, noFixture: true, flicker: 0.4 });
     add('attic', 30, 8.7, 15, 0xffb070, 4, 10, { always: true });
+    add('club', 10, 9.2, 14.5, 0x9050ff, 3, 14, { always: true, noFixture: true, flicker: 0.05 });
+    // spotlights over the two poles and the bar
+    add('club', 5.0, 9.15, 17.5, 0xff70c8, 9, 6, { always: true, noFixture: true, flicker: 0.02 });
+    add('club', 8.8, 9.15, 17.5, 0xff5030, 6, 6, { always: true, noFixture: true, flicker: 0.02 });
+    add('club', 8.0, 9.15, 9.8, 0xffc090, 6, 7, { always: true, noFixture: true, flicker: 0.02 });
+    add('club', 15.5, 9.15, 18.5, 0x8040ff, 4, 9, { always: true, noFixture: true, flicker: 0.02 });
     // a lamp over the yard at the top of the driveway
     add('yard', 51, 3.2, 18.5, 0xb8c8ff, 7, 16, { always: true, flicker: 0.3 });
     add('attic', 22, 8.7, 10, 0xffb070, 3, 8, { always: true, flicker: 0.2 });
@@ -1001,6 +1009,8 @@ export function makeItemMesh(type, M) {
       jaw.position.set(0.15, 0.014, s * 0.012);
       g.add(h, jaw);
     }
+  } else if (type === 'stair_lower' || type === 'stair_upper') {
+    return makeStairPieceMesh(M, type === 'stair_upper');
   } else if (type === 'engine') {
     const blk = new THREE.Mesh(new THREE.BoxGeometry(0.55, 0.38, 0.45), M.metal);
     blk.position.y = 0.19;
@@ -1039,7 +1049,7 @@ export function makeItemMesh(type, M) {
     // object.glb is fitted in later (game.js) once the model has loaded
     g.userData.revolver = true;
   } else {
-    const tint = { exit_key: 0x301008, office_key: 0x102030, storage_key: 0x103010, elevator_key: 0x202020, weapon_key: 0x200820 }[type] ?? 0x201505;
+    const tint = { exit_key: 0x301008, office_key: 0x102030, storage_key: 0x103010, elevator_key: 0x202020, weapon_key: 0x200820, attic_key: 0x082020 }[type] ?? 0x201505;
     const mat = M.brass.clone();
     mat.emissive = new THREE.Color(tint);
     const ring = new THREE.Mesh(new THREE.TorusGeometry(0.03, 0.009, 8, 16), mat);
@@ -1051,7 +1061,7 @@ export function makeItemMesh(type, M) {
     const t2 = t1.clone();
     t2.position.x = 0.1;
     g.add(ring, shaft, t1, t2);
-    const tagColor = { exit_key: 0xaa1515, office_key: 0x2050a0, storage_key: 0x2a8a2a, elevator_key: 0xd0b020, weapon_key: 0x7a1aa0 }[type];
+    const tagColor = { exit_key: 0xaa1515, office_key: 0x2050a0, storage_key: 0x2a8a2a, elevator_key: 0xd0b020, weapon_key: 0x7a1aa0, attic_key: 0x10a0a0 }[type];
     if (tagColor) {
       const tag = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.004, 0.04), new THREE.MeshStandardMaterial({ color: tagColor, emissive: new THREE.Color(tagColor).multiplyScalar(0.25) }));
       tag.position.set(-0.055, 0, 0.0);
@@ -1074,8 +1084,12 @@ export const ITEM_SPAWNS = {
   exit_key: [{ pos: [23.75, 0.78, 0.95] }, { pos: [21.9, 0.78, 0.95] }],
   elevator_key: [{ container: 'c_kit1' }, { container: 'c_kit2' }, { container: 'c_desk2' }, { container: 'c_bath' }, { container: 'c_ns1' }],
   // Opens the safe with the revolver; anywhere in the house.
-  weapon_key: [{ container: 'c_nursery' }, { container: 'c_ns_m' }, { container: 'c_guest' }, { pos: [16.2, 4.16, 16.6] }, { pos: [32.2, -2.29, 26.4] }, { pos: [19.2, 7.71, 20.2] }, { pos: [2.5, 0.45, 15.6] }],
+  weapon_key: [{ container: 'c_nursery' }, { container: 'c_ns_m' }, { container: 'c_guest' }, { pos: [16.2, 4.16, 16.6] }, { pos: [32.2, -2.29, 26.4] }, { pos: [26.0, 7.71, 20.3] }, { pos: [2.5, 0.45, 15.6] }],
   revolver: [{ container: 'c_safe' }],
+  // the attic staircase, taken apart: both sections lie side by side in the basement
+  stair_lower: [{ pos: [12.4, -3.2, 24.55] }],
+  stair_upper: [{ pos: [12.4, -3.2, 25.6] }],
+  attic_key: [{ pos: [30.37, 0.9, 20.6] }, { pos: [15.4, 4.16, 4.6] }, { pos: [10.5, 1.32, 18.6] }, { pos: [25.0, 4.7, 19.6] }],
   // car parts for the garage escape (car.js)
   engine: [{ pos: [22.0, -3.2, 21.5] }, { pos: [26.3, 3.4, 3.0] }, { pos: [37.5, 6.8, 17.0] }, { pos: [28.6, 0, 4.6] }],
   wrench: [{ pos: [38.2, -2.3, 26.2] }, { pos: [29.6, 0.97, 18.3] }, { pos: [8.5, 0.85, 7.55] }],

@@ -16,6 +16,20 @@ export const RIG_SPECS = {
     shirt: { yMin: 0.515, yMax: 0.86, xMax: 0.2 },
     pants: { yMin: 0.055, yMax: 0.53, xMax: 0.2 },
   },
+  // Nightclub NPCs (static Tripo meshes, T-pose, facing +Z). Measured from
+  // the vertex profiles of yasmin.glb and bartender.glb.
+  yasmin: {
+    height: 1.0,
+    hipsY: 0.5, spineY: 0.6, chestY: 0.69, neckY: 0.83,
+    shoulderX: 0.14, shoulderY: 0.78, armHalf: 0.035, elbowX: 0.29,
+    legX: 0.045, hipJointY: 0.46, kneeY: 0.26,
+  },
+  bartender: {
+    height: 1.0,
+    hipsY: 0.5, spineY: 0.6, chestY: 0.7, neckY: 0.845,
+    shoulderX: 0.14, shoulderY: 0.8, armHalf: 0.035, elbowX: 0.31,
+    legX: 0.055, hipJointY: 0.46, kneeY: 0.27,
+  },
   ajan: {
     height: 0.696,
     hipsY: 0.29, spineY: 0.37, chestY: 0.45, neckY: 0.555,

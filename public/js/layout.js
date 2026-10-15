@@ -23,7 +23,7 @@ export const RAMPS = [
   // driveway outside the garage door: basement level up to the ground outside
   { id: 'R4', x0: 40.0, x1: 49, z0: 19.4, z1: 22.6, axis: 'x', a: 40.6, ya: BY, b: 49, yb: GY, outside: true },
   // attic stairs upstairs → attic: rises southward
-  { id: 'R3', x0: 20.15, x1: 23.85, z0: 12.5, z1: 19.5, axis: 'z', a: 12.5, ya: UY, b: 19.5, yb: AY },
+  { id: 'R3', puzzle: true, x0: 20.15, x1: 23.85, z0: 12.5, z1: 19.5, axis: 'z', a: 12.5, ya: UY, b: 19.5, yb: AY },
 ];
 export function rampHeight(r, x, z) {
   const c = r.axis === 'x' ? x : z;
@@ -71,6 +71,7 @@ export const ROOMS = [
   { id: 'music', name: 'MUSIC ROOM', L: 2, x0: 24, x1: 30, z0: 11, z1: 21, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'rail' },
   { id: 'sitting', name: 'SITTING ROOM', L: 2, x0: 30, x1: 36, z0: 11, z1: 21, floor: 'floorWood', wall: 'wallStripe', trim: 'wainscot', floors: [[30, 33.4, 11, 21], [33.4, 36, 13.4, 21], [35.8, 36, 11, 13.4]] },
   // ---- attic (safe zone)
+  { id: 'club', name: 'THE CLUB', L: 3, x0: 2, x1: 18, z0: 8, z1: 21, floor: 'floorClub', wall: 'wallClub', trim: 'none', safe: true },
   { id: 'attic', name: 'ATTIC', L: 3, x0: 18, x1: 40, z0: 8, z1: 21, floor: 'floorWood', wall: 'wallBase', safe: true,
     floors: [[18, 20, 8, 21], [20, 24, 8, 11], [24, 33.4, 8, 21], [33.4, 35.8, 8, 11], [33.4, 35.8, 13.4, 21], [35.8, 40, 8, 21]] },
 ];
@@ -154,6 +155,8 @@ export const DOORS = [
   { id: 'd_dress', line: 'z', c: 6.6, a0: 5.5, w: 1.0, swing: 1, y: UY, name: 'Dressing Room Door' },
   { id: 'd_ubin', line: 'x', c: 4.6, a0: 11.9, w: 1.0, swing: -1, y: UY, name: 'Bathroom Door' },
   { id: 'd_sitting', line: 'z', c: 30, a0: 15.0, w: 1.1, swing: 1, y: UY, name: 'Sitting Room Door' },
+  // attic → secret nightclub
+  { id: 'd_club', line: 'z', c: 18, a0: 14.0, w: 1.1, swing: 1, y: AY, name: 'Unmarked Door' },
   // basement
   { id: 'd_workshop', line: 'z', c: 30, a0: 22.0, w: 1.1, swing: 1, y: BY, name: 'Garage Door' },
 ];
@@ -195,7 +198,9 @@ export const WALLS = [
   ['z', 10, 0, 8, UY, 6.4], ['z', 15, 0, 8, UY, 6.4], ['z', 23, 0, 8, UY, 6.4], ['z', 30, 0, 8, UY, 6.4],
   ['z', 10, 11, 21, UY, 6.4], ['z', 20, 11, 21, UY, 6.4], ['z', 24, 11, 21, UY, 6.4],
   // attic
-  ['x', 8, 18, 40, AY, 9], ['x', 21, 18, 40, AY, 9], ['z', 18, 8, 21, AY, 9], ['z', 40, 8, 21, AY, 9],
+  ['x', 8, 18, 40, AY, 9], ['x', 21, 18, 40, AY, 9], ['z', 18, 8, 21, AY, 9.4], ['z', 40, 8, 21, AY, 9],
+  // the secret nightclub behind the attic's west wall
+  ['x', 8, 2, 18, AY, 9.4], ['x', 21, 2, 18, AY, 9.4], ['z', 2, 8, 21, AY, 9.4],
   ['z', 20, 11, 19.5, AY, 7.9], ['z', 24, 11, 19.5, AY, 7.9], ['x', 11, 20, 24, AY, 7.9],
   // elevator shaft (all levels)
   ['x', 11, 33.4, 35.8, BY, 9], ['x', 13.4, 33.4, 35.8, BY, 9], ['z', 33.4, 11, 13.4, BY, 9], ['z', 35.8, 11, 13.4, BY, 9],
