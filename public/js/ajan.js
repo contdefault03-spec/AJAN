@@ -490,47 +490,69 @@ export class AjanBrain {
   }
 
   // ------------------------------------------------------------ the club visit (scripted, host)
-  /** Lured by the music: comes up the attic stairs, through the club door, to his pole. */
+  /** Lured by the music: walks to the attic stairs, climbs them, crosses the attic, comes through the club door to his pole. */
   startClub() {
     if (['kill', 'drag'].includes(this.state)) return false;
     this.standUp();
     this.target = null; this.path = null; this.inspecting = null;
+    const was = this.state;
     this.setState('club');
-    this.clubPhase = 'enter';
     this.clubWp = 0;
-    const [x, z] = AJAN_ROUTE[0];
-    this.pos.set(x, this.clubGround(x, z), z);
-    this.ry = 0;
+    this.clubThen = null;
     this.anim = 'move';
     this.animT = 0;
+    // out of the house (dormant)? He comes in from his room like he always does.
+    if (was === 'dormant' && this.house.ajanBed) { this.pos.copy(this.house.ajanBed.stand); this.ry = Math.PI; }
+    const [x, z] = AJAN_ROUTE[0];
+    const foot = new THREE.Vector3(x, this.clubGround(x, z), z);
+    this.clubT = 0;
+    if (this.pos.distanceTo(foot) > 0.6 && this.moveTo(foot)) this.clubPhase = 'approach';
+    else { this.pos.copy(foot); this.clubPhase = 'enter'; }
     return true;
   }
 
+  /** Floor height along the scripted club route: the upstairs hall, the attic stairs, then the attic. */
   clubGround(x, z) {
     const r = RAMPS.find(q => q.id === 'R3');
-    if (x > r.x0 && x < r.x1 && z > r.a && z < r.b) return rampHeight(r, x, z);
-    return 6.8;
+    if (x >= r.x0 && x <= r.x1 && z >= r.z0 - 0.2 && z <= r.z1 + 0.2) return rampHeight(r, x, z);
+    if (x < r.x0 && z < 11) return r.ya;
+    return r.yb;
+  }
+
+  /** Follow a list of [x, z] waypoints; true when the last one is reached. */
+  walkRoute(route, dt, sp) {
+    const [tx, tz] = route[this.clubWp];
+    const dx = tx - this.pos.x, dz = tz - this.pos.z, d = Math.hypot(dx, dz);
+    if (d < 0.08) { this.clubWp++; if (this.clubWp >= route.length) return true; }
+    else {
+      const step = Math.min(d, sp * dt);
+      this.pos.x += dx / d * step; this.pos.z += dz / d * step;
+      this.speed = sp;
+      this.ry = this.ry + clamp(angleDiff(this.ry, Math.atan2(dx, dz)), -dt * 6, dt * 6);
+    }
+    this.pos.y = this.clubGround(this.pos.x, this.pos.z);
+    this.anim = 'move';
+    return false;
   }
 
   updateClub(dt) {
+    if (this.clubPhase === 'approach') {
+      // through the house to the foot of the attic stairs, on the nav graph
+      this.clubT += dt;
+      const [fx, fz] = AJAN_ROUTE[0];
+      // (if a door or a player is in the way for too long, he still gets there)
+      if (this.step(dt, AJAN.investigate) || this.clubT > 45) { this.pos.set(fx, this.clubGround(fx, fz), fz); this.clubPhase = 'enter'; this.clubWp = 0; }
+      this.anim = 'move';
+      return;
+    }
     if (this.clubPhase === 'enter') {
-      const [tx, tz] = AJAN_ROUTE[this.clubWp];
-      const dx = tx - this.pos.x, dz = tz - this.pos.z, d = Math.hypot(dx, dz);
-      const sp = 1.6;
-      if (d < 0.08) {
-        this.clubWp++;
-        if (this.clubWp >= AJAN_ROUTE.length) { this.clubPhase = 'dance'; this.danceT = 0; this.danceA = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z); }
-      } else {
-        const step = Math.min(d, sp * dt);
-        this.pos.x += dx / d * step; this.pos.z += dz / d * step;
-        this.speed = sp;
-        this.ry = this.ry + clamp(angleDiff(this.ry, Math.atan2(dx, dz)), -dt * 6, dt * 6);
+      if (this.walkRoute(AJAN_ROUTE, dt, 1.6)) {
+        this.clubPhase = 'dance'; this.danceT = 0; this.danceA = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
+        if (this.clubThen) this.leaveClub(this.clubThen); // the money already got to him on the way in
       }
-      this.pos.y = this.clubGround(this.pos.x, this.pos.z);
       // he opens the club door himself on the way through
       const door = this.house.doors.get('d_club');
       if (door && !door.open && Math.hypot(this.pos.x - 18, this.pos.z - 14.55) < 2.2) this.game.broadcast({ k: 'door', id: 'd_club', open: true, by: 'ajan' });
-      this.anim = 'move';
       return;
     }
     if (this.clubPhase === 'dance') {
@@ -549,33 +571,44 @@ export class AjanBrain {
       this.animT = this.danceT;
       return;
     }
-    if (this.clubPhase === 'sleep') {
-      this.anim = 'floorsleep';
-      this.speed = 0;
+    if (this.clubPhase === 'leave') {
+      // back out the way he came: off the dance floor, through the door, down the stairs
+      if (this.walkRoute(this.clubExit, dt, 1.3)) this.finishClub();
     }
   }
 
-  /** The money (and the song) finally gets to him: down on the floor, asleep. */
-  clubSleep() {
-    if (this.state !== 'club' || this.clubPhase === 'sleep') return;
-    this.clubPhase = 'sleep';
-    // sit down just off the platform, facing the room
-    const a = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
-    this.pos.set(POLE_A.x + Math.sin(a) * 1.0, 6.8, POLE_A.z + Math.cos(a) * 1.0);
-    this.ry = Math.atan2(this.pos.x - POLE_A.x, this.pos.z - POLE_A.z);
-    this.anim = 'floorsleep';
-    this.animT = 0;
+  /** The money (and the song) finally gets to him: he wanders off to his own bed to sleep it off. */
+  clubSleep() { this.leaveClub('bed'); }
+
+  /** Leave the club on foot; `then` is 'bed' (sleep it off) or 'patrol' (back to the hunt). */
+  leaveClub(then = 'patrol') {
+    if (this.state !== 'club' || this.clubPhase === 'leave') return;
+    if (this.clubPhase === 'approach' || this.clubPhase === 'enter') {
+      if (then === 'bed' || !this.clubThen) this.clubThen = then;
+      if (this.clubPhase === 'approach') this.finishClub(); // never got upstairs: just carry on
+      return;
+    }
+    this.clubThen = then;
+    this.clubPhase = 'leave';
+    this.clubWp = 0;
+    this.clubExit = AJAN_ROUTE.slice().reverse();
+    this.anim = 'move';
   }
 
-  /** Back to the ordinary horror: he's gone from the club and turns up in his own room later. */
-  endClub(delay = 15) {
-    if (this.state !== 'club') return;
+  /** Back to the ordinary horror at the foot of the attic stairs. */
+  finishClub() {
+    const then = this.clubThen || 'patrol';
     this.clubPhase = null;
+    this.clubThen = null;
+    this.path = null;
     this.anim = 'move';
-    this.setState('dormant');
-    this.dormantLeft = this.game.freePlay ? Infinity : delay;
-    this.sleepTimer = 180 + this.rnd() * 60; // he just slept
+    this.setState('patrol');
+    if (then === 'bed') this.goToBed();
+    else this.pickPatrol();
   }
+
+  /** Everyone left while he was still dancing: he leaves too. */
+  endClub() { this.leaveClub('patrol'); }
 
   /** Hit by the revolver: knocked down for `sec` seconds. Returns false if it can't take effect. */
   stun(sec) {

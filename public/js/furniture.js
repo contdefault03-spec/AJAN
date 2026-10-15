@@ -360,7 +360,7 @@ function buildBasement(h) {
 function buildAttic(h) {
   const G = h.geo;
   G.box(26, AY + 0.002, 15.5, 34, AY + 0.008, 19.8, 'carpet');
-  G.box(19, AY + 0.002, 9, 26, AY + 0.008, 12, 'carpetB');
+  G.box(19, AY + 0.002, 11.4, 26, AY + 0.008, 14.2, 'carpetB');
   // TV stand for the cinema TV (props.js builds the set)
   h.furnitureBox(28.6, AY, 20.2, 31.4, AY + 0.55, 20.9, 'woodDark');
   h.anchors.cinema = new THREE.Vector3(30, AY + 0.55, 20.55);
@@ -369,7 +369,7 @@ function buildAttic(h) {
   G.box(28.0, AY + 0.45, 16.0, 32.0, AY + 0.95, 16.25, 'fabricRed');
   h.chair(26.8, 17.5, AY, 'woodPale');
   h.chair(33.2, 17.5, AY, 'woodPale');
-  for (const [x, z, s] of [[19.0, 9.0, 0.8], [26.0, 20.3, 0.9], [38.8, 9.2, 0.9], [38.6, 20.0, 0.8], [25.4, 9.0, 0.6], [39.0, 15.0, 0.7]]) h.furnitureBox(x - s / 2, AY, z - s / 2, x + s / 2, AY + s, z + s / 2, 'woodPale');
+  for (const [x, z, s] of [[19.0, 9.0, 0.8], [26.0, 20.3, 0.9], [38.8, 9.2, 0.9], [38.6, 20.0, 0.8], [27.2, 9.0, 0.6], [39.0, 15.0, 0.7]]) h.furnitureBox(x - s / 2, AY, z - s / 2, x + s / 2, AY + s, z + s / 2, 'woodPale');
   h.furnitureBox(36.5, AY, 10.0, 37.5, AY + 0.3, 12.0, 'fabricBed');
   h.painting(18.12, AY + 1.1, 11.2, '+x', 0.5, 0.7);
 }

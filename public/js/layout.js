@@ -22,9 +22,12 @@ export const RAMPS = [
   { id: 'R2', x0: 36.15, x1: 39.85, z0: 13, z1: 19.5, axis: 'z', a: 19.5, ya: GY, b: 13, yb: UY },
   // driveway outside the garage door: basement level up to the ground outside
   { id: 'R4', x0: 40.0, x1: 49, z0: 19.4, z1: 22.6, axis: 'x', a: 40.6, ya: BY, b: 49, yb: GY, outside: true },
-  // attic stairs upstairs → attic: rises southward
-  { id: 'R3', puzzle: true, x0: 20.15, x1: 23.85, z0: 12.5, z1: 19.5, axis: 'z', a: 12.5, ya: UY, b: 19.5, yb: AY },
+  // attic stairs: in the middle of the upstairs hall, along its south wall, rising eastward
+  { id: 'R3', puzzle: true, x0: 20.0, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 20.0, ya: UY, b: 25.5, yb: AY },
 ];
+// The hole in the attic floor above the attic stairs (closed by the trapdoor).
+export const ATTIC_OPENING = { x0: 21.8, x1: 25.5, z0: 9.5, z1: 11 };
+
 export function rampHeight(r, x, z) {
   const c = r.axis === 'x' ? x : z;
   let t = (c - r.a) / (r.b - r.a);
@@ -65,7 +68,8 @@ export const ROOMS = [
   { id: 'guest', name: 'GUEST ROOM', L: 2, x0: 15, x1: 23, z0: 0, z1: 8, floor: 'carpetB', wall: 'wallC', trim: 'rail' },
   { id: 'storage', name: 'STORAGE ROOM', L: 2, x0: 23, x1: 30, z0: 0, z1: 8, floor: 'floorWoodDark', wall: 'wallBase', trim: 'none' },
   { id: 'ajanroom', name: '???', L: 2, x0: 30, x1: 40, z0: 0, z1: 8, floor: 'floorWoodDark', wall: 'wallFilth', trim: 'base' },
-  { id: 'uhall', name: 'UPSTAIRS HALL', L: 2, x0: 0, x1: 40, z0: 8, z1: 11, floor: 'floorWood', wall: 'wallC', trim: 'wainscot' },
+  { id: 'uhall', name: 'UPSTAIRS HALL', L: 2, x0: 0, x1: 40, z0: 8, z1: 11, floor: 'floorWood', wall: 'wallC', trim: 'wainscot',
+    ceilings: [[0, 21.8, 8, 11], [21.8, 25.5, 8, 9.5], [25.5, 40, 8, 11]] },
   { id: 'nursery', name: 'NURSERY', L: 2, x0: 0, x1: 10, z0: 11, z1: 21, floor: 'carpetB', wall: 'wallKids', trim: 'wainscotPale' },
   { id: 'library', name: 'LIBRARY', L: 2, x0: 10, x1: 20, z0: 11, z1: 21, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'wainscot' },
   { id: 'music', name: 'MUSIC ROOM', L: 2, x0: 24, x1: 30, z0: 11, z1: 21, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'rail' },
@@ -73,7 +77,7 @@ export const ROOMS = [
   // ---- attic (safe zone)
   { id: 'club', name: 'THE CLUB', L: 3, x0: 2, x1: 18, z0: 8, z1: 21, floor: 'floorClub', wall: 'wallClub', trim: 'none', safe: true },
   { id: 'attic', name: 'ATTIC', L: 3, x0: 18, x1: 40, z0: 8, z1: 21, floor: 'floorWood', wall: 'wallBase', safe: true,
-    floors: [[18, 20, 8, 21], [20, 24, 8, 11], [24, 33.4, 8, 21], [33.4, 35.8, 8, 11], [33.4, 35.8, 13.4, 21], [35.8, 40, 8, 21]] },
+    floors: [[18, 21.8, 8, 21], [21.8, 25.5, 8, 9.5], [21.8, 25.5, 11, 21], [25.5, 33.4, 8, 21], [33.4, 35.8, 8, 11], [33.4, 35.8, 13.4, 21], [35.8, 40, 8, 21]] },
 ];
 
 // Multi-level shafts (checked before ordinary rooms)
@@ -81,7 +85,7 @@ export const SHAFTS = [
   { id: 'elevator', name: 'ELEVATOR', x0: 33.4, x1: 35.8, z0: 11, z1: 13.4, yMin: -4, yMax: 10 },
   { id: 'stairB', name: 'STAIRWELL', x0: 11, x1: 17, z0: 17, z1: 21, yMin: -4, yMax: 1.9, floors: { 1: [[16, 17.2, 17, 21]] } },
   { id: 'stairU', name: 'STAIRCASE', x0: 36, x1: 40, z0: 11, z1: 21, yMin: -0.5, yMax: 5.3, floors: { 1: [[36, 40, 19.5, 21]], 2: [[36, 40, 11, 13]] } },
-  { id: 'stairA', name: 'ATTIC STAIRS', x0: 20, x1: 24, z0: 11, z1: 21, yMin: 1.9, yMax: 10, safeAbove: 3.9, floors: { 2: [[20, 24, 11, 12.5]], 3: [[20, 24, 19.5, 21]] } },
+  { id: 'stairA', name: 'ATTIC STAIRS', x0: 20, x1: 25.5, z0: 9.45, z1: 11, yMin: 3.9, yMax: 6.6 },
 ];
 
 export function roomAt(x, z, y = 0) {
@@ -113,7 +117,8 @@ export function floorAt(L, x, z) {
 /** True for positions Ajan must never enter or attack (attic + attic stairs). */
 export function isSafeZone(p) {
   if (levelIndex(p.y) === 3) return true;
-  return p.x > 20 && p.x < 24 && p.z > 11 && p.z < 21 && p.y > 3.0;
+  // the upper steps of the attic stairs count as the attic
+  return p.x > 21.0 && p.x < 25.6 && p.z > 9.45 && p.z < 11 && p.y > 4.0;
 }
 
 // Doors: line 'x' = wall runs along X at z=c; line 'z' = wall runs along Z at x=c. y = floor level.
@@ -142,7 +147,6 @@ export const DOORS = [
   { id: 'd_ajan', line: 'x', c: 8, a0: 34.2, w: 1.1, swing: -1, y: UY, name: 'Door' },
   { id: 'd_nursery', line: 'x', c: 11, a0: 4.5, w: 1.1, swing: 1, y: UY, name: 'Nursery Door' },
   { id: 'd_library', line: 'x', c: 11, a0: 14.5, w: 1.1, swing: 1, y: UY, name: 'Library Door' },
-  { id: 'd_attic', line: 'x', c: 11, a0: 21.45, w: 1.1, swing: -1, y: UY, name: 'Attic Door', ajanBlocked: true },
   { id: 'd_music', line: 'x', c: 11, a0: 27.5, w: 1.1, swing: 1, y: UY, name: 'Music Room Door' },
   // new interior doors (smaller rooms)
   { id: 'd_wardrobe', line: 'z', c: 5.6, a0: 5.7, w: 1.0, swing: 1, y: GY, name: 'Wardrobe Door' },
@@ -201,7 +205,8 @@ export const WALLS = [
   ['x', 8, 18, 40, AY, 9], ['x', 21, 18, 40, AY, 9], ['z', 18, 8, 21, AY, 9.4], ['z', 40, 8, 21, AY, 9],
   // the secret nightclub behind the attic's west wall
   ['x', 8, 2, 18, AY, 9.4], ['x', 21, 2, 18, AY, 9.4], ['z', 2, 8, 21, AY, 9.4],
-  ['z', 20, 11, 19.5, AY, 7.9], ['z', 24, 11, 19.5, AY, 7.9], ['x', 11, 20, 24, AY, 7.9],
+  // railings round the attic stairwell opening (the trapdoor side is open; the open hatch closes it)
+  ['x', 9.5, 21.8, 25.5, AY, 7.85], ['z', 21.8, 9.5, 11, AY, 7.85],
   // elevator shaft (all levels)
   ['x', 11, 33.4, 35.8, BY, 9], ['x', 13.4, 33.4, 35.8, BY, 9], ['z', 33.4, 11, 13.4, BY, 9], ['z', 35.8, 11, 13.4, BY, 9],
   // basement

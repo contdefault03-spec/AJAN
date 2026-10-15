@@ -457,7 +457,7 @@ export class Props {
     this.mirror = { cv, tex, index: -1 };
     this.setMirror(0);
     // Redraw once the horror font is available to the canvas.
-    document.fonts?.load('80px "Creepster"').then(() => { const i = this.mirror.index; this.mirror.index = -1; this.setMirror(i); }).catch(() => {});
+    document.fonts?.load('80px "Lacquer"').then(() => { const i = this.mirror.index; this.mirror.index = -1; this.setMirror(i); }).catch(() => {});
   }
 
   setMirror(i) {
@@ -471,7 +471,7 @@ export class Props {
     g.textAlign = 'center';
     lines.forEach((ln, k) => {
       const size = lines.length > 2 ? 104 : 118;
-      g.font = `${size}px "Creepster", "Chiller", Impact, fantasy`;
+      g.font = `${size}px "Lacquer", "Chiller", fantasy`;
       const y = (lines.length > 2 ? 110 : 160) + k * (size + 14);
       g.save();
       g.translate(256, y);

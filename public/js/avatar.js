@@ -54,7 +54,7 @@ gl_FragColor.rgb += dEdge * vec3(1.6, 0.35, 0.08);`);
  * Restrained secondary motion (soft-tissue follow-through) for a dancing
  * character: small spring-driven offsets applied after skinning to two soft
  * regions of the rest mesh (upper chest front, seat at the back). The offsets are
- * a few millimetres, so the mesh, clothing and silhouette are never distorted.
+ * at most ~2.7 cm (clamped in club.js), so the mesh and clothing never tear or warp.
  * club.js drives uJigC / uJigB (mesh-local units) from the body's motion.
  */
 function addSecondaryMotion(mat, uniforms) {

@@ -317,7 +317,7 @@ export class Game {
         if (e.code === 'Escape') { this.closeDrinkMenu(true); return; }
       }
       if (e.code === 'KeyG' && !e.repeat && !this.drinkMenuOpen && !$('noteView').classList.contains('show')) this.dropSelected();
-      if (e.code === 'Space' && this.local.hidden?.type === 'clubseat' && !e.repeat) { this.request({ k: 'hide', id: 'club_seat', enter: false }); return; }
+      if (e.code === 'Space' && this.local.hidden?.type === 'clubseat' && !e.repeat) { this.request({ k: 'hide', id: this.local.hidden.id, enter: false }); return; }
       // In the driver's seat: W floors it (if the car is fixed).
       if (e.code === 'KeyW' && !e.repeat && this.local.hidden?.seat === 'driver' && this.car.state === 'parked' && !this.localDead) this.request({ k: 'drive' });
       // Inside the elevator car, 1–4 pick a floor (B, ground, upstairs, attic).
@@ -1334,7 +1334,7 @@ export class Game {
         this.local.hideLook = 0;
         this.local.pitch = 0;
         $('hideOverlay').classList.toggle('car', h.type === 'seat' || h.type === 'clubseat');
-        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? 'AT YASMIN\'S TABLE — aim and press [E] to make it rain  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
+        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? (h.id === 'club_seat2' ? 'AT AJAN\'S POLE' : 'AT YASMIN\'S TABLE') + ' — aim and press [E] to make it rain  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
         $('hideOverlay').classList.add('show');
       }
     } else {

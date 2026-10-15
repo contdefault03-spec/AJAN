@@ -173,8 +173,11 @@ export class Screens {
    * screens matter so we don't waste GPU time.
    */
   update(dt, time, renderer, scene, viewerPos, timeStr) {
-    const nearSec = viewerPos.x > 20 && viewerPos.z < 11 && viewerPos.y > -1;
-    const nearTV = viewerPos.x < 12 && viewerPos.z > 9 && viewerPos.y > -1;
+    // only on the ground floor (the security room and the living room TV are both down there);
+    // without the level check the feeds rendered every frame upstairs and in the attic too
+    const ground = viewerPos.y > -1 && viewerPos.y < 1.9;
+    const nearSec = ground && viewerPos.x > 20 && viewerPos.z < 11;
+    const nearTV = ground && viewerPos.x < 12 && viewerPos.z > 9;
     const want = new Set();
     if (nearSec && this.house.power) this.monitorSel.forEach(i => want.add(i));
     if (nearTV && this.tv.mode === 'cam') want.add(this.tv.content % this.cams.length);

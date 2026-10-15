@@ -245,10 +245,8 @@ export class House {
     // ---------------- floors, ceilings, baseboards
     for (const r of ROOMS) {
       const L = LEVELS[r.L];
-      for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) {
-        G.plane(r.floor, x0, z0, x1, z1, L.y, true);
-        if (r.L !== 3) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
-      }
+      for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane(r.floor, x0, z0, x1, z1, L.y, true);
+      if (r.L !== 3) for (const [x0, x1, z0, z1] of (r.ceilings || r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
     }
     // Shaft landings and ceilings
     G.plane('floorWoodDark', 16, 17, 17, 21, 0, true);
@@ -256,8 +254,6 @@ export class House {
     G.plane('floorWoodDark', 36, 19.5, 40, 21, 0, true);
     G.plane('floorWood', 36, 11, 40, 13, 3.4, true);
     G.plane('ceiling', 36, 11, 40, 21, 6.4, false);
-    G.plane('floorWoodDark', 20, 11, 24, 12.5, 3.4, true);
-    G.plane('floorWood', 20, 19.5, 24, 21, 6.8, true);
     this.buildStairs();
     this.buildAtticRoof();
     this.buildFloorboards();
@@ -291,7 +287,11 @@ export class House {
     const G = this.geo;
     for (const r of RAMPS) {
       if (r.outside) { this.buildDriveway(r); continue; }
-      if (r.puzzle) continue; // the attic staircase is built by attic.js once assembled
+      if (r.puzzle) {
+        // the attic staircase is built by attic.js once assembled; Ajan's patrols never use its footprint
+        this.collider(r.x0 - 0.1, r.z0 - 0.15, r.x1 + 0.1, r.z1, r.ya, r.ya + 2.4, { ajanOnly: true });
+        continue;
+      }
       const len = Math.abs(r.b - r.a);
       const steps = Math.round(len / 0.28);
       const lo = Math.min(r.ya, r.yb);
@@ -776,7 +776,7 @@ export class House {
     add('yard', 51, 3.2, 18.5, 0xb8c8ff, 7, 16, { always: true, flicker: 0.3 });
     add('attic', 22, 8.7, 10, 0xffb070, 3, 8, { always: true, flicker: 0.2 });
     add('attic', 37, 8.7, 18, 0xffb070, 3, 8, { always: true });
-    add('stairA', 22, 8.4, 17, 0xffb070, 2.5, 7, { always: true });
+    add('uhall', 23.6, U, 9.0, 0xffc98a, 4, 8);
   }
 
   createLightPool(n) {

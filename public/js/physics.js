@@ -15,8 +15,10 @@ export function groundAt(x, z, y) {
     const r = RAMPS[i];
     if (r.disabled) continue; // e.g. the attic stairs before they're assembled
     if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) {
-      const lo = Math.min(r.ya, r.yb), hi = Math.max(r.ya, r.yb);
-      if (y >= lo - 1.0 && y <= hi + 1.0) return rampHeight(r, x, z);
+      // only when you're actually on (or just above / below) the steps here — not on a floor
+      // that passes over or under this part of the staircase
+      const h = rampHeight(r, x, z);
+      if (y >= h - 1.0 && y <= h + 0.9) return h;
     }
   }
   for (let L = levelIndex(y + 0.6); L >= 0; L--) {

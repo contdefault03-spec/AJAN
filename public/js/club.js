@@ -25,12 +25,17 @@ export const RAIN_COST = 20;
 export const START_MONEY = 500;
 const SEAT = new THREE.Vector3(5.0, AY, 15.3);
 const TABLE = new THREE.Vector3(5.0, AY, 16.05);
+// a second table and chair, right in front of AJAN's pole
+const SEAT2 = new THREE.Vector3(8.8, AY, 15.3);
+const TABLE2 = new THREE.Vector3(8.8, AY, 16.05);
+export const CLUB_SEATS = ['club_seat', 'club_seat2'];
 const FAI_HOME = new THREE.Vector3(8.0, AY, 9.3);
 const COUNTER_Y = AY + 1.1, COUNTER_Z = 10.3;
-// AJAN's way in: up the last stretch of the attic stairs, across the attic,
-// through the club door and across the dance floor to his pole.
+// AJAN's way in (after walking through the house to the foot of the attic stairs):
+// up the stairs in the upstairs hall, across the attic, through the club door and
+// across the dance floor to his pole. He leaves the same way, reversed.
 export const AJAN_ROUTE = [
-  [22.0, 15.2], [22.0, 19.9], [20.6, 20.35], [19.05, 19.3], [19.05, 14.55], [18.6, 14.55], [17.2, 14.55], [14.2, 15.8], [11.0, 17.2], [9.4, 17.6],
+  [19.2, 10.25], [20.0, 10.25], [25.9, 10.25], [26.6, 10.25], [26.6, 12.3], [19.6, 14.55], [18.6, 14.55], [17.2, 14.55], [14.2, 15.8], [11.0, 17.2], [9.4, 17.6],
 ];
 export const AJAN_POLE_R = 0.72;
 
@@ -164,16 +169,18 @@ export class Club {
       this.group.add(plat, ring, p);
       col(pole.x - 0.07, pole.z - 0.07, pole.x + 0.07, pole.z + 0.07, TOP - AY);
     }
-    // ---- Yasmin's table and the chair in front of it
-    const tbl = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 24), M.woodDark); tbl.position.set(TABLE.x, AY + 0.74, TABLE.z);
-    const tleg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.12, 0.74, 10), M.metal); tleg.position.set(TABLE.x, AY + 0.37, TABLE.z);
-    this.group.add(tbl, tleg);
-    col(TABLE.x - 0.36, TABLE.z - 0.36, TABLE.x + 0.36, TABLE.z + 0.36, 0.76);
-    const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 10), new THREE.MeshStandardMaterial({ color: 0xff3060, emissive: 0x801030 })); candle.position.set(TABLE.x + 0.15, AY + 0.795, TABLE.z); this.group.add(candle);
-    G.box(SEAT.x - 0.25, AY + 0.45, SEAT.z - 0.25, SEAT.x + 0.25, AY + 0.52, SEAT.z + 0.25, 'fabricRed');
-    for (const [dx, dz] of [[-0.22, -0.22], [0.18, -0.22], [-0.22, 0.18], [0.18, 0.18]]) G.box(SEAT.x + dx, AY, SEAT.z + dz, SEAT.x + dx + 0.04, AY + 0.45, SEAT.z + dz + 0.04, 'metal');
-    G.box(SEAT.x - 0.25, AY + 0.52, SEAT.z - 0.27, SEAT.x + 0.25, AY + 1.1, SEAT.z - 0.22, 'fabricRed');
-    col(SEAT.x - 0.27, SEAT.z - 0.27, SEAT.x + 0.27, SEAT.z + 0.27, 0.9);
+    // ---- a table with a chair in front of each pole (Yasmin's, and AJAN's)
+    for (const [T, S] of [[TABLE, SEAT], [TABLE2, SEAT2]]) {
+      const tbl = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.04, 24), M.woodDark); tbl.position.set(T.x, AY + 0.74, T.z);
+      const tleg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.12, 0.74, 10), M.metal); tleg.position.set(T.x, AY + 0.37, T.z);
+      this.group.add(tbl, tleg);
+      col(T.x - 0.36, T.z - 0.36, T.x + 0.36, T.z + 0.36, 0.76);
+      const candle = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 0.07, 10), new THREE.MeshStandardMaterial({ color: 0xff3060, emissive: 0x801030 })); candle.position.set(T.x + 0.15, AY + 0.795, T.z); this.group.add(candle);
+      G.box(S.x - 0.25, AY + 0.45, S.z - 0.25, S.x + 0.25, AY + 0.52, S.z + 0.25, 'fabricRed');
+      for (const [dx, dz] of [[-0.22, -0.22], [0.18, -0.22], [-0.22, 0.18], [0.18, 0.18]]) G.box(S.x + dx, AY, S.z + dz, S.x + dx + 0.04, AY + 0.45, S.z + dz + 0.04, 'metal');
+      G.box(S.x - 0.25, AY + 0.52, S.z - 0.27, S.x + 0.25, AY + 1.1, S.z - 0.22, 'fabricRed');
+      col(S.x - 0.27, S.z - 0.27, S.x + 0.27, S.z + 0.27, 0.9);
+    }
     // ---- lounge: booths along the west wall, sofas by the south wall, DJ booth, speakers
     for (const z0 of [9.2, 12.4]) {
       G.box(2.1, AY, z0, 2.9, AY + 0.45, z0 + 2.4, 'fabricRed'); G.box(2.1, AY + 0.45, z0, 2.35, AY + 1.1, z0 + 2.4, 'fabricRed');
@@ -195,16 +202,22 @@ export class Club {
     this.group.add(ball, wire);
     this.ball = ball;
     // moving coloured lights (only lit while someone is up here)
-    this.lights = [0xff2080, 0x20c0ff, 0xffd020].map(c => { const l = new THREE.PointLight(c, 0, 9, 1.4); this.group.add(l); return l; });
+    // (kept in the scene permanently, only dimmed: toggling lights in and out changes the
+    // light count, which makes three.js recompile every material — a long hitch)
+    this.lights = [0xff2080, 0x20c0ff, 0xffd020].map(c => { const l = new THREE.PointLight(c, 0, 9, 1.4); l.position.set(12.8, TOP - 0.4, 14.6); H.group.add(l); return l; });
     for (const m of G.build(M)) { this.group.add(m); H.staticMeshes.push(m); }
-    // seat: a hiding-spot style seat (synced occupancy), facing Yasmin's pole
-    const spot = { id: 'club_seat', type: 'clubseat', doors: [], open: 0, target: 0, inside: SEAT.clone(), exit: new THREE.Vector3(SEAT.x, AY, SEAT.z - 0.95), yaw: Math.PI, camY: 1.12, occupant: null, label: 'SIT AT YASMIN\'S TABLE' };
-    H.hides.set(spot.id, spot);
-    const pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.6), new THREE.MeshBasicMaterial({ visible: false }));
-    pick.position.set(SEAT.x, AY + 0.6, SEAT.z);
-    this.group.add(pick);
-    H.register('club_seat', 'hide', [pick], SEAT.clone().add(new THREE.Vector3(0, 0.6, 0)), { spot });
-    this.seat = spot;
+    // seats: hiding-spot style (synced occupancy), each facing its pole
+    this.seats = [];
+    for (const [id, S, label] of [['club_seat', SEAT, 'SIT AT YASMIN\'S TABLE'], ['club_seat2', SEAT2, 'SIT IN FRONT OF AJAN\'S POLE']]) {
+      const spot = { id, type: 'clubseat', doors: [], open: 0, target: 0, inside: S.clone(), exit: new THREE.Vector3(S.x, AY, S.z - 0.95), yaw: Math.PI, camY: 1.12, occupant: null, label };
+      H.hides.set(spot.id, spot);
+      const pick = new THREE.Mesh(new THREE.BoxGeometry(0.6, 1.0, 0.6), new THREE.MeshBasicMaterial({ visible: false }));
+      pick.position.set(S.x, AY + 0.6, S.z);
+      this.group.add(pick);
+      H.register(id, 'hide', [pick], S.clone().add(new THREE.Vector3(0, 0.6, 0)), { spot });
+      this.seats.push(spot);
+    }
+    this.seat = this.seats[0];
     this.group.updateMatrixWorld(true);
   }
 
@@ -274,7 +287,7 @@ export class Club {
     this._set3(av, 'upperL', pause ? 0 : Math.sin(beat / 2) * 0.4, -0.2, pause ? -1.1 : -0.45 + Math.sin(beat / 4) * 0.5, k);
     this._set3(av, 'foreL', 0, pause ? -0.2 : -0.6 - Math.sin(beat / 2) * 0.4, 0, k);
     av.body.position.y = damp(av.body.position.y, -0.02 - Math.abs(step) * 0.035 + spin * 0.02, 10, dt);
-    // restrained soft-tissue follow-through: springs driven by the body's vertical/lateral motion
+    // soft-tissue follow-through: springs driven by the body's vertical/lateral motion
     const J = this.yasJig;
     av.mesh.updateMatrixWorld(true);
     const hp = av.bones.hips.getWorldPosition(new THREE.Vector3());
@@ -282,15 +295,21 @@ export class Club {
       const v = hp.clone().sub(J.last).divideScalar(dt);
       const acc = v.clone().sub(J.lastV).divideScalar(dt).clampLength(0, 30);
       J.lastV.copy(v);
+      // her steps land on the beat: a bounce on every step, a softer sway with the hips
+      const drive = pause ? 0.35 : 1;
+      acc.y += drive * 1.8 * Math.sin(beat);
+      acc.x += drive * 0.9 * Math.cos(beat / 2);
       // to the mesh's local frame (the avatar only rotates about y)
       const c = Math.cos(-av.group.rotation.y), s = Math.sin(-av.group.rotation.y);
       const ax = acc.x * c - acc.z * s, az = acc.x * s + acc.z * c;
-      for (const [o, ov, K, D, gain] of [[J.c, J.cv, 140, 9, 0.00004], [J.b, J.bv, 110, 8, 0.00005]]) {
+      // softer, bouncier springs (less damping, more drive) for a livelier follow-through
+      // (gain is metres of sway per m/s² of hip acceleration; her dance bob is ~5 m/s²)
+      for (const [o, ov, K, D, gain] of [[J.c, J.cv, 95, 3.2, 0.0024], [J.b, J.bv, 80, 3.0, 0.0028]]) {
         ov.x += (-K * o.x - D * ov.x - ax * gain * K) * dt;
         ov.y += (-K * o.y - D * ov.y - acc.y * gain * K) * dt;
         ov.z += (-K * o.z - D * ov.z - az * gain * K) * dt;
         o.addScaledVector(ov, dt);
-        o.clampLength(0, 0.006); // never more than ~1 cm on the real character
+        o.clampLength(0, 0.016); // capped at ~2.7 cm on the real character: bouncy, never deforming
       }
     }
     J.last = hp;
@@ -555,7 +574,7 @@ export class Club {
   // ------------------------------------------------------------ host: money and the AJAN visit
   hostRain(pid, target) {
     const G = this.game, p = G.players.get(pid), b = G.brain;
-    if (!p || !p.alive || !p.hidden || p.hideId !== 'club_seat') return;
+    if (!p || !p.alive || !p.hidden || !CLUB_SEATS.includes(p.hideId)) return;
     const now = Date.now();
     this.lastRain = this.lastRain || new Map();
     if (now - (this.lastRain.get(pid) || 0) < 650) return; // one throw at a time
@@ -585,15 +604,13 @@ export class Club {
     if (this.ajanDueAt && now >= this.ajanDueAt) {
       if (b.startClub()) { this.ajanDueAt = 0; G.broadcast({ k: 'clubsnd', s: 'ajanenters' }); } else this.ajanDueAt = now + 1000;
     }
-    if (this.ajanSleepAt && now >= this.ajanSleepAt && b.state === 'club') { b.clubSleep(); this.ajanSleepAt = 0; }
+    // the nap timer: he wanders off to his own bed (never just drops by the pole)
+    if (this.ajanSleepAt && now >= this.ajanSleepAt && b.state === 'club') { b.clubSleep(); this.ajanSleepAt = 0; G.broadcast({ k: 'clubsnd', s: 'ajanleaves' }); }
     const up = [...G.players.values()].some(p => p.alive && !p.escaped && p.pos && p.pos.y > 5.6);
     this.emptyFor = up ? 0 : (this.emptyFor || 0) + dt;
     if (this.emptyFor > 10) this.visitYasmin = false; // a fresh visit next time
-    if (b.state === 'club') {
-      // once everyone has left the attic, the nightmare picks up where it left off
-      if (b.clubPhase === 'sleep' && this.emptyFor > 3) b.endClub(15);
-      else if (b.clubPhase !== 'sleep' && this.emptyFor > 30) b.endClub(5);
-    }
+    // everyone left the attic while he was still dancing: he leaves too and the hunt resumes
+    if (b.state === 'club' && b.clubPhase === 'dance' && this.emptyFor > 30) b.endClub();
   }
 
   applyRain(e) {
@@ -618,7 +635,8 @@ export class Club {
       audio.play('yasmin', { pos: this.yasminTarget(), vol: 1.0, ref: 3, rolloff: 1.2, delay });
     }
     if (e.s === 'ajanmoney' && here) audio.play('sleep', { pos: G.ajanVis.pos.clone().add(new THREE.Vector3(0, 1.6, 0)), vol: 1.1, ref: 3, duration: 3 });
-    if (e.s === 'ajanenters' && G.camera.position.y > 5.6) G.message('Heavy footsteps on the attic stairs…', 4);
+    if (e.s === 'ajanenters' && G.camera.position.y > 5.6) G.message('Heavy footsteps somewhere below… coming this way.', 4);
+    if (e.s === 'ajanleaves' && here) G.message('AJAN yawns, waves the money away and shuffles off to bed…', 4);
   }
 
   // ------------------------------------------------------------ per frame
