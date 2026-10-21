@@ -282,3 +282,14 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 .peepView.show { display: block; }
 .peepView.scare { background: radial-gradient(circle at 50% 50%, rgba(255, 0, 0, 0.25) 0, transparent 27vmin, rgba(0, 0, 0, 0.55) 31vmin, #000 34vmin); }
 #hud.peeping > *:not(.peepView) { visibility: hidden; }
+
+.camHud { position: absolute; left: 24px; top: 140px; display: none; font-size: 22px; color: #fff; text-shadow: 0 0 6px #000; }
+.camHud.show { display: block; }
+.camHud span { display: block; font-size: 15px; color: #bbb; }
+.camHud .recDot { color: #ff2a2a; animation: blink 1s steps(2) infinite; }
+@keyframes blink { 50% { opacity: 0; } }
+.clipReview { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 80; background: rgba(10, 4, 4, 0.96); border: 2px solid #a01818; padding: 16px; display: flex; flex-direction: column; gap: 10px; align-items: center; max-width: calc(100vw - 32px); }
+.clipReview video { width: min(640px, 86vw); background: #000; }
+.clipReview .crTitle { font-size: 30px; color: #e03030; letter-spacing: 0.15em; }
+.clipReview .crRow { display: flex; gap: 12px; }
+.clipReview .crNote { font-size: 16px; color: #aaa; }

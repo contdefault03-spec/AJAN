@@ -68,6 +68,10 @@ Single-player runs entirely in your browser. The server only serves files and re
 - **Ajan's private dance:** at his club table while he's at his pole, **Q** ($50) makes him do Yasmin's private-dance routine.
 - **Garden and well:** climb out through the window in the child's bedroom (ground floor, north side). The well's crank lever is hidden somewhere in the house: fit it, crank the bucket up and take what's inside. Ajan has his own garden door; you can't open it.
 - **Security office** (east wing, ground floor): **E** on the red button slams the steel shutter down or lifts it, the yellow button lights the hall outside the window for a few seconds, and the desk is a CCTV console (A/D or the wheel to switch cameras, E or Esc to stand up). If Ajan chases you in and the shutter is down, he knocks, looks in through the window, grins and leaves.
+- **Third floor:** up the stairs in Ajan's room: hall, doll room, old bathroom, chapel, painting studio, sewing room, observatory, a balcony over the garden and a roof terrace.
+- **Secret passages:** some bookcases aren't bookcases. Look for a red book that sticks out, a coat hook in the wardrobe, or a candlestick on the chapel altar.
+- **Peepholes:** **E** on a door that opens onto a hallway to look through it (E, Esc or move to stop). Don't stare too long if something is walking the hall.
+- **Camcorder:** on the back-room table. With it in hand: **R** record or pause, **Z/X** zoom, **V** selfie, **T** light. At the end you can watch the tape and save it.
 - See `CHECKLIST.md` for what has been tested and what is still to do.
 
 ## Difficulty

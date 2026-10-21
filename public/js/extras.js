@@ -12,6 +12,8 @@ import { SlotMachine } from './slots.js';
 import { Garden } from './garden.js';
 import { Security } from './security.js';
 import { Passages } from './passages.js';
+import { Skinwalker } from './skinwalker.js';
+import { Camcorder } from './camcorder.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const BY = -3.2, U = 3.4, AY = 6.8;
@@ -194,6 +196,9 @@ export class Extras {
     this.security.init();
     this.passages = new Passages(G);
     this.passages.init();
+    this.skin = new Skinwalker(G);
+    this.cam = new Camcorder(G);
+    await this.cam.init();
     this.buildUI();
   }
 
@@ -259,7 +264,7 @@ export class Extras {
   // ======================================================================= events
   event(e) {
     const G = this.game;
-    if (this.garden.event(e) || this.security.event(e) || this.passages.event(e)) return true;
+    if (this.garden.event(e) || this.security.event(e) || this.passages.event(e) || this.skin.event(e)) return true;
     switch (e.k) {
       case 'freed': {
         const fp = G.players.get(e.pid);
@@ -406,6 +411,9 @@ export class Extras {
     this.garden.update(dt);
     this.security.update(dt);
     this.passages.update(dt);
+    this.skin.hostTick();
+    this.skin.update(dt);
+    this.cam.update(dt);
     // --- HUD: lives, coming back
     const me = G.me;
     const left = G.livesLeft?.(G.localId);
@@ -437,6 +445,8 @@ export class Extras {
   dispose() {
     this.security?.dispose();
     this.passages?.dispose();
+    this.skin?.dispose();
+    this.cam?.dispose();
     this.tvVideo.pause();
     this.tvVideo.removeAttribute('src');
     this.tvVideo.load();

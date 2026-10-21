@@ -30,12 +30,16 @@ export class Garden {
     const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.9, ...o });
     const box = (w, h, d, m, x, y, z, ry = 0) => { const b = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m); b.position.set(x, y, z); b.rotation.y = ry; b.castShadow = true; b.receiveShadow = true; g.add(b); return b; };
     // ground: grass with a gravel path from the window to the well
-    const grass = new THREE.Mesh(new THREE.PlaneGeometry(36, 14), mat(0x1a2a14));
+    const T = gardenTextures();
+    const grass = new THREE.Mesh(new THREE.PlaneGeometry(36, 14), new THREE.MeshStandardMaterial({ map: T.grass, roughness: 1, color: 0x9aa890 }));
     grass.rotation.x = -Math.PI / 2; grass.position.set(20, 0.002, -7); grass.receiveShadow = true; g.add(grass);
     const path = new THREE.Mesh(new THREE.PlaneGeometry(1.4, 6.2), mat(0x4a4640));
     path.rotation.x = -Math.PI / 2; path.position.set(18, 0.006, -3.6); path.rotation.z = 0.35; g.add(path);
     // fence pickets on top of the low garden walls
-    const wood = mat(0x2a2018), stone = mat(0x55524c), leaf = mat(0x10240e), dark = mat(0x111111, { metalness: 0.5, roughness: 0.5 });
+    const wood = new THREE.MeshStandardMaterial({ map: T.bark, roughness: 0.95, color: 0x8a7a68 });
+    const stone = new THREE.MeshStandardMaterial({ map: T.stone, roughness: 0.95 });
+    const leaf = new THREE.MeshStandardMaterial({ map: T.leaves, roughness: 0.9, color: 0x8aa080 });
+    const dark = mat(0x111111, { metalness: 0.5, roughness: 0.5 });
     const fence = (x0, z0, x1, z1) => {
       const len = Math.hypot(x1 - x0, z1 - z0), n = Math.round(len / 0.5);
       for (let i = 0; i <= n; i++) box(0.08, 0.9, 0.08, wood, x0 + (x1 - x0) * i / n, 1.65, z0 + (z1 - z0) * i / n);
@@ -45,12 +49,19 @@ export class Garden {
     fence(2, -14, 38, -14); fence(2, -14, 2, 0); fence(38, -14, 38, 0);
     // hedges and flower beds
     for (const [x, z, w, d] of [[5, -12.6, 5, 1.2], [14, -12.6, 6, 1.2], [27, -12.6, 6, 1.2], [35, -12.6, 4, 1.2], [3.2, -6, 1.2, 7], [36.8, -6, 1.2, 7]]) {
-      box(w, 1.1, d, leaf, x, 0.55, z);
+      // a hedge: a leafy core with clumps bulging out of it, so the top isn't a flat box
+      const core = box(w, 1.0, d, leaf, x, 0.5, z);
+      core.material = leaf;
+      for (let k = 0; k < Math.round((w + d) * 2.2); k++) {
+        const c = new THREE.Mesh(new THREE.IcosahedronGeometry(0.32 + Math.random() * 0.22, 1), leaf);
+        c.position.set(x + (Math.random() - 0.5) * w, 0.75 + Math.random() * 0.4, z + (Math.random() - 0.5) * d);
+        c.scale.y = 0.7; c.castShadow = true; g.add(c);
+      }
       H.collider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, 1.1, { furniture: true });
     }
     const flowerCols = [0x7a1020, 0xc0a020, 0x8a3a8a, 0xd0d0c0];
     for (const [x, z] of [[9, -4], [30, -4], [9, -10], [30, -10]]) {
-      box(3, 0.25, 1.2, mat(0x2a1a10), x, 0.12, z);
+      box(3, 0.25, 1.2, new THREE.MeshStandardMaterial({ map: T.soil, roughness: 1 }), x, 0.12, z);
       H.collider(x - 1.5, z - 0.6, x + 1.5, z + 0.6, 0, 0.3, { furniture: true });
       for (let i = 0; i < 14; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), mat(flowerCols[i % 4])); f.position.set(x - 1.3 + (i % 7) * 0.43, 0.38, z - 0.3 + Math.floor(i / 7) * 0.6); g.add(f); }
     }
@@ -64,6 +75,33 @@ export class Garden {
     g.add(hose);
     box(0.12, 2.6, 0.12, dark, 12, 1.3, -6.2); box(0.35, 0.35, 0.35, mat(0xfff0c0, { emissive: 0x806030 }), 12, 2.7, -6.2);
     H.collider(11.9, -6.3, 12.1, -6.1, 0, 2.6);
+
+    // ---------------------------------------------------------- grass tufts: thousands of crossed
+    // blade cards (one instanced draw call), thinner on the path and under the beds
+    const tuft = new THREE.PlaneGeometry(0.42, 0.34); tuft.translate(0, 0.17, 0);
+    const tuft2 = tuft.clone(); tuft2.rotateY(Math.PI / 2);
+    const blades = mergeTwo(tuft, tuft2);
+    const bladeMat = new THREE.MeshStandardMaterial({ map: T.blades, alphaTest: 0.45, side: THREE.DoubleSide, roughness: 1, color: 0xa0b090 });
+    const N = 5200, im = new THREE.InstancedMesh(blades, bladeMat, N);
+    const m4 = new THREE.Matrix4(), q = new THREE.Quaternion(), up = V(0, 1, 0);
+    let n = 0;
+    for (let i = 0; i < N * 2 && n < N; i++) {
+      const x = 2.3 + Math.random() * 35.4, z = -13.7 + Math.random() * 13.4;
+      if (Math.hypot(x - WELL.x, z - WELL.z) < 1.2) continue;
+      if (Math.abs((z + 3.6) - (x - 18) * -0.37) < 0.8 && z > -6.8) continue; // the gravel path
+      if ([[9, -4], [30, -4], [9, -10], [30, -10]].some(([bx, bz]) => Math.abs(x - bx) < 1.6 && Math.abs(z - bz) < 0.7)) continue;
+      const k = 0.6 + Math.random() * 0.9;
+      m4.compose(V(x, 0, z), q.setFromAxisAngle(up, Math.random() * Math.PI), V(k, k * (0.7 + Math.random() * 0.6), k));
+      im.setMatrixAt(n++, m4);
+    }
+    im.count = n;
+    im.receiveShadow = true;
+    g.add(im);
+    // a few stepping stones and rocks
+    for (let i = 0; i < 9; i++) {
+      const r = new THREE.Mesh(new THREE.DodecahedronGeometry(0.18 + Math.random() * 0.25, 0), stone);
+      r.position.set(4 + Math.random() * 32, 0.05, -1 - Math.random() * 12); r.scale.y = 0.45; r.rotation.y = Math.random() * 6; g.add(r);
+    }
 
     // ---------------------------------------------------------- the well
     const ring = new THREE.Mesh(new THREE.CylinderGeometry(0.95, 1.0, 0.85, 20, 1, true), stone);
@@ -213,4 +251,81 @@ export class Garden {
       this.placeBucket();
     }
   }
+}
+
+function mergeTwo(a, b) {
+  const g = new THREE.BufferGeometry();
+  for (const key of ['position', 'normal', 'uv']) {
+    const A = a.attributes[key].array, B = b.attributes[key].array;
+    const arr = new Float32Array(A.length + B.length); arr.set(A); arr.set(B, A.length);
+    g.setAttribute(key, new THREE.BufferAttribute(arr, a.attributes[key].itemSize));
+  }
+  const ia = a.index.array, ib = b.index.array, off = a.attributes.position.count;
+  g.setIndex([...ia, ...Array.from(ib, i => i + off)]);
+  return g;
+}
+
+/** Procedural textures for the garden (canvas-painted once, cached): grass, blades, leaves, soil, bark, stone. */
+let TEX = null;
+function gardenTextures() {
+  if (TEX) return TEX;
+  const mk = (size, draw, repeat = 1, alpha = false) => {
+    const c = document.createElement('canvas'); c.width = c.height = size;
+    const x = c.getContext('2d'); draw(x, size);
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.wrapS = t.wrapT = THREE.RepeatWrapping;
+    t.repeat.set(repeat, repeat);
+    t.anisotropy = 4;
+    if (alpha) t.premultiplyAlpha = false;
+    return t;
+  };
+  const R = Math.random;
+  const noise = (x, s, cols, n, rmin, rmax) => { for (let i = 0; i < n; i++) { x.fillStyle = cols[Math.floor(R() * cols.length)]; x.globalAlpha = 0.25 + R() * 0.5; x.beginPath(); x.arc(R() * s, R() * s, rmin + R() * (rmax - rmin), 0, 7); x.fill(); } x.globalAlpha = 1; };
+  TEX = {
+    grass: mk(512, (x, s) => {
+      x.fillStyle = '#26361c'; x.fillRect(0, 0, s, s);
+      noise(x, s, ['#1d2c15', '#34482a', '#2e3a1e', '#3b4a26', '#45391f'], 2600, 1, 6);
+      x.lineWidth = 1.2;
+      for (let i = 0; i < 9000; i++) { const px = R() * s, py = R() * s, l = 4 + R() * 9, a = -Math.PI / 2 + (R() - 0.5) * 0.9; x.strokeStyle = ['#4a6a30', '#3a5626', '#5d7a3a', '#2a4018', '#6a7a40'][i % 5]; x.globalAlpha = 0.5 + R() * 0.5; x.beginPath(); x.moveTo(px, py); x.lineTo(px + Math.cos(a) * l, py + Math.sin(a) * l); x.stroke(); }
+      x.globalAlpha = 1;
+    }, 9),
+    blades: mk(256, (x, s) => {
+      x.clearRect(0, 0, s, s);
+      for (let i = 0; i < 46; i++) {
+        const bx = s * 0.08 + R() * s * 0.84, h = s * (0.45 + R() * 0.55), lean = (R() - 0.5) * s * 0.25, w = 2 + R() * 4;
+        const gr = x.createLinearGradient(0, s, 0, s - h);
+        gr.addColorStop(0, '#1a2a10'); gr.addColorStop(0.6, ['#4a6e2c', '#3c5a24', '#5a7a34'][i % 3]); gr.addColorStop(1, '#8a9a50');
+        x.fillStyle = gr;
+        x.beginPath(); x.moveTo(bx - w, s); x.quadraticCurveTo(bx + lean * 0.4, s - h * 0.5, bx + lean, s - h); x.quadraticCurveTo(bx + lean * 0.4 + w * 0.3, s - h * 0.5, bx + w, s); x.fill();
+      }
+    }, 1, true),
+    leaves: mk(256, (x, s) => {
+      x.fillStyle = '#132a10'; x.fillRect(0, 0, s, s);
+      for (let i = 0; i < 1400; i++) {
+        x.save(); x.translate(R() * s, R() * s); x.rotate(R() * 6.3);
+        x.fillStyle = ['#1f4a18', '#2c5a20', '#183a12', '#3a6a28', '#244018'][i % 5]; x.globalAlpha = 0.7 + R() * 0.3;
+        x.beginPath(); x.ellipse(0, 0, 3 + R() * 4, 1.5 + R() * 2, 0, 0, 7); x.fill();
+        x.restore();
+      }
+      x.globalAlpha = 1;
+    }, 2),
+    soil: mk(256, (x, s) => { x.fillStyle = '#2e2014'; x.fillRect(0, 0, s, s); noise(x, s, ['#22160c', '#3a2a1a', '#4a3a28', '#1a120a'], 1800, 0.8, 3.5); }, 2),
+    bark: mk(128, (x, s) => {
+      x.fillStyle = '#3a2c1e'; x.fillRect(0, 0, s, s);
+      for (let i = 0; i < 160; i++) { x.strokeStyle = ['#2a1e12', '#4a3826', '#1e140a'][i % 3]; x.globalAlpha = 0.6; x.lineWidth = 1 + R() * 2; const px = R() * s; x.beginPath(); x.moveTo(px, 0); x.bezierCurveTo(px + (R() - 0.5) * 8, s * 0.3, px + (R() - 0.5) * 8, s * 0.7, px + (R() - 0.5) * 6, s); x.stroke(); }
+      x.globalAlpha = 1;
+    }, 1),
+    stone: mk(256, (x, s) => {
+      x.fillStyle = '#5a5650'; x.fillRect(0, 0, s, s);
+      // mortar grid of irregular stones
+      for (let row = 0; row < 8; row++) for (let col = 0; col < 6; col++) {
+        const w = s / 6, h = s / 8, ox = row % 2 ? w / 2 : 0;
+        x.fillStyle = ['#6a665e', '#55524a', '#726c62', '#4a4842'][(row * 7 + col * 3) % 4];
+        x.fillRect(col * w + ox + 2, row * h + 2, w - 4, h - 4);
+      }
+      noise(x, s, ['#3a3834', '#7a766c', '#2e3a26'], 900, 0.6, 2.4);
+    }, 2),
+  };
+  return TEX;
 }
