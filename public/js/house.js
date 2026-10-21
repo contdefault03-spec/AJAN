@@ -9,6 +9,7 @@ import { shuffle } from './util.js';
 import {
   LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
   roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway } from './layout.js';
+import { buildWing } from './wing.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
 import { makeStairPieceMesh } from './attic.js';
@@ -255,6 +256,7 @@ export class House {
     G.plane('floorWood', 36, 11, 40, 13, 3.4, true);
     G.plane('ceiling', 36, 11, 40, 21, 6.4, false);
     this.buildStairs();
+    buildWing(this);
     this.buildAtticRoof();
     this.buildFloorboards();
 
@@ -287,6 +289,7 @@ export class House {
     const G = this.geo;
     for (const r of RAMPS) {
       if (r.outside) { this.buildDriveway(r); continue; }
+      if (r.spiral) continue; // wing.js
       if (r.puzzle) {
         // the attic staircase is built by attic.js once assembled; Ajan's patrols never use its footprint
         this.collider(r.x0 - 0.1, r.z0 - 0.15, r.x1 + 0.1, r.z1, r.ya, r.ya + 2.4, { ajanOnly: true });
@@ -751,6 +754,15 @@ export class House {
     add('uhall', 6, U, 9.5, 0xffc98a, 5, 10); add('uhall', 18, U, 9.5, 0xffc98a, 5, 10, { flicker: 0.4 }); add('uhall', 30, U, 9.5, 0xffc98a, 5, 10);
     add('nursery', 5, U, 16, 0xffd0d0, 4, 9, { flicker: 0.3 }); add('library', 15, U, 16, 0xffc98a, 6, 10);
     add('music', 27, U, 16, 0xffc98a, 5, 9); add('sitting', 33, U, 17, 0xffc080, 5, 9, { flicker: 0.2 });
+    // east wing
+    add('ehall', 44, G, 6, 0xffc98a, 5, 9, { flicker: 0.4 }); add('ehall', 52, G, 6, 0xffc98a, 5, 9);
+    add('gallery', 44, G, 2.5, 0xfff0d0, 6, 9); add('smoking', 52, G, 2.5, 0xffa860, 4, 8, { flicker: 0.3 });
+    add('pantry2', 43, G, 10.5, 0xf0ffe0, 4, 8, { flicker: 0.5 }); add('servants', 52.5, G, 10.5, 0xffd8b0, 4, 8);
+    add('estair', 47.5, 5.9, 11, 0xffc98a, 4, 9, { flicker: 0.4 });
+    add('uehall', 44, U, 6, 0xff7040, 3, 8, { flicker: 0.6 }); add('uehall', 52, U, 6, 0xff7040, 3, 8, { flicker: 0.5 });
+    add('cageroom', 43, U, 2.5, 0xff3020, 3, 7, { flicker: 0.8 }); add('operating', 48.5, U, 2.5, 0xe0fff0, 6, 7, { flicker: 0.7 });
+    add('chairroom', 53.5, U, 2.5, 0xfff4d0, 4, 7, { flicker: 0.9 });
+    add('nurse', 43, U, 10.5, 0xe8f0ff, 4, 8, { flicker: 0.4 }); add('spiralroom', 51, U, 12.5, 0xffc98a, 4, 8);
     add('base', 6, B, 22, 0xffb070, 6, 10, { flicker: 0.4 }); add('base', 13, B, 24, 0xffb070, 6, 10);
     add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('garage', 33, B, 18, 0xfff0d0, 6, 10); add('garage', 35, B, 24.5, 0xfff0d0, 5, 9, { flicker: 0.3 });
     // Always-on: candles in the back room, emergency light, Ajan's red lamp, attic lamps.
@@ -841,6 +853,9 @@ export class House {
       ['x', 0.11, 5.0, 4.4, 1.4, 1.2, 1], ['x', 0.11, 19.5, 4.4, 1.4, 1.2, 1], ['x', 0.11, 37.0, 4.4, 1.4, 1.2, 1],
       ['z', 0.11, 16.0, 4.4, 1.4, 1.2, 1], ['x', 20.89, 15.0, 4.4, 1.4, 1.2, -1], ['x', 20.89, 29.0, 4.4, 1.4, 1.2, -1],
       ['z', 39.89, 9.5, 4.4, 1.0, 1.3, -1],
+      // east wing
+      ['x', 0.11, 44, 1.0, 1.4, 1.2, 1], ['x', 0.11, 52, 1.0, 1.4, 1.2, 1], ['z', 55.89, 10.5, 1.0, 1.4, 1.2, -1], ['x', 13.89, 43, 1.0, 1.4, 1.2, -1],
+      ['x', 0.11, 43, 4.4, 1.0, 1.0, 1], ['z', 55.89, 2.5, 4.4, 1.0, 1.0, -1], ['x', 13.89, 52.5, 4.4, 1.4, 1.2, -1], ['z', 55.89, 10.5, 7.8, 1.0, 1.0, -1],
     ];
     for (const [line, c, a, y, w, h, n] of W) {
       const g = new THREE.Group();
@@ -904,6 +919,11 @@ export class House {
     for (const o of OPENINGS) if (!o.noNav) addPortal(o, o.y0, null);
     const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
+    const s3 = [node(47.5, 8.2, 0, 'estair'), node(47.5, 10.3, 1.7, 'estair:ramp'), node(47.5, 13.4, 3.4, 'estair')];
+    // The upstairs hall narrows to 1.3 m past the attic-stair footprint (z 9.4–10.9 is
+    // off limits to him): a lane of nodes along its north side keeps the west half of
+    // the upstairs (master, guest, nursery, library…) connected to the rest.
+    for (const x of [20.6, 22.6, 24.6, 26.6, 28.6]) this.roomNodes.uhall?.push(node(x, 8.62, 3.4, 'uhall'));
 
     const byId = {};
     N.forEach(n => { byId[n.id] = n; });
@@ -924,7 +944,7 @@ export class House {
       if (!blocked) link(a, b);
     }
     for (const [a, b, d] of portals) link(a, b, d);
-    for (const chain of [s1, s2]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
+    for (const chain of [s1, s2, s3]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
     // Keep only the main connected graph (all links, locked doors included): a node
     // boxed in by furniture would otherwise be a patrol target he can never reach.
     const comp = new Map();
@@ -940,6 +960,7 @@ export class House {
     const mainById = Object.fromEntries(main.map(n => [n.id, n]));
     this.nav = { nodes: main, byId: mainById };
     this.navDropped = N.length - main.length;
+    this.navAll = N;
     for (const id of Object.keys(this.roomNodes)) this.roomNodes[id] = this.roomNodes[id].filter(n => mainById[n.id]);
     // one patrol point per room: the reachable node nearest the room's middle
     this.patrolNodes = ROOMS.filter(r => !r.safe && this.roomNodes[r.id]?.length).map(r => {

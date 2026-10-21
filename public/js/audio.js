@@ -559,13 +559,35 @@ class AudioEngine {
         d[i] = (lp + Math.sin(t * 2 * Math.PI * 110) * 0.6) * v * 0.8;
       }
     });
-    this.buffers.wind = mk(6, (d, sr) => {
-      let lp = 0;
+    // Night forest outside: a soft breeze in the leaves under two layers of crickets
+    // (the old bed sounded like surf). 8 s, seamless loop.
+    this.buffers.wind = mk(8, (d, sr) => {
+      let lp = 0, lp2 = 0;
+      const crick = [[4300, 0, 17], [5100, 0.37, 13], [3900, 0.71, 21]];
       for (let i = 0; i < d.length; i++) {
         const t = i / sr;
-        const k = 0.01 + 0.02 * (0.5 + 0.5 * Math.sin(t * 0.9));
-        lp += (rnd() - lp) * k;
-        d[i] = lp * 2.2 * Math.min(1, t, 6 - t);
+        lp += (rnd() - 0.5 - lp) * 0.02;
+        lp2 += (lp - lp2) * 0.05;
+        let c = 0;
+        for (const [f, ph, rate] of crick) {
+          // chirp trains: 3 quick pulses, then a pause
+          const cyc = (t * rate / 8 + ph) % 1;
+          const pulse = cyc < 0.3 ? Math.max(0, Math.sin(cyc / 0.3 * Math.PI * 3)) : 0;
+          c += Math.sin(2 * Math.PI * f * t) * pulse * 0.12;
+        }
+        const edge = Math.min(1, t * 4, (8 - t) * 4);
+        d[i] = (lp2 * 1.6 + c) * edge;
+      }
+    });
+    // A distant wolf howl: rises, holds, falls, with a few harmonics.
+    this.buffers.howl = mk(4.5, (d, sr) => {
+      let ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = t < 0.8 ? 320 + t * 380 : t < 3.2 ? 624 + Math.sin(t * 5) * 8 - (t - 0.8) * 25 : 564 - (t - 3.2) * 220;
+        ph += 2 * Math.PI * f / sr;
+        const env = Math.min(1, t * 2.5) * Math.min(1, (4.5 - t) * 1.2);
+        d[i] = (Math.sin(ph) * 0.6 + Math.sin(ph * 2) * 0.18 + Math.sin(ph * 3) * 0.06 + (rnd() - 0.5) * 0.02) * env * 0.5;
       }
     });
     this.buffers.heartbeat = mk(0.9, (d, sr) => {

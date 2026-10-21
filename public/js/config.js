@@ -130,6 +130,8 @@ export const DIFFICULTY = {
 export const difficultyOf = d => (DIFFICULTY[d] ? d : 'medium');
 
 export const DEATH_GAIN = { MASKED: 4 };
+// Character voices (death sounds, monster see / catch / leave lines, chewing) play 150 % louder.
+export const VOICE_GAIN = 1.5;
 
 export const PLAYER = {
   height: 1.75,

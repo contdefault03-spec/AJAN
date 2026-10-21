@@ -12,8 +12,9 @@ import { VoiceChat, mic } from './voice.js';
 import { audio } from './audio.js';
 import { loadGLTF, loadTexture, playerSpec, assetUrl } from './assets.js';
 import { settings } from './settings.js';
-import { INV_SLOTS, itemSlots, CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf, MONSTERS, monstersFor } from './config.js';
+import { VOICE_GAIN, INV_SLOTS, itemSlots, CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf, MONSTERS, monstersFor } from './config.js';
 import { Extras, CAPTURE_SPOTS } from './extras.js';
+import { buildForest } from './forest.js';
 
 const GUN_CAPACITY = 2; // the revolver holds two rounds; more lie around the house
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
@@ -116,6 +117,7 @@ export class Game {
     this.house = new House(mulberry32(this.seed ^ 0x51ed));
     this.house.createLightPool(settings.quality === 'low' ? 4 : settings.quality === 'high' ? 7 : 6);
     scene.add(this.house.group);
+    buildForest(scene, mulberry32(this.seed ^ 0xf0e57));
 
     progress(0.3, 'Loading models...');
     const [pg, ag] = await Promise.all([loadGLTF('playerModel'), loadGLTF('ajanModel')]);
@@ -374,7 +376,7 @@ export class Game {
       if (this.phase !== 'play') return;
       // Notes and Fai's drink menu free the mouse on purpose; anything else means "pause".
       // (The lock events arrive asynchronously, so allow a moment after the menu closes.)
-      const menu = this.drinkMenuOpen || this.slotOpen || performance.now() - Math.max(this.drinkMenuClosedAt || -1e9, this.slotClosedAt || -1e9) < 1500;
+      const menu = this.drinkMenuOpen || performance.now() - (this.drinkMenuClosedAt || -1e9) < 1500;
       if (this.localEscaped || this.app.cinemaPlaying) return; // the escape video freed the mouse
       if (document.pointerLockElement !== this.canvas && !$('noteView').classList.contains('show') && !menu) this.app.pause(true);
     };
@@ -1088,7 +1090,7 @@ export class Game {
     this.spider.hiss();
     const c = charById(p.character);
     const snd = c.sound;
-    const gain = DEATH_GAIN[c.id] ?? 1;
+    const gain = (DEATH_GAIN[c.id] ?? 1) * VOICE_GAIN;
     if (snd) audio.play(snd, p.isLocal ? { vol: gain, limit: gain > 1 } : { pos: p.pos.clone().add(V(0, 1.4, 0)), vol: gain, ref: 3, limit: gain > 1 });
     if (p.label) p.label.style.opacity = 0;
     if (p.isLocal) {
@@ -1349,9 +1351,9 @@ export class Game {
         const pos = mon.vis.pos.clone().add(V(0, 1.9, 0));
         const snd = mon.def.sounds;
         if (e.s === 'roar') { audio.play('roar', { pos, vol: 1.0, ref: 3, rate: e.m === 'ajanita' ? 1.2 : e.m === 'guy' ? 0.8 : 1 }); this.post?.glitch(0.6); }
-        else if (e.s === 'see') { if (!audio.play(snd.see, { pos, vol: 1.2, ref: 4, limit: true })) audio.play('roar', { pos, vol: 1, ref: 3 }); this.post?.glitch(0.5); }
+        else if (e.s === 'see') { if (!audio.play(snd.see, { pos, vol: 1.2 * VOICE_GAIN, ref: 4, limit: true })) audio.play('roar', { pos, vol: 1, ref: 3 }); this.post?.glitch(0.5); }
         // he leaves without finding you (ajanleaves / guyleaves / ajanitaleave)
-        else if (e.s === 'laugh') { if (!audio.play(snd.leave, { pos, vol: 1.0, ref: 3 })) audio.play('sleep', { pos, vol: 0.9, ref: 2.5, duration: 3 }); }
+        else if (e.s === 'laugh') { if (!audio.play(snd.leave, { pos, vol: VOICE_GAIN, ref: 3, limit: true })) audio.play('sleep', { pos, vol: 0.9, ref: 2.5, duration: 3 }); }
         else if (e.s === 'squeeze') { audio.play('growl', { pos, vol: 0.9, ref: 2.5, rate: 0.8 }); audio.play('thud', { pos, vol: 0.8, ref: 2 }); setTimeout(() => audio.play('ajannew', { pos, vol: 0.8, ref: 2.5 }), 900); }
         else if (e.s === 'whisper') { if (snd.whisper) audio.play(snd.whisper, { pos, vol: 0.45, ref: 1.6, rolloff: 1.6, rate: 0.92 }); }
         else audio.play('growl', { pos, vol: 0.8, ref: 2.5, rate: 0.9 + Math.random() * 0.2 });
@@ -1483,11 +1485,11 @@ export class Game {
     p.avatar.state.mode = 'grabbed';
     if (p.label) p.label.style.opacity = 0;
     if (seq.isAjanChar) {
-      const gain = DEATH_GAIN.AJAN ?? 1;
+      const gain = (DEATH_GAIN.AJAN ?? 1) * VOICE_GAIN;
       audio.play('ajannew', seq.local ? { vol: gain, limit: gain > 1 } : { pos: seq.start.clone().add(V(0, 1.5, 0)), vol: gain, ref: 3, limit: gain > 1 });
     }
     // ajancatch / ajanita: the "got you" sound as he grabs you
-    if (!audio.play(mon.def.sounds.catch, { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1.2, ref: 3.5, limit: true })) audio.play('growl', { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1, ref: 3 });
+    if (!audio.play(mon.def.sounds.catch, { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1.2 * VOICE_GAIN, ref: 3.5, limit: true })) audio.play('growl', { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1, ref: 3 });
     if (seq.local) {
       this.local.frozen = true;
       if (this.local.hidden) { this.local.hidden = null; $('hideOverlay').classList.remove('show'); }
@@ -1531,7 +1533,7 @@ export class Game {
         if (s.stage === 0) {
           s.stage = 1;
           if (s.sound) {
-            const gain = DEATH_GAIN[s.p.character] ?? 1;
+            const gain = (DEATH_GAIN[s.p.character] ?? 1) * VOICE_GAIN;
             audio.play(s.sound, s.local ? { vol: gain, limit: gain > 1 } : { pos: av.group.position.clone().add(V(0, 1.4, 0)), vol: gain, ref: 3, limit: gain > 1 });
           }
         }
@@ -1572,7 +1574,7 @@ export class Game {
     const at = p.knocked.start.clone().add(V(0, 1.5, 0));
     audio.play('thud', { pos: at, vol: 1.0, ref: 3, rate: 0.8 });
     audio.play('slam', { pos: at, vol: 0.7, ref: 3, rate: 1.3 });
-    if (!audio.play(mon.def.sounds.catch, { pos: at, vol: 1.2, ref: 3.5, limit: true })) audio.play('growl', { pos: at, vol: 1, ref: 3 });
+    if (!audio.play(mon.def.sounds.catch, { pos: at, vol: 1.2 * VOICE_GAIN, ref: 3.5, limit: true })) audio.play('growl', { pos: at, vol: 1, ref: 3 });
     if (p.isLocal) {
       const L = this.local;
       L.frozen = true;
@@ -1852,7 +1854,7 @@ export class Game {
     const it = f.it;
     const me = this.localId;
     switch (it.kind) {
-      case 'slot': this.extras.interactSlot(); return;
+      case 'slotbtn': it.machine.pressButton(it.btn); return;
       case 'door': {
         const d = it.door;
         const rattle = what => {
@@ -1955,7 +1957,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slot': return this.extras.prompt(it);
+      case 'slotbtn': return this.extras.prompt(it);
     }
     return '';
   }
@@ -2407,6 +2409,7 @@ export class Game {
       v.st = s.st; v.m = s.m; v.mt = s.mt; v.sp = s.sp; v.hy = s.hy;
     }
     const aj = mon.avatar;
+    if (mon.def.id === 'ajan' && this.club?.poseAjanLap(aj, dt)) return; // private dance at a club table
     aj.group.visible = v.st !== 'dormant';
     aj.group.position.copy(v.pos);
     aj.group.rotation.y = v.ry;
@@ -2539,6 +2542,13 @@ export class Game {
 
   ambience(dt, cp) {
     if (this.phase !== 'play') return;
+    // a wolf somewhere out in the forest now and then
+    this.howlT = (this.howlT ?? 30 + Math.random() * 40) - dt;
+    if (this.howlT <= 0) {
+      this.howlT = 45 + Math.random() * 60;
+      const a = Math.random() * Math.PI * 2;
+      audio.play('howl', { pos: V(20 + Math.cos(a) * 45, 2, 10 + Math.sin(a) * 45), vol: 0.9, ref: 12, rolloff: 0.6, rate: 0.9 + Math.random() * 0.2, muffle: 0.35 });
+    }
     // Things in the house that make their own little noises (rocking chairs).
     for (const s of this.house.periodic || []) {
       s.t = (s.t ?? Math.random() * s.every) - dt;

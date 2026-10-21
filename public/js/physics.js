@@ -1,7 +1,7 @@
 // 2.5D collision: axis-aligned boxes in XZ with a vertical span, circle-vs-box
 // resolution for characters, and segment tests for line of sight / occlusion.
 // Floor heights come from the multi-level layout (floors, stair ramps, elevator car).
-import { LEVELS, RAMPS, rampHeight, levelIndex, floorAt, inElevator } from './layout.js';
+import { LEVELS, RAMPS, rampHeight, spiralHeight, levelIndex, floorAt, inElevator } from './layout.js';
 
 export const BASEMENT_Y = LEVELS[0].y;
 
@@ -14,6 +14,13 @@ export function groundAt(x, z, y) {
   for (let i = 0; i < RAMPS.length; i++) {
     const r = RAMPS[i];
     if (r.disabled) continue; // e.g. the attic stairs before they're assembled
+    if (r.spiral) {
+      if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) {
+        const h = spiralHeight(r, x, z, y);
+        if (h !== null && y >= h - 1.0 && y <= h + 0.9) return h;
+      }
+      continue;
+    }
     if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) {
       // only when you're actually on (or just above / below) the steps here — not on a floor
       // that passes over or under this part of the staircase

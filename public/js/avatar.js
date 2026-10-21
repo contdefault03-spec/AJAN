@@ -172,7 +172,12 @@ export class Avatar {
     this.t += dt;
     // NPCs (club.js) drive their own bones through _set()
     if (this.custom) { this.custom(dt, this.t); return; }
-    if (this.kind === 'ajan') this._animAjan(dt, st);
+    // Human-shaped monsters (Guy) walk and look around with the players' gait; the
+    // grab / sleep / stun / dance poses still come from the monster set.
+    if (this.kind === 'ajan' && this.spec.human && (!st.mode || st.mode === 'move' || st.mode === 'search')) {
+      this._animPlayer(dt, { speed: st.speed || 0, crouch: 0, run: (st.speed || 0) > 3, mode: 'normal', interactT: 9, turn: 0, flash: false, pitch: st.mode === 'search' ? Math.sin(this.t * 1.6) * 0.15 : 0 });
+      if (st.mode === 'search') this.bones.head.rotation.y = Math.sin(this.t * 1.6) * 0.7;
+    } else if (this.kind === 'ajan') this._animAjan(dt, st);
     else this._animPlayer(dt, st);
   }
 

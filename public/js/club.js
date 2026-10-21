@@ -115,6 +115,7 @@ export class Club {
       if (d3) this.yasDance = new DancePlayer(d3, this.yasmin, { maxDrift: 0.35 });
       if (d1) this.lapPlayer = new DancePlayer(d1, this.yasmin, { maxDrift: 0.2 });
       this.ajanDanceFbx = d2; // attached to AJAN's avatar once it exists (see update)
+      this.lapFbx = d1;       // AJAN's private dance uses the same routine as Yasmin's
     } catch (e) { console.warn('dance retarget failed', e); }
     this.yasJig = { c: new THREE.Vector3(), cv: new THREE.Vector3(), b: new THREE.Vector3(), bv: new THREE.Vector3(), last: null, lastV: new THREE.Vector3() };
   }
@@ -265,6 +266,35 @@ export class Club {
     const theta = T * 0.42 + cyc * 1.7 * 1.5 + 1.7 * 1.5 * spinS;
     const pause = (T % 30) > 26;
     return { theta, spin: u > 9 && u < 12 ? Math.sin((u - 9) / 3 * Math.PI) : 0, pause };
+  }
+
+  /**
+   * AJAN's private dance: walks from his pole to the customer's chair, does Yasmin's
+   * routine (dance1.fbx retargeted onto his rig) facing them, walks back. Returns true
+   * while it is posing him (the normal club pose is skipped then).
+   */
+  poseAjanLap(av, dt) {
+    const now = this.game.net.serverNow();
+    const L = this.ajanLap && now < this.ajanLap.end ? this.ajanLap : (this.ajanLap = null);
+    if (!L || this.game.brain && this.game.brain.state !== 'club' && this.game.isHost) { this.ajanLap = null; return false; }
+    if (this.lapFbx && !av.lapPlayer) { try { av.lapPlayer = new DancePlayer(this.lapFbx, av, { maxDrift: 0.2 }); } catch (e) { console.warn('AJAN private dance retarget failed', e); } this.lapFbx = null; }
+    const t = (now - L.at) / 1000, W = LAP_WALK, D = L.dance;
+    av.group.visible = true;
+    if (t < W || t > W + D || !av.lapPlayer) {
+      const out = t > W + D, k = clamp(out ? (t - W - D) / W : t / W, 0, 1), e = k * k * (3 - 2 * k);
+      const a = out ? L.spot : L.from, b = out ? L.from : L.spot;
+      av.group.position.lerpVectors(a, b, e);
+      av.group.rotation.y = angleLerp(av.group.rotation.y, k < 1 ? Math.atan2(b.x - a.x, b.z - a.z) : Math.PI, Math.min(1, dt * 8));
+      av.state = { speed: k > 0 && k < 1 ? 1.2 : 0, mode: 'move', modeT: t };
+      av.update(dt);
+    } else {
+      av.group.position.copy(L.spot);
+      av.group.rotation.y = angleLerp(av.group.rotation.y, Math.PI, Math.min(1, dt * 8));
+      av.body.position.y = 0;
+      av.lapPlayer.seek(t - W);
+      av.lapPlayer.apply();
+    }
+    return true;
   }
 
   /** Yasmin: her dance (dance3.fbx) in front of her pole, or a private dance (dance1.fbx) at a customer's chair. */
@@ -662,16 +692,25 @@ export class Club {
   hostLap(pid) {
     const G = this.game, p = G.players.get(pid), now = G.net.serverNow();
     if (!p || !p.alive || !p.hidden || !CLUB_SEATS.includes(p.hideId) || !this.yasmin) return;
-    if (this.lap && now < this.lap.end) { G.broadcast({ k: 'msg', text: 'Yasmin is busy with someone else.' }, pid); return; }
+    // At AJAN's table (club_seat2) the dance is his, if he's in the club at his pole.
+    const ajan = p.hideId === 'club_seat2' && G.brain?.state === 'club';
+    const busy = ajan ? this.ajanLap && now < this.ajanLap.end : this.lap && now < this.lap.end;
+    if (busy) { G.broadcast({ k: 'msg', text: `${ajan ? 'AJAN' : 'Yasmin'} is busy with someone else.` }, pid); return; }
     const bal = this.balance(pid);
     if (bal < LAP_COST) { G.broadcast({ k: 'msg', text: `A private dance is $${LAP_COST}. You have $${bal}.` }, pid); return; }
     const dance = Math.min(30, Math.max(12, this.lapPlayer?.duration || 20));
-    G.broadcast({ k: 'lap', pid, seat: p.hideId, at: now + 200, dance, money: bal - LAP_COST });
+    G.broadcast({ k: 'lap', pid, seat: p.hideId, at: now + 200, dance, money: bal - LAP_COST, who: ajan ? 'ajan' : 'yasmin' });
   }
 
   applyLap(e) {
     const S = e.seat === 'club_seat2' ? SEAT2 : SEAT;
     this.money.set(e.pid, e.money);
+    if (e.who === 'ajan') {
+      this.ajanLap = { pid: e.pid, at: e.at, dance: e.dance, end: e.at + (LAP_WALK * 2 + e.dance) * 1000, spot: new THREE.Vector3(S.x, AY, S.z + 0.7), from: POLE_A.clone().add(new THREE.Vector3(0, 0, -AJAN_POLE_R)) };
+      if (e.pid === this.game.localId) this.game.message('AJAN grins and lumbers over to your chair…', 3);
+      this.game.updateHUD();
+      return;
+    }
     this.lap = { pid: e.pid, at: e.at, dance: e.dance, end: e.at + (LAP_WALK * 2 + e.dance) * 1000, spot: new THREE.Vector3(S.x, AY, S.z + 0.62) };
     if (e.pid === this.game.localId) this.game.message('Yasmin smiles and comes over to your chair…', 3);
     this.game.updateHUD();
