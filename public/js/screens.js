@@ -40,7 +40,7 @@ void main(){
 export function screenMaterial() {
   return new THREE.ShaderMaterial({
     uniforms: {
-      tex: { value: null }, mode: { value: 0 }, time: { value: 0 }, glitch: { value: 0 }, tint: { value: 1 }, bright: { value: 2.6 }, mono: { value: -1 }, curve: { value: 0.25 },
+      tex: { value: null }, mode: { value: 0 }, time: { value: 0 }, glitch: { value: 0 }, tint: { value: 1 }, bright: { value: 4.0 }, mono: { value: -1 }, curve: { value: 0.25 },
     },
     vertexShader: SCREEN_VERT,
     fragmentShader: SCREEN_FRAG,

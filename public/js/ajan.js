@@ -10,6 +10,7 @@ import { collideCircle, groundAt, lineOfSight, levelOf, segmentBlockers, soundTr
 import { isSafeZone, RAMPS, rampHeight, inElevator } from './layout.js';
 import { AJAN_ROUTE, POLE_A, AJAN_POLE_R } from './club.js';
 import { nearestNode, findPath } from './nav.js';
+import { inSecOffice, SEC_DOOR, SEC_WINDOW } from './security.js';
 import { angleDiff, clamp } from './util.js';
 
 const tmp = new THREE.Vector3();
@@ -107,7 +108,7 @@ export class AjanBrain {
    * for "exact" sources like a creaking floorboard or a radio.
    */
   hear(n) {
-    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge'].includes(this.state)) return;
+    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock'].includes(this.state)) return;
     if (isSafeZone(n.pos)) return;
     const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z) + Math.abs(n.pos.y - this.pos.y) * 0.5;
     // Low, booming sources (radio, elevator) carry through walls better than footsteps.
@@ -238,6 +239,7 @@ export class AjanBrain {
     }
 
     if (this.state === 'carry') { this.updateCarry(dt); return; }
+    if (this.state === 'knock') { this.updateKnock(dt); return; }
     if (this.state === 'spot') { this.updateSpot(dt); return; }
     if (this.state === 'fridge') { this.updateFridge(dt); return; }
 
@@ -379,6 +381,8 @@ export class AjanBrain {
     if (!p || !p.alive || p.escaped || p.dying) { this.loseTarget(false); return; }
     // Reached the attic: he stops dead and won't follow.
     if (isSafeZone(p.pos)) { this.loseTarget(true); return; }
+    // Shut in the security office behind the shutter: knock, stare through the window, leave.
+    if (this.game.extras?.security?.closed && inSecOffice(p.pos)) { this.startKnock(p); return; }
     if (p.hidden) {
       if (p.hideSeen) { this.beginDrag(p); return; }
       this.loseTarget(true);
@@ -439,6 +443,48 @@ export class AjanBrain {
     } else {
       this.game.ajanSound(this, 'laugh');
       this.setState('patrol');
+      this.pickPatrol();
+    }
+  }
+
+  startKnock(p) {
+    this.knock = { pid: p.id, phase: 'door', t: 0 };
+    this.target = null;
+    this.chaseProg = null;
+    this.setState('knock');
+    if (!this.moveTo(SEC_DOOR.outside)) this.path = null;
+  }
+
+  updateKnock(dt) {
+    const k = this.knock, sec = this.game.extras?.security;
+    k.t += dt;
+    const p = this.game.players.get(k.pid);
+    // the shutter went up while he was there: back to the chase
+    if (!sec?.closed && p && p.alive && !p.dying && (k.phase === 'knocking' || k.phase === 'stare')) { this.target = p.id; this.lastSeen = p.pos.clone(); this.lastSeenT = 0; this.knock = null; this.setState('chase'); return; }
+    const face = () => this.faceTo(0, dt, 6); // the office is to the +z side of the hall
+    if (k.phase === 'door' || k.phase === 'towin') {
+      this.anim = 'move';
+      const arrived = !this.path || this.step(dt, this.v.investigate);
+      if (arrived || k.t > 12) {
+        k.phase = k.phase === 'door' ? 'knocking' : 'stare';
+        k.t = 0;
+        this.animT = 0;
+        if (k.phase === 'knocking') this.game.broadcast({ k: 'knock' });
+      }
+      return;
+    }
+    this.speed = 0;
+    this.anim = 'inspect';
+    face();
+    if (k.phase === 'knocking' && k.t > 3.2) { k.phase = 'towin'; k.t = 0; if (!this.moveTo(SEC_WINDOW.outside)) this.path = null; }
+    else if (k.phase === 'stare' && k.t > 2.6) {
+      // a long grin through the glass, then the "didn't find you" sound, and off he goes
+      this.game.ajanSound(this, 'laugh');
+      this.ignore.set(k.pid, 20);
+      this.knock = null;
+      this.anim = 'move';
+      this.setState('patrol');
+      this.pauseT = 0.8;
       this.pickPatrol();
     }
   }

@@ -272,3 +272,8 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 .struggle .stBar i { display: block; height: 100%; width: 0; background: #c01818; transition: width 0.1s; }
 
 .menuVersion { position: absolute; right: 14px; bottom: 10px; font-size: 14px; color: rgba(230, 220, 210, 0.55); letter-spacing: 0.12em; pointer-events: none; z-index: 2; }
+
+.camLabel { position: absolute; left: 50%; top: 18px; transform: translateX(-50%); display: none; font-size: 30px; color: #c8ffc8; text-shadow: 0 0 6px #000; letter-spacing: 0.1em; text-align: center; }
+.camLabel.show { display: block; }
+.camLabel span { display: block; font-size: 18px; color: #9c9; }
+#hud.cctv > *:not(.camLabel) { visibility: hidden; }

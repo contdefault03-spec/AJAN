@@ -9,6 +9,8 @@ import { settings } from './settings.js';
 import { FRIDGE, SNACK_CHAIR, MUSIC_SPOT } from './ajan.js';
 import { lineOfSight } from './physics.js';
 import { SlotMachine } from './slots.js';
+import { Garden } from './garden.js';
+import { Security } from './security.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const BY = -3.2, U = 3.4, AY = 6.8;
@@ -185,6 +187,10 @@ export class Extras {
     // ---------------------------------------------------------- slot machine in the club
     this.slots = [new SlotMachine(G, 'slot_club', SLOT_POS, SLOT_RY)];
     for (const m of this.slots) await m.init();
+    this.garden = new Garden(G);
+    this.garden.init();
+    this.security = new Security(G);
+    this.security.init();
     this.buildUI();
   }
 
@@ -211,6 +217,7 @@ export class Extras {
   /** Host: requests this module owns. Returns true if handled. */
   request(pid, r, p) {
     const G = this.game;
+    if (this.garden.request(pid, r, p) || this.security.request(pid, r, p)) return true;
     switch (r.k) {
       case 'free': {
         if (!p.restrained) return true;
@@ -249,6 +256,7 @@ export class Extras {
   // ======================================================================= events
   event(e) {
     const G = this.game;
+    if (this.garden.event(e) || this.security.event(e)) return true;
     switch (e.k) {
       case 'freed': {
         const fp = G.players.get(e.pid);
@@ -392,6 +400,8 @@ export class Extras {
     if (st === 'dance' && !this.danceSound) this.danceSound = audio.play('song1', { pos: MUSIC_SPOT.clone().add(V(0, 1.5, 0)), loop: true, vol: 0.9, ref: 3, rolloff: 1.4 });
     else if (st !== 'dance' && this.danceSound) { this.danceSound.stop(1); this.danceSound = null; }
     for (const m of this.slots) m.update(dt);
+    this.garden.update(dt);
+    this.security.update(dt);
     // --- HUD: lives, coming back
     const me = G.me;
     const left = G.livesLeft?.(G.localId);
@@ -411,10 +421,17 @@ export class Extras {
 
   prompt(it) {
     if (it.kind === 'slotbtn') return it.machine.prompt(it.btn);
+    return this.garden.prompt(it) ?? this.security.prompt(it);
+  }
+
+  /** E on one of this module's interactables. */
+  interact(it) {
+    return this.garden.interact(it) || this.security.interact(it);
     return null;
   }
 
   dispose() {
+    this.security?.dispose();
     this.tvVideo.pause();
     this.tvVideo.removeAttribute('src');
     this.tvVideo.load();

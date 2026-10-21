@@ -100,7 +100,9 @@ export const ROOMS = [
   { id: 'gallery', name: 'GALLERY', L: 1, x0: 40, x1: 48, z0: 0, z1: 5, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'wainscot' },
   { id: 'smoking', name: 'SMOKING ROOM', L: 1, x0: 48, x1: 56, z0: 0, z1: 5, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'rail' },
   { id: 'pantry2', name: 'PANTRY', L: 1, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
-  { id: 'servants', name: "SERVANTS' QUARTERS", L: 1, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorWoodDark', wall: 'wallC', trim: 'base' },
+  { id: 'secoffice', name: 'SECURITY OFFICE', L: 1, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
+  // the walled garden behind the house (outdoors: no ceiling, its own ground; see garden.js)
+  { id: 'garden', name: 'GARDEN', L: 1, x0: 2, x1: 38, z0: -14, z1: 0, floor: 'floorConcrete', wall: 'wallBase', outdoor: true },
   { id: 'uehall', name: 'EAST WING', L: 2, x0: 40, x1: 56, z0: 5, z1: 7, floor: 'floorWood', wall: 'wallFilth', trim: 'base' },
   { id: 'cageroom', name: 'THE CAGE', L: 2, x0: 40, x1: 46, z0: 0, z1: 5, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none' },
   { id: 'operating', name: 'OPERATING ROOM', L: 2, x0: 46, x1: 51, z0: 0, z1: 5, floor: 'floorTile', wall: 'wallTile', trim: 'none' },
@@ -205,7 +207,9 @@ export const DOORS = [
   { id: 'd_gallery', line: 'x', c: 5, a0: 43.5, w: 1.1, swing: -1, y: GY, name: 'Gallery Door' },
   { id: 'd_smoking', line: 'x', c: 5, a0: 51.5, w: 1.1, swing: -1, y: GY, name: 'Smoking Room Door' },
   { id: 'd_pantry2', line: 'x', c: 7, a0: 42.5, w: 1.1, swing: 1, y: GY, name: 'Pantry Door' },
-  { id: 'd_servants', line: 'x', c: 7, a0: 52.0, w: 1.1, swing: 1, y: GY, name: "Servants' Door" },
+  { id: 'd_wing_hall', line: 'z', c: 40, a0: 9.0, w: 1.1, swing: 1, y: GY, name: 'East Wing Door' },
+  // Ajan's way in and out of the garden: players can't open it (bolted from his side)
+  { id: 'd_garden', line: 'x', c: 0, a0: 3.2, w: 1.1, swing: -1, y: GY, name: 'Garden Door', ajanOnly: true },
   { id: 'd_east_u', line: 'z', c: 40, a0: 5.4, w: 1.1, swing: 1, y: UY, name: 'Door' },
   { id: 'd_cage', line: 'x', c: 5, a0: 42.5, w: 1.1, swing: -1, y: UY, name: 'Iron Door' },
   { id: 'd_operating', line: 'x', c: 5, a0: 48.0, w: 1.1, swing: -1, y: UY, name: 'Operating Room Door' },
@@ -224,6 +228,9 @@ export const OPENINGS = [
   // the garage door (props: car.js closes it with a breakable door; nobody paths through it)
   { id: 'o_garage', line: 'z', c: 40, a0: 19.4, w: 3.2, y0: BY, h: 2.5, noNav: true },
   { id: 'o_estair', line: 'x', c: 7, a0: 46.3, w: 2.4, y0: GY, h: 2.6 },
+  // the security office: a doorway closed by a steel shutter (security.js) and a window onto the hall
+  { id: 'o_secoffice', line: 'x', c: 7, a0: 51.4, w: 1.2, y0: GY, h: 2.3, navDoor: 'd_secoffice' },
+  { id: 'o_secwin', line: 'x', c: 7, a0: 53.6, w: 1.6, y0: GY + 1.0, h: 0.9, noNav: true },
 ];
 // Elevator landing doorways (sliding doors live in props.js)
 export const ELEV_DOORS = [
@@ -267,6 +274,8 @@ export const WALLS = [
   ['x', 13.4, 30, 33.4, BY, -0.25], ['x', 13.4, 35.8, 40, BY, -0.25], ['z', 40, 13.4, 27, BY, -0.25],
   // east wing: outside walls, ground floor, upstairs
   ['x', 0, 40, 56, GY, 6.4], ['x', 14, 40, 56, GY, 6.4], ['z', 56, 0, 14, GY, 6.4],
+  // the garden's back wall and side walls (a fence on top is in garden.js)
+  ['x', -14, 2, 38, GY, 1.2], ['z', 2, -14, 0, GY, 1.2], ['z', 38, -14, 0, GY, 1.2],
   ['x', 5, 40, 56, GY, 3], ['x', 7, 40, 56, GY, 3], ['z', 48, 0, 5, GY, 3], ['z', 46, 7, 14, GY, 3], ['z', 49, 7, 14, GY, 3],
   ['x', 5, 40, 56, UY, 6.4], ['x', 7, 40, 56, UY, 6.4], ['z', 46, 0, 5, UY, 6.4], ['z', 51, 0, 5, UY, 6.4], ['z', 46, 7, 14, UY, 6.4], ['z', 49, 7, 14, UY, 6.4],
   // the TV room on top of the tower, with a rail round the spiral stair's opening (open to the north)

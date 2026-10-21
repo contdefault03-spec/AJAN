@@ -115,6 +115,7 @@ export const ITEM_INFO = {
   oil: { name: 'Motor Oil' },
   battery: { name: 'Car Battery' },
   spray: { name: 'Poison Spray' },
+  well_lever: { name: 'Well Crank Lever' },
 };
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a

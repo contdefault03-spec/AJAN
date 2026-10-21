@@ -246,6 +246,7 @@ export class House {
     // ---------------- floors, ceilings, baseboards
     for (const r of ROOMS) {
       const L = LEVELS[r.L];
+      if (r.outdoor) continue; // garden.js builds its own ground and there's no ceiling
       for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane(r.floor, x0, z0, x1, z1, L.y, true);
       if (r.L !== 3) for (const [x0, x1, z0, z1] of (r.ceilings || r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
     }
@@ -757,7 +758,9 @@ export class House {
     // east wing
     add('ehall', 44, G, 6, 0xffc98a, 5, 9, { flicker: 0.4 }); add('ehall', 52, G, 6, 0xffc98a, 5, 9);
     add('gallery', 44, G, 2.5, 0xfff0d0, 6, 9); add('smoking', 52, G, 2.5, 0xffa860, 4, 8, { flicker: 0.3 });
-    add('pantry2', 43, G, 10.5, 0xf0ffe0, 4, 8, { flicker: 0.5 }); add('servants', 52.5, G, 10.5, 0xffd8b0, 4, 8);
+    add('pantry2', 43, G, 10.5, 0xf0ffe0, 4, 8, { flicker: 0.5 }); add('secoffice', 52.5, G, 10.5, 0xd8e8ff, 5, 8, { flicker: 0.1 });
+    add('garden', 12, 2.6, -6.2, 0xffe2b0, 7, 16, { noFixture: true, flicker: 0.05 }); add('garden', 28, 3, -8, 0xa8b8ff, 6, 16, { noFixture: true, flicker: 0.05 });
+    add('garden', 20, 2.9, -7, 0xa8b8ff, 5, 12, { noFixture: true, flicker: 0.1 });
     add('estair', 47.5, 5.9, 11, 0xffc98a, 4, 9, { flicker: 0.4 });
     add('uehall', 44, U, 6, 0xff7040, 3, 8, { flicker: 0.6 }); add('uehall', 52, U, 6, 0xff7040, 3, 8, { flicker: 0.5 });
     add('cageroom', 43, U, 2.5, 0xff3020, 3, 7, { flicker: 0.8 }); add('operating', 48.5, U, 2.5, 0xe0fff0, 6, 7, { flicker: 0.7 });
@@ -916,7 +919,7 @@ export class House {
       portals.push([a, b, doorId]);
     };
     for (const d of DOORS) if (!d.exit && !d.ajanBlocked) addPortal(d, d.y, d.id);
-    for (const o of OPENINGS) if (!o.noNav) addPortal(o, o.y0, null);
+    for (const o of OPENINGS) if (!o.noNav) addPortal(o, o.y0, o.navDoor || null);
     const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
     const s3 = [node(47.5, 8.2, 0, 'estair'), node(47.5, 10.3, 1.7, 'estair:ramp'), node(47.5, 13.4, 3.4, 'estair')];
@@ -1011,6 +1014,16 @@ export class House {
 /** Item meshes (keys, fuse, bolt cutters). */
 export function makeItemMesh(type, M) {
   const g = new THREE.Group();
+  if (type === 'well_lever') {
+    // an iron crank handle off the well's axle
+    const iron = new THREE.MeshStandardMaterial({ color: 0x3a3632, metalness: 0.7, roughness: 0.5 });
+    const arm = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.04, 0.04), iron); arm.position.set(0, 0.03, 0);
+    const grip = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.16, 8), new THREE.MeshStandardMaterial({ color: 0x4a3018, roughness: 0.8 }));
+    grip.position.set(0.19, 0.1, 0);
+    const hub = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.05, 10), iron); hub.position.set(-0.19, 0.03, 0);
+    g.add(arm, grip, hub);
+    return g;
+  }
   if (type === 'spray') {
     // a small aerosol can with a red cap and a skull label
     const can = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 14), new THREE.MeshStandardMaterial({ color: 0x3a7a20, metalness: 0.6, roughness: 0.35 }));
@@ -1146,4 +1159,10 @@ export const CAMERAS = [
   { label: 'CAM 06  BACK ROOM', pos: [16.7, 2.75, 11.3], look: [12.5, 0.4, 16] },
   { label: 'CAM 07  UPSTAIRS', pos: [0.4, 6.15, 8.4], look: [12, 3.6, 10] },
   { label: 'CAM 08  GARAGE', pos: [39.6, -0.55, 26.6], look: [33, -2.9, 18] },
+  { label: 'CAM 09  GARDEN', pos: [2.4, 3.2, -13.6], look: [20, 0, -5] },
+  { label: 'CAM 10  EAST HALL', pos: [40.3, 2.75, 5.2], look: [52, 0.6, 6.4] },
+  { label: 'CAM 11  EAST WING UP', pos: [55.7, 6.15, 5.2], look: [43, 3.6, 6.2] },
+  { label: 'CAM 12  BACK STAIRS', pos: [48.7, 6.1, 13.7], look: [47.4, 0.8, 7.8] },
+  { label: 'CAM 13  STAIRCASE', pos: [36.3, 6.1, 20.7], look: [38.5, 1.2, 13] },
+  { label: 'CAM 14  SECURITY DOOR', pos: [48.4, 2.7, 5.2], look: [53, 0.8, 6.8] },
 ];
