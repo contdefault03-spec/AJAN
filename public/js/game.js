@@ -10,9 +10,10 @@ import { Screens } from './screens.js';
 import { PostFX } from './postfx.js';
 import { VoiceChat, mic } from './voice.js';
 import { audio } from './audio.js';
-import { loadGLTF, loadTexture } from './assets.js';
+import { loadGLTF, loadTexture, playerSpec, assetUrl } from './assets.js';
 import { settings } from './settings.js';
-import { INV_SLOTS, itemSlots, CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf } from './config.js';
+import { INV_SLOTS, itemSlots, CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf, MONSTERS, monstersFor } from './config.js';
+import { Extras, CAPTURE_SPOTS } from './extras.js';
 
 const GUN_CAPACITY = 2; // the revolver holds two rounds; more lie around the house
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
@@ -75,6 +76,21 @@ export class Game {
   }
 
   get me() { return this.players.get(this.localId); }
+
+  makeBrains(seed, snaps = null) {
+    this.brains = this.monsterDefs.map((def, i) => {
+      const b = new AjanBrain(this, mulberry32(seed + i * 7919), def);
+      const s = snaps?.[def.id];
+      if (s && s.st !== 'dormant') { b.pos.set(s.x, s.y, s.z); b.ry = s.ry; b.state = 'patrol'; b.pickPatrol(); } else if (snaps) b.dormantLeft = 10 + i * 10;
+      if (this.freePlay) { b.dormantLeft = Infinity; b.hear = () => {}; } // they stay out of the house
+      return b;
+    });
+    this.brain = this.brains[0];
+  }
+  brainOf(id) { return this.brains?.find(b => b.id === id) || null; }
+  livesLeft(pid) { return this.lives?.get(pid); }
+  /** Length of a loaded sound in seconds (0 if missing). */
+  soundLength(key) { return key ? audio.duration(key) : 0; }
   get isHost() { return this.net.isHost; }
 
   // =============================================================== setup
@@ -134,7 +150,7 @@ export class Game {
     const sorted = [...this.roster].sort((a, b) => (a.id < b.id ? -1 : 1));
     sorted.forEach((p, i) => {
       const isLocal = p.id === this.localId;
-      const av = new Avatar('player', pg, { shirt: p.shirt, pants: p.pants });
+      const av = new Avatar('player', pg, { shirt: p.shirt, pants: p.pants, spec: playerSpec() });
       scene.add(av.group);
       if (isLocal) av.setLayer(1);
       const sp = SPAWN_POINTS[i % SPAWN_POINTS.length];
@@ -158,18 +174,28 @@ export class Game {
       return l;
     });
 
-    this.ajan = new Avatar('ajan', ag);
-    this.ajan.group.position.set(17, -50, 4);
-    scene.add(this.ajan.group);
-    this.ajanVis = { pos: V(17, -50, 4), ry: 0, st: 'dormant', m: 'move', mt: 0, sp: 0, hy: 0 };
+    // The monsters in this round: Ajan always, Guy from Medium, Ajanita on Hard.
+    this.monsterDefs = monstersFor(this.difficulty);
+    this.monsters = new Map();
+    const extra = await Promise.all(this.monsterDefs.map(d => (d.id === 'ajan' ? ag : loadGLTF(d.model))));
+    this.monsterDefs.forEach((def, i) => {
+      const av = new Avatar('ajan', extra[i], { spec: def.spec, height: def.height });
+      av.group.position.set(17, -50, 4);
+      scene.add(av.group);
+      this.monsters.set(def.id, { def, avatar: av, vis: { pos: V(17, -50, 4), ry: 0, st: 'dormant', m: 'move', mt: 0, sp: 0, hy: 0 }, snap: null, stepDist: 0, sleepSound: null });
+    });
+    this.ajan = this.monsters.get('ajan').avatar;
+    this.ajanVis = this.monsters.get('ajan').vis;
     this.fx = new DissolveFX(scene);
     this.buildDust();
 
-    if (this.isHost) this.brain = new AjanBrain(this, mulberry32(this.seed ^ 0x9e3779b9));
-    if (this.freePlay && this.brain) {
-      this.brain.dormantLeft = Infinity; // he stays out of the house
-      this.brain.hear = () => {};
-    }
+    // Respawns left per player (host-authoritative; joining mid-round isn't allowed, so
+    // reconnecting can't reset them).
+    this.lives = new Map();
+    for (const p of this.players.values()) this.lives.set(p.id, DIFFICULTY[this.difficulty].respawns);
+    if (this.isHost) this.makeBrains(this.seed ^ 0x9e3779b9);
+    this.extras = new Extras(this);
+    await this.extras.init();
 
     this.post = new PostFX(this.renderer, scene, this.camera);
     this.applyGraphics();
@@ -348,7 +374,8 @@ export class Game {
       if (this.phase !== 'play') return;
       // Notes and Fai's drink menu free the mouse on purpose; anything else means "pause".
       // (The lock events arrive asynchronously, so allow a moment after the menu closes.)
-      const menu = this.drinkMenuOpen || performance.now() - (this.drinkMenuClosedAt || -1e9) < 1500;
+      const menu = this.drinkMenuOpen || this.slotOpen || performance.now() - Math.max(this.drinkMenuClosedAt || -1e9, this.slotClosedAt || -1e9) < 1500;
+      if (this.localEscaped || this.app.cinemaPlaying) return; // the escape video freed the mouse
       if (document.pointerLockElement !== this.canvas && !$('noteView').classList.contains('show') && !menu) this.app.pause(true);
     };
     // Mouse wheel: cycle the selected inventory item (only while actually playing).
@@ -391,7 +418,7 @@ export class Game {
     this.request({ k: 'elev', to: level });
   }
 
-  isSpectating() { return !!((this.localDead || this.localEscaped) && this.spectate.active); }
+  isSpectating() { return !!((this.localDead || this.localEscaped || this.me?.knocked) && this.spectate.active); }
 
   // ============================================================ networking
   bindNet() {
@@ -403,7 +430,8 @@ export class Game {
 
   onRelay(from, t, d) {
     if (t === 'p') this.onPlayerState(from, d);
-    else if (t === 'a') { if (!this.isHost) this.ajanSnap = d; }
+    else if (t === 'a') { if (!this.isHost) { this.ajanSnap = d; this.monsters.get('ajan').snap = d; } }
+    else if (t === 'm') { if (!this.isHost) for (const [id, sn] of Object.entries(d)) { const m = this.monsters.get(id); if (m) m.snap = sn; } }
     else if (t === 's') { if (!this.isHost) this.spider.snap = d; }
     else if (t === 'rq') { if (this.isHost) this.handleRequest(from, d); }
     else if (t === 'ev') this.applyEvent(d);
@@ -421,6 +449,7 @@ export class Game {
     p.run = !!d[7];
     p.flash = !!d[8];
     if (d[9] !== p.act) { p.act = d[9]; p.actT = 0; }
+    if ((d[10] || null) !== (p.heldType || null)) this.setRemoteHeld(p, d[10] || null);
     if (!p.seen) { p.pos.copy(p.target); p.yaw = p.tyaw; p.seen = true; }
   }
 
@@ -454,15 +483,10 @@ export class Game {
 
   onHostChanged() {
     if (this.isHost && !this.brain) {
-      // Take over Ajan from the last replicated snapshot.
-      this.brain = new AjanBrain(this, mulberry32(this.seed ^ Date.now()));
-      const s = this.ajanSnap;
-      if (s && s.st !== 'dormant') {
-        this.brain.pos.set(s.x, s.y, s.z);
-        this.brain.ry = s.ry;
-        this.brain.state = 'patrol';
-        this.brain.pickPatrol();
-      } else this.brain.dormantLeft = 10;
+      // Take over the monsters from the last replicated snapshots.
+      const snaps = {};
+      for (const [id, m] of this.monsters) snaps[id] = m.snap || { st: 'dormant' };
+      this.makeBrains(Date.now() & 0xffffff, snaps);
       this.toast('You are now the host.');
     }
   }
@@ -476,7 +500,9 @@ export class Game {
   handleRequest(pid, r) {
     const p = this.players.get(pid);
     if (!p || !p.alive || p.escaped || p.dying) return;
+    if (p.restrained && r.k !== 'free' && r.k !== 'noise') return; // tied up: nothing else until free
     const H = this.house;
+    if (this.extras?.request(pid, r, p)) return;
     switch (r.k) {
       case 'door': {
         const d = H.doors.get(r.id);
@@ -553,10 +579,9 @@ export class Game {
         if (!h) return;
         if (r.enter) {
           if (h.occupant || p.hidden) return;
-          const b = this.brain;
-          // He knows where you are if he was chasing you a moment ago or is looking right at you.
-          const seen = !!b && b.state !== 'sleep' && b.state !== 'dormant' && b.pos.distanceTo(p.pos) < 9 &&
-            ((b.state === 'chase' && b.target === pid && b.lastSeenT < 0.6) || b.canSee(p));
+          // A monster knows where you are if it was chasing you a moment ago or is looking right at you.
+          const seen = (this.brains || []).some(b => b.state !== 'sleep' && b.state !== 'dormant' && b.pos.distanceTo(p.pos) < 9 &&
+            ((b.state === 'chase' && b.target === pid && b.lastSeenT < 0.6) || b.canSee(p)));
           h.occupant = pid;
           p.hideSeen = seen;
           this.broadcast({ k: 'hide', pid, id: r.id, on: true });
@@ -570,7 +595,7 @@ export class Game {
       case 'noise': {
         const pos = V(r.x, r.y, r.z);
         if (isSafeZone(pos)) return; // nothing in the attic reaches him
-        if (this.brain) this.brain.hear({ pos, radius: Math.min(r.r, 25), kind: r.kind, pid });
+        for (const b of this.brains || []) b.hear({ pos, radius: Math.min(r.r, 25), kind: r.kind, pid });
         return;
       }
       case 'board': {
@@ -580,7 +605,7 @@ export class Game {
         if ((b.lastHost || -9) > now - 2.5) return; // per-board cooldown
         b.lastHost = now;
         this.broadcast({ k: 'creak', i: r.i, pid });
-        if (this.brain) this.brain.hear({ pos: V(b.x, b.y, b.z), radius: 17, kind: 'board', pid, exact: true });
+        for (const br of this.brains || []) br.hear({ pos: V(b.x, b.y, b.z), radius: 17, kind: 'board', pid, exact: true });
         return;
       }
       case 'elev': {
@@ -701,27 +726,49 @@ export class Game {
   }
 
   hostNoise(pos, radius, kind, pid = null, exact = false) {
-    if (!this.brain || pid === 'ajan') return;
+    if (!this.brains || pid === 'ajan') return;
     const p = pos.clone ? pos.clone() : V(pos.x, pos.y, pos.z);
     if (isSafeZone(p)) return;
-    this.brain.hear({ pos: p, radius, kind, pid, exact });
+    for (const b of this.brains) b.hear({ pos: p, radius, kind, pid, exact });
   }
 
-  hostStartKill(pid) {
+  hostFridge(open) { this.broadcast({ k: 'fridge', open }); }
+
+  hostStartKill(pid, b = this.brain) {
     const p = this.players.get(pid);
     if (!p || !p.alive || p.dying || this.kills.has(pid)) return;
     if (isSafeZone(p.pos)) return; // the attic is sacred
     if (this.freePlay) return;
     if (this.car?.state !== 'parked' && this.car?.riders.includes(pid)) return; // already driving away
+    if (b.state === 'carry') return; // busy dragging someone: can't attack
     p.dying = true;
-    const b = this.brain;
+    const left = this.lives.get(pid) ?? 0;
+    // Not their last life (or Guy, who never eats anyone): a slap/punch knocks them out
+    // and the monster drags the body to the room they'll wake up in.
+    if (left > 0 || b.def.kill === 'punch') {
+      const final = left <= 0;
+      if (!final) this.lives.set(pid, left - 1);
+      b.setState('kill');
+      b.anim = 'grab'; b.animT = 0;
+      b.ry = Math.atan2(p.pos.x - b.pos.x, p.pos.z - b.pos.z);
+      const spot = this.extras.pickSpot(pid);
+      // rough ETA: path length at his carrying speed, plus the knock-down
+      const eta = this.net.serverNow() + (1.6 + p.pos.distanceTo(spot.drop) * 1.35 / (b.v.patrol * 1.15) + Math.abs(p.pos.y - spot.drop.y) * 2) * 1000;
+      this.broadcast({ k: 'ko', pid, m: b.id, x: b.pos.x, y: b.pos.y, z: b.pos.z, ry: b.ry, vx: p.pos.x, vy: p.pos.y, vz: p.pos.z, final, lives: this.lives.get(pid), eta, spot: spot.id });
+      this.dropItems(pid, p.pos);
+      setTimeout(() => {
+        if (this.disposed || b.state !== 'kill') return;
+        b.startCarry(pid, { id: spot.id, pos: spot.drop, final });
+      }, 1600);
+      return;
+    }
     b.setState('kill');
     b.anim = 'grab';
     b.animT = 0;
     // Face the victim
     b.ry = Math.atan2(p.pos.x - b.pos.x, p.pos.z - b.pos.z);
     const dur = EAT_START + this.eatDuration(p.character) + 0.4;
-    this.broadcast({ k: 'kill', pid, x: b.pos.x, y: b.pos.y, z: b.pos.z, ry: b.ry, vx: p.pos.x, vy: p.pos.y, vz: p.pos.z });
+    this.broadcast({ k: 'kill', pid, m: b.id, x: b.pos.x, y: b.pos.y, z: b.pos.z, ry: b.ry, vx: p.pos.x, vy: p.pos.y, vz: p.pos.z });
     setTimeout(() => {
       if (this.disposed) return;
       this.broadcast({ k: 'dead', pid, x: p.pos.x, y: p.pos.y, z: p.pos.z });
@@ -729,6 +776,21 @@ export class Game {
       b.finishKill();
       this.checkEnd();
     }, dur * 1000);
+  }
+
+  /** Host: the monster arrived with an unconscious player — they wake up there (or, on their last life, don't). */
+  hostRevive(pid, spot) {
+    const p = this.players.get(pid);
+    if (!p || !p.dying) return;
+    if (spot.final) {
+      this.broadcast({ k: 'dead', pid, x: p.pos.x, y: p.pos.y, z: p.pos.z });
+      this.checkEnd();
+      return;
+    }
+    const cs = CAPTURE_SPOTS.find(c => c.id === spot.id) || CAPTURE_SPOTS[0];
+    p.restrained = true;
+    p.captureSpot = cs.id;
+    this.broadcast({ k: 'revive', pid, spot: cs.id, x: cs.pos.x, y: cs.pos.y, z: cs.pos.z, yaw: cs.yaw });
   }
 
   // ============================================================ revolver
@@ -929,6 +991,7 @@ export class Game {
   tryShoot() {
     const L = this.local;
     const held = this.selectedItem();
+    if (held?.type === 'spray' && !this.localDead && !L.frozen && !L.hidden && !this.me?.dying) { this.extras.useSpray(held); return true; }
     // a drink in hand: left click drinks it
     if (held && DRINKS[held.type] && !this.localDead && !L.frozen && !this.me?.dying) { this.request({ k: 'drink', id: held.id }); return true; }
     if (!this.playerHas(this.localId, 'revolver') || this.localDead || this.localEscaped || L.hidden || L.frozen || this.me?.dying) return false;
@@ -962,10 +1025,12 @@ export class Game {
     const clear = q => (levelOf(o.y - 1.4) === levelOf(q.y - 0.3) || (inStairs(o) && inStairs(q))) &&
       segmentBlockers(o.x, o.z, q.x, q.z, (o.y + q.y) / 2, this.house.colliders, { max: 1 }) === 0;
     let hit = null, target = null;
-    const b = this.brain, sp = this.spider;
+    let b = null;
+    const sp = this.spider;
     for (let t = 0.3; t < 40 && !hit; t += 0.05) {
       const q = o.clone().addScaledVector(d, t);
-      if (b && b.state !== 'dormant' && Math.hypot(q.x - b.pos.x, q.z - b.pos.z) < 0.55 && q.y > b.pos.y + 0.15 && q.y < b.pos.y + 2.4) { hit = q; target = 'ajan'; }
+      const mb = (this.brains || []).find(m => m.state !== 'dormant' && Math.hypot(q.x - m.pos.x, q.z - m.pos.z) < 0.55 && q.y > m.pos.y + 0.15 && q.y < m.pos.y + 2.4);
+      if (mb) { hit = q; target = 'ajan'; b = mb; }
       else if (sp && sp.state !== 'dead' && q.distanceTo(sp.hitCentre()) < 0.8) { hit = q; target = 'spider'; }
     }
     if (hit && !clear(hit)) { hit = null; target = null; }
@@ -973,7 +1038,7 @@ export class Game {
     if (target === 'ajan') effect = b.stun(25) ? 'stun' : 'hit';
     if (target === 'spider') effect = sp.kill() ? 'spiderdead' : null;
     gun.ammo -= 1;
-    this.broadcast({ k: 'shot', by: pid, at: now, ammo: gun.ammo, ox: o.x, oy: o.y, oz: o.z, target, effect, hx: hit?.x, hy: hit?.y, hz: hit?.z });
+    this.broadcast({ k: 'shot', mon: b?.def.name, by: pid, at: now, ammo: gun.ammo, ox: o.x, oy: o.y, oz: o.z, target, effect, hx: hit?.x, hy: hit?.y, hz: hit?.z });
     // A gunshot is the loudest thing in the house. If he's still up, he comes.
     if (effect !== 'stun') this.hostNoise(p.pos, 45, 'gunshot', pid, true);
   }
@@ -1022,7 +1087,7 @@ export class Game {
     p.dying = true;
     this.spider.hiss();
     const c = charById(p.character);
-    const snd = c.id === 'AJAN' ? 'ajandie' : c.sound;
+    const snd = c.sound;
     const gain = DEATH_GAIN[c.id] ?? 1;
     if (snd) audio.play(snd, p.isLocal ? { vol: gain, limit: gain > 1 } : { pos: p.pos.clone().add(V(0, 1.4, 0)), vol: gain, ref: 3, limit: gain > 1 });
     if (p.label) p.label.style.opacity = 0;
@@ -1054,13 +1119,13 @@ export class Game {
     if (s.t > 1.8) { s.done = true; this.onLocalDeath(); }
   }
 
-  hostDragOut(pid) {
+  hostDragOut(pid, b = this.brain) {
     const p = this.players.get(pid);
     if (!p || !p.hidden) return;
     const h = this.house.hides.get(p.hideId);
     if (h) h.occupant = null;
     this.broadcast({ k: 'hide', pid, id: p.hideId, on: false, forced: true });
-    this.hostStartKill(pid);
+    this.hostStartKill(pid, b);
   }
 
   dropItems(pid, pos) {
@@ -1087,12 +1152,13 @@ export class Game {
     return Math.max(3.4, (key ? audio.duration(key) : 0) + 0.4);
   }
 
-  ajanSound(kind) {
-    if (this.brain) this.broadcast({ k: 'ajs', s: kind });
+  ajanSound(b, kind) {
+    if (this.brains) this.broadcast({ k: 'ajs', s: kind, m: b.id });
   }
 
-  onAjanState(s) {
-    const chase = s === 'chase' || s === 'drag';
+  onAjanState() {
+    // chase music while any monster is chasing (it starts once their "I see you" sound is over)
+    const chase = (this.brains || []).some(b => b.state === 'chase' || b.state === 'drag');
     if (chase !== this.chase && this.isHost) this.broadcast({ k: 'music', chase });
   }
 
@@ -1261,11 +1327,13 @@ export class Game {
         break;
       case 'hide': this.applyHide(e); break;
       case 'kill': this.startKillSeq(e); break;
+      default: this.extras?.event(e); break;
       case 'spiderkill': this.applySpiderKill(e); break;
       case 'spider': if (e.s === 'hiss') this.spider.hiss(); break;
       case 'dead': {
         const p = this.players.get(e.pid);
-        if (p) { p.alive = false; p.dying = false; p.avatar.group.visible = false; }
+        if (p) { p.alive = false; p.dying = false; p.knocked = null; p.avatar.group.visible = false; }
+        if (p?.isLocal) this.extras.hideComingBack();
         // (our own death sequence, if one is still playing, calls onLocalDeath when it ends)
         if (p?.isLocal && !this.localDead && !this.kills.has(e.pid) && !(this.spiderDeath && !this.spiderDeath.done)) this.onLocalDeath();
         if (p?.label) p.label.style.opacity = 0;
@@ -1276,13 +1344,21 @@ export class Game {
       case 'escape': this.applyEscape(e); break;
       case 'music': this.chase = e.chase; this.updateMusic(); break;
       case 'ajs': {
-        const pos = this.ajanVis.pos.clone().add(V(0, 1.9, 0));
-        if (e.s === 'roar') { audio.play('roar', { pos, vol: 1.0, ref: 3 }); this.post?.glitch(0.6); }
-        else if (e.s === 'laugh') audio.play('sleep', { pos, vol: 0.9, ref: 2.5, duration: 3 }); // first 3 s of sleep.mp3
-        else if (e.s === 'whisper') audio.play('ajan', { pos, vol: 0.45, ref: 1.6, rolloff: 1.6, rate: 0.92 });
+        const mon = this.monsters.get(e.m || 'ajan');
+        if (!mon) break;
+        const pos = mon.vis.pos.clone().add(V(0, 1.9, 0));
+        const snd = mon.def.sounds;
+        if (e.s === 'roar') { audio.play('roar', { pos, vol: 1.0, ref: 3, rate: e.m === 'ajanita' ? 1.2 : e.m === 'guy' ? 0.8 : 1 }); this.post?.glitch(0.6); }
+        else if (e.s === 'see') { if (!audio.play(snd.see, { pos, vol: 1.2, ref: 4, limit: true })) audio.play('roar', { pos, vol: 1, ref: 3 }); this.post?.glitch(0.5); }
+        // he leaves without finding you (ajanleaves / guyleaves / ajanitaleave)
+        else if (e.s === 'laugh') { if (!audio.play(snd.leave, { pos, vol: 1.0, ref: 3 })) audio.play('sleep', { pos, vol: 0.9, ref: 2.5, duration: 3 }); }
+        else if (e.s === 'squeeze') { audio.play('growl', { pos, vol: 0.9, ref: 2.5, rate: 0.8 }); audio.play('thud', { pos, vol: 0.8, ref: 2 }); setTimeout(() => audio.play('ajannew', { pos, vol: 0.8, ref: 2.5 }), 900); }
+        else if (e.s === 'whisper') { if (snd.whisper) audio.play(snd.whisper, { pos, vol: 0.45, ref: 1.6, rolloff: 1.6, rate: 0.92 }); }
         else audio.play('growl', { pos, vol: 0.8, ref: 2.5, rate: 0.9 + Math.random() * 0.2 });
         break;
       }
+      case 'ko': this.startKnockout(e); break;
+      case 'revive': this.applyRevive(e); break;
       case 'msg': this.message(e.text); break;
       case 'chain': {
         const d = H.doors.get(e.id);
@@ -1397,8 +1473,9 @@ export class Game {
     p.dying = true;
     const c = charById(p.character);
     const sound = c.id === 'AJAN' ? null : c.sound;
+    const mon = this.monsters.get(e.m || 'ajan');
     const seq = {
-      pid: e.pid, p, t: 0, ajanPos: V(e.x, e.y, e.z), ry: e.ry, start: V(e.vx, e.vy, e.vz),
+      mon, pid: e.pid, p, t: 0, ajanPos: V(e.x, e.y, e.z), ry: e.ry, start: V(e.vx, e.vy, e.vz),
       sound, isAjanChar: c.id === 'AJAN', eatDur: this.eatDuration(p.character), stage: 0, chewT: 0, local: p.isLocal,
     };
     this.kills.set(e.pid, seq);
@@ -1407,9 +1484,10 @@ export class Game {
     if (p.label) p.label.style.opacity = 0;
     if (seq.isAjanChar) {
       const gain = DEATH_GAIN.AJAN ?? 1;
-      audio.play('ajandie', seq.local ? { vol: gain, limit: gain > 1 } : { pos: seq.start.clone().add(V(0, 1.5, 0)), vol: gain, ref: 3, limit: gain > 1 });
+      audio.play('ajannew', seq.local ? { vol: gain, limit: gain > 1 } : { pos: seq.start.clone().add(V(0, 1.5, 0)), vol: gain, ref: 3, limit: gain > 1 });
     }
-    audio.play('growl', { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1, ref: 3 });
+    // ajancatch / ajanita: the "got you" sound as he grabs you
+    if (!audio.play(mon.def.sounds.catch, { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1.2, ref: 3.5, limit: true })) audio.play('growl', { pos: seq.ajanPos.clone().add(V(0, 2, 0)), vol: 1, ref: 3 });
     if (seq.local) {
       this.local.frozen = true;
       if (this.local.hidden) { this.local.hidden = null; $('hideOverlay').classList.remove('show'); }
@@ -1425,7 +1503,7 @@ export class Game {
       s.t += dt;
       const t = s.t;
       const av = s.p.avatar;
-      const aj = this.ajan;
+      const aj = s.mon.avatar;
       // Ajan pose
       aj.group.position.copy(s.ajanPos);
       aj.group.rotation.y = s.ry;
@@ -1468,7 +1546,7 @@ export class Game {
         if (k >= 1 && s.stage === 1) {
           s.stage = 2;
           av.group.visible = false;
-          audio.play('ajan', { pos: aj.mouth(), vol: 1, ref: 3 });
+          if (s.mon.def.id === 'ajan') audio.play('ajan', { pos: aj.mouth(), vol: 1, ref: 3 });
         }
       }
       if (s.local) this.updateDeathCam(s, dt);
@@ -1480,9 +1558,108 @@ export class Game {
     }
   }
 
+  // ======================================================== knocked out (not the last life)
+  startKnockout(e) {
+    const p = this.players.get(e.pid);
+    if (!p) return;
+    const mon = this.monsters.get(e.m) || this.monsters.get('ajan');
+    p.dying = true;
+    p.knocked = { mon, t: 0, start: V(e.vx, e.vy, e.vz), ry: e.ry, final: e.final };
+    if (p.label) p.label.style.opacity = 0;
+    if (p.hidden) { const h = this.house.hides.get(p.hideId); if (h) h.occupant = null; p.hidden = false; p.hideId = null; }
+    if (p.isLocal) this.lives.set(e.pid, e.lives);
+    // the slap / punch
+    const at = p.knocked.start.clone().add(V(0, 1.5, 0));
+    audio.play('thud', { pos: at, vol: 1.0, ref: 3, rate: 0.8 });
+    audio.play('slam', { pos: at, vol: 0.7, ref: 3, rate: 1.3 });
+    if (!audio.play(mon.def.sounds.catch, { pos: at, vol: 1.2, ref: 3.5, limit: true })) audio.play('growl', { pos: at, vol: 1, ref: 3 });
+    if (p.isLocal) {
+      const L = this.local;
+      L.frozen = true;
+      if (L.hidden) { L.hidden = null; $('hideOverlay').classList.remove('show'); }
+      this.post.vhs.uniforms.redFlash.value = 0.8;
+      this.post.glitch(2);
+      $('hud').classList.add('dying');
+      setTimeout(() => {
+        if (this.disposed || !p.knocked) return;
+        $('hud').classList.remove('dying');
+        this.post.vhs.uniforms.redFlash.value = 0;
+        if (e.final) { this.message(`${mon.def.name} knocked you out. You won't wake up from this one.`, 5); return; }
+        this.extras.showComingBack(e.eta, mon.def.name);
+        if (this.spectateCandidates().length) this.startSpectating();
+      }, 1500);
+    } else this.toast(e.final ? `${p.name} was beaten unconscious.` : `${p.name} was knocked out and dragged away.`);
+    this.updateHUD();
+  }
+
+  /** Poses knocked-out bodies: slumped, then dragged behind whoever carries them. */
+  updateKnocked(dt) {
+    for (const p of this.players.values()) {
+      const k = p.knocked;
+      if (!k) continue;
+      k.t += dt;
+      const av = p.avatar, mv = k.mon.vis;
+      av.group.visible = !p.isLocal || !this.isSpectating();
+      if (p.isLocal) av.setLayer(this.isSpectating() ? 1 : 0);
+      if (k.t < 1.4) {
+        // falls over where they stood
+        av.group.position.copy(k.start);
+        av.group.rotation.y = k.ry + Math.PI;
+        av.state = { mode: 'prone', speed: 0 };
+      } else {
+        // dragged by the ankles behind the monster
+        const back = V(-Math.sin(mv.ry), 0, -Math.cos(mv.ry));
+        const tgt = mv.pos.clone().addScaledVector(back, 1.3);
+        av.group.position.lerp(tgt, 1 - Math.exp(-dt * 8));
+        av.group.rotation.y = angleLerp(av.group.rotation.y, mv.ry, 1 - Math.exp(-dt * 6));
+        av.state = { mode: 'prone', speed: 0 };
+      }
+      av.update(dt);
+      p.pos.copy(av.group.position);
+      if (p.isLocal && !this.isSpectating()) {
+        // nobody else to watch: look down at your own body being dragged
+        const cam = this.camera;
+        const want = av.group.position.clone().add(V(Math.sin(mv.ry) * 2.2, 2.4, Math.cos(mv.ry) * 2.2));
+        cam.position.lerp(want, 1 - Math.exp(-dt * 3));
+        cam.lookAt(av.group.position);
+        this.local.hands.visible = false;
+      }
+    }
+  }
+
+  applyRevive(e) {
+    const p = this.players.get(e.pid);
+    if (!p) return;
+    p.knocked = null;
+    p.dying = false;
+    p.alive = true;
+    p.restrained = true;
+    p.captureSpot = e.spot;
+    const at = V(e.x, e.y, e.z);
+    p.pos.copy(at); p.target.copy(at);
+    p.avatar.setDissolve(0);
+    if (p.label) p.label.style.opacity = 1;
+    if (p.isLocal) {
+      const L = this.local;
+      p.avatar.setLayer(1);
+      this.extras.hideComingBack();
+      if (this.spectate.active) { this.spectate.active = false; $('spectateHud').classList.remove('show'); this.camera.layers.disable(1); }
+      L.pos.copy(at);
+      L.yaw = e.yaw;
+      L.pitch = -0.2;
+      L.frozen = true;
+      L.hands.visible = true;
+      this.post.glitch(1.2);
+      const spot = CAPTURE_SPOTS.find(c => c.id === e.spot);
+      this.message(`You wake up in ${spot?.name || 'the dark'}. Your head is pounding.`, 5);
+    } else this.toast(`${p.name} woke up somewhere in the house.`);
+    this.extras.onRevive(e);
+    this.updateHUD();
+  }
+
   updateDeathCam(s, dt) {
     const cam = this.camera;
-    const aj = this.ajan;
+    const aj = s.mon.avatar;
     const mouth = aj.mouth();
     const u = this.post.vhs.uniforms;
     if (s.t < EAT_START) {
@@ -1582,17 +1759,14 @@ export class Game {
       this.localEscaped = true;
       this.local.frozen = true;
       const delay = Math.max(0, e.at - this.net.serverNow());
-      if (e.car) {
-        setTimeout(() => {
-          this.cineAjan = false;
-          this.car.eyes?.forEach(m => { m.visible = false; });
-          $('hud').classList.remove('cine');
-          this.post.vhs.uniforms.fade.value = 0;
-          this.escapeVideoDone = true;
-          this.afterEscapeVideo();
-          setTimeout(() => $('escapeTitle').classList.remove('show'), 400);
-        }, delay + 1200);
-      } else setTimeout(() => this.app.playEscape(() => { this.escapeVideoDone = true; this.afterEscapeVideo(); }), delay);
+      // Front door → escape.mp4; out through the garage in the car → escapecar.mp4.
+      // The end menu only appears once the clip has finished.
+      setTimeout(() => {
+        this.cineAjan = false;
+        $('hud').classList.remove('cine');
+        this.post.vhs.uniforms.fade.value = 0;
+        this.app.playEscape(() => { this.escapeVideoDone = true; this.afterEscapeVideo(); }, !!e.car);
+      }, delay);
     }
     if (this.isHost) this.checkEnd();
     this.updateHUD();
@@ -1664,6 +1838,7 @@ export class Game {
 
   interact() {
     const L = this.local;
+    if (this.extras?.restrained && !this.localDead) { this.extras.press(); return; }
     if (this.localDead || this.localEscaped || L.frozen) return;
     if ($('noteView').classList.contains('show')) { this.closeNote(); return; }
     if (L.hidden) {
@@ -1677,6 +1852,7 @@ export class Game {
     const it = f.it;
     const me = this.localId;
     switch (it.kind) {
+      case 'slot': this.extras.interactSlot(); return;
       case 'door': {
         const d = it.door;
         const rattle = what => {
@@ -1779,6 +1955,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
+      case 'slot': return this.extras.prompt(it);
     }
     return '';
   }
@@ -2003,7 +2180,7 @@ export class Game {
     this.sendT -= dt;
     if (this.sendT <= 0 && this.net.online && me && this.phase === 'play') {
       this.sendT = 1 / 15;
-      this.net.vsend('p', [+L.pos.x.toFixed(3), +L.pos.y.toFixed(3), +L.pos.z.toFixed(3), +(L.yaw + Math.PI).toFixed(3), +L.pitch.toFixed(2), +L.speed.toFixed(2), L.crouch ? 1 : 0, L.run ? 1 : 0, L.flash ? 1 : 0, L.actCount]);
+      this.net.vsend('p', [+L.pos.x.toFixed(3), +L.pos.y.toFixed(3), +L.pos.z.toFixed(3), +(L.yaw + Math.PI).toFixed(3), +L.pitch.toFixed(2), +L.speed.toFixed(2), L.crouch ? 1 : 0, L.run ? 1 : 0, L.flash ? 1 : 0, L.actCount, this.heldShown || 0]);
     }
     // Speaking flag
     const spk = mic.speaking;
@@ -2021,13 +2198,14 @@ export class Game {
 
     // Authority
     if (this.isHost && this.phase === 'play') {
-      this.brain.update(dt);
+      for (const b of this.brains) b.update(dt);
       this.hostDirector(dt);
       this.ajanSendT -= dt;
       if (this.ajanSendT <= 0) {
         this.ajanSendT = 0.1;
         this.ajanSnap = this.brain.snapshot();
         if (this.net.online) this.net.vsend('a', this.ajanSnap);
+        if (this.net.online && this.brains.length > 1) { const m = {}; for (const b of this.brains.slice(1)) m[b.id] = b.snapshot(); this.net.vsend('m', m); }
         if (this.net.online) this.net.vsend('s', this.spider.snapshot());
       }
       // Ajan uses the escape route? No: but escaping players on the threshold.
@@ -2076,6 +2254,8 @@ export class Game {
     this.updateFloorboards(dt);
     this.updateJellyTouch(dt);
     this.updateSleepAudio();
+    this.updateKnocked(dt);
+    this.extras.update(dt);
     H.update(dt, this.time, this.camera.position);
 
     // Lightning flash
@@ -2144,20 +2324,42 @@ export class Game {
     this.post.update(dt, this.time);
   }
 
+  /** Another player's selected item, shown in their right hand (weapons included). */
+  setRemoteHeld(p, type) {
+    p.heldType = type;
+    if (p.heldMesh) { p.heldMesh.parent?.remove(p.heldMesh); p.heldMesh = null; }
+    if (!type || !ITEM_INFO[type] && !DRINKS[type]) return;
+    const m = type === 'revolver' && this.revolverModel ? this.revolverModel.clone() : this.heldModel(type);
+    // undo the avatar's mesh scale so the item keeps its real size in the hand
+    m.scale.multiplyScalar(1 / p.avatar.scale);
+    m.position.set(-0.13 / 1, 0, 0.02);
+    if (type === 'revolver') m.rotation.set(0, Math.PI / 2, -Math.PI / 2);
+    p.avatar.bones.foreR.add(m);
+    p.heldMesh = m;
+  }
+
   updateRemotePlayers(dt) {
     for (const p of this.players.values()) {
       if (p.isLocal) continue;
       p.actT += dt;
       const av = p.avatar;
-      if (p.dying) continue; // posed by the kill sequence
+      if (p.dying) continue; // posed by the kill / knock-out sequence
       // hiding under a bed/table or sitting (car, club chair): still visible to others; closets stay shut
       const hs = p.hidden ? this.house.hides.get(p.hideId) : null;
-      const shown = hs && hs.type !== 'closet' && !(hs.type === 'seat' && this.car.state !== 'parked');
+      const shown = !!hs; // seated in the moving car too: riders stay in their seats for everyone watching
       const visible = p.alive && !p.escaped && (!p.hidden || shown) && p.seen;
       av.group.visible = visible;
       if (!visible) continue;
       if (shown) {
         const face = hs.yaw + Math.PI, prone = hs.type === 'under';
+        if (hs.type === 'closet') {
+          // standing inside the closet, behind the louvers
+          av.group.position.copy(hs.inside);
+          av.group.rotation.y = face;
+          av.state = { speed: 0, crouch: 0, run: false, flash: false, interactT: 9, pitch: 0, turn: 0, mode: 'normal' };
+          av.update(dt);
+          continue;
+        }
         // lying under furniture: feet in, head at the edge he looks out of
         av.group.position.copy(hs.inside).addScaledVector(V(Math.sin(face), 0, Math.cos(face)), prone ? -1.25 : 0);
         av.group.rotation.y = face;
@@ -2190,8 +2392,13 @@ export class Game {
 
   updateAjanVisual(dt) {
     if (this.cineAjan) return; // car.js is posing him for the escape cut
-    const v = this.ajanVis;
-    let s = this.isHost ? this.brain?.snapshot() : this.ajanSnap;
+    const busy = new Set([...this.kills.values()].map(k => k.mon));
+    for (const mon of this.monsters.values()) if (!busy.has(mon)) this.updateMonsterVisual(mon, dt);
+  }
+
+  updateMonsterVisual(mon, dt) {
+    const v = mon.vis;
+    let s = this.isHost ? this.brainOf(mon.def.id)?.snapshot() : mon.snap;
     if (s) {
       const tp = V(s.x, s.y, s.z);
       if (v.pos.distanceTo(tp) > 5 || v.pos.y < -20) v.pos.copy(tp);
@@ -2199,20 +2406,22 @@ export class Game {
       v.ry = angleLerp(v.ry, s.ry, 1 - Math.exp(-dt * 10));
       v.st = s.st; v.m = s.m; v.mt = s.mt; v.sp = s.sp; v.hy = s.hy;
     }
-    if (this.kills.size) return; // kill sequences pose Ajan themselves
-    const aj = this.ajan;
+    const aj = mon.avatar;
     aj.group.visible = v.st !== 'dormant';
     aj.group.position.copy(v.pos);
     aj.group.rotation.y = v.ry;
-    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun', 'dance', 'floorsleep'].includes(v.m) ? v.m : 'move';
-    aj.state = { speed: v.sp, mode: ajMode, modeT: v.mt, headYaw: v.m === 'search' ? undefined : v.hy };
+    // sprayed in the eyes: rubs his face (roar pose) at first, then stumbles about blind
+    let m = v.m === 'sprayed' ? (v.mt < 3 ? 'roar' : 'search') : v.m;
+    if (v.st === 'kill' && m === 'grab') m = 'grab';
+    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun', 'dance', 'floorsleep', 'roar', 'grab'].includes(m) ? m : 'move';
+    aj.state = { speed: v.sp, mode: ajMode, modeT: v.mt, headYaw: m === 'search' ? undefined : v.hy };
     aj.update(dt);
     // Heavy footsteps
     if (v.st !== 'dormant' && v.sp > 0.2) {
-      this.ajanStepDist += v.sp * dt;
+      mon.stepDist += v.sp * dt;
       const stride = v.sp > 3 ? 1.5 : 1.15;
-      if (this.ajanStepDist > stride) {
-        this.ajanStepDist = 0;
+      if (mon.stepDist > stride) {
+        mon.stepDist = 0;
         audio.play('stepHeavy', { pos: v.pos.clone().add(V(0, 0.2, 0)), vol: v.sp > 3 ? 1 : 0.7, ref: 2.2, rolloff: 1.1, rate: 0.85 + Math.random() * 0.15, muffle: this.muffleFor(v.pos) });
       }
     }
@@ -2306,13 +2515,16 @@ export class Game {
 
   /** sleep.mp3 loops at his bed while he naps (from the replicated state). */
   updateSleepAudio() {
-    const sleeping = this.ajanVis.st === 'sleep' || this.ajanVis.m === 'floorsleep';
-    if (sleeping && !this.sleepSound) {
-      const pos = this.ajanVis.pos.clone().add(V(0, 1.2, 0));
-      this.sleepSound = audio.play('sleep', { pos, loop: true, vol: 1.7, ref: 3.5, rolloff: 1.0, limit: true });
-    } else if (!sleeping && this.sleepSound) {
-      this.sleepSound.stop(0.6);
-      this.sleepSound = null;
+    // ajansleep / ajanitasleep loop at the bed while they nap
+    for (const mon of this.monsters.values()) {
+      const sleeping = mon.vis.st === 'sleep' || mon.vis.m === 'floorsleep';
+      if (sleeping && !mon.sleepSound && mon.def.sounds.sleep) {
+        const pos = mon.vis.pos.clone().add(V(0, 1.2, 0));
+        mon.sleepSound = audio.play(mon.def.sounds.sleep, { pos, loop: true, vol: 1.7, ref: 3.5, rolloff: 1.0, limit: true });
+      } else if (!sleeping && mon.sleepSound) {
+        mon.sleepSound.stop(0.6);
+        mon.sleepSound = null;
+      }
     }
   }
 
@@ -2398,6 +2610,8 @@ export class Game {
     this.car?.dispose();
     this.attic?.dispose();
     this.club?.dispose();
+    this.extras?.dispose();
+    for (const m of this.monsters?.values() || []) m.sleepSound?.stop();
     this.closeDrinkMenu?.();
     document.getElementById('hud')?.classList.remove('cine');
     document.getElementById('escapeTitle')?.classList.remove('show');
