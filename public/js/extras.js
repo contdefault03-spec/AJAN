@@ -11,6 +11,7 @@ import { lineOfSight } from './physics.js';
 import { SlotMachine } from './slots.js';
 import { Garden } from './garden.js';
 import { Security } from './security.js';
+import { Passages } from './passages.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const BY = -3.2, U = 3.4, AY = 6.8;
@@ -191,6 +192,8 @@ export class Extras {
     this.garden.init();
     this.security = new Security(G);
     this.security.init();
+    this.passages = new Passages(G);
+    this.passages.init();
     this.buildUI();
   }
 
@@ -217,7 +220,7 @@ export class Extras {
   /** Host: requests this module owns. Returns true if handled. */
   request(pid, r, p) {
     const G = this.game;
-    if (this.garden.request(pid, r, p) || this.security.request(pid, r, p)) return true;
+    if (this.garden.request(pid, r, p) || this.security.request(pid, r, p) || this.passages.request(pid, r, p)) return true;
     switch (r.k) {
       case 'free': {
         if (!p.restrained) return true;
@@ -256,7 +259,7 @@ export class Extras {
   // ======================================================================= events
   event(e) {
     const G = this.game;
-    if (this.garden.event(e) || this.security.event(e)) return true;
+    if (this.garden.event(e) || this.security.event(e) || this.passages.event(e)) return true;
     switch (e.k) {
       case 'freed': {
         const fp = G.players.get(e.pid);
@@ -402,6 +405,7 @@ export class Extras {
     for (const m of this.slots) m.update(dt);
     this.garden.update(dt);
     this.security.update(dt);
+    this.passages.update(dt);
     // --- HUD: lives, coming back
     const me = G.me;
     const left = G.livesLeft?.(G.localId);
@@ -421,17 +425,18 @@ export class Extras {
 
   prompt(it) {
     if (it.kind === 'slotbtn') return it.machine.prompt(it.btn);
-    return this.garden.prompt(it) ?? this.security.prompt(it);
+    return this.garden.prompt(it) ?? this.security.prompt(it) ?? this.passages.prompt(it);
   }
 
   /** E on one of this module's interactables. */
   interact(it) {
-    return this.garden.interact(it) || this.security.interact(it);
+    return this.garden.interact(it) || this.security.interact(it) || this.passages.interact(it);
     return null;
   }
 
   dispose() {
     this.security?.dispose();
+    this.passages?.dispose();
     this.tvVideo.pause();
     this.tvVideo.removeAttribute('src');
     this.tvVideo.load();

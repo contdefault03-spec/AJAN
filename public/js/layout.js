@@ -26,6 +26,8 @@ export const RAMPS = [
   { id: 'R3', puzzle: true, x0: 23.4, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 23.4, ya: UY, b: 25.5, yb: AY },
   // east wing: a narrow servants' staircase, and the spiral stair up to the TV room
   { id: 'R5', x0: 46.3, x1: 48.7, z0: 7.6, z1: 13.0, axis: 'z', a: 7.6, ya: GY, b: 13.0, yb: UY },
+  // the third-floor stairs: up the east side of Ajan's room, from the door end to the north wall
+  { id: 'R7', x0: 31.95, x1: 33.15, z0: 1.0, z1: 6.4, axis: 'z', a: 6.4, ya: UY, b: 1.0, yb: AY },
   { id: 'R6', spiral: true, cx: 53.5, cz: 10, r0: 0.28, r1: 1.45, x0: 52, x1: 55, z0: 8.5, z1: 11.5, ya: UY, yb: AY, a0: Math.PI, turns: 1.25 },
 ];
 
@@ -87,7 +89,8 @@ export const ROOMS = [
   { id: 'ubath', name: 'UPSTAIRS BATHROOM', L: 2, x0: 10, x1: 15, z0: 0, z1: 4.6, floor: 'floorBath', wall: 'wallTile', trim: 'base' },
   { id: 'guest', name: 'GUEST ROOM', L: 2, x0: 15, x1: 23, z0: 0, z1: 8, floor: 'carpetB', wall: 'wallC', trim: 'rail' },
   { id: 'storage', name: 'STORAGE ROOM', L: 2, x0: 23, x1: 30, z0: 0, z1: 8, floor: 'floorWoodDark', wall: 'wallBase', trim: 'none' },
-  { id: 'ajanroom', name: '???', L: 2, x0: 30, x1: 40, z0: 0, z1: 8, floor: 'floorWoodDark', wall: 'wallFilth', trim: 'base' },
+  { id: 'ajanroom', name: '???', L: 2, x0: 30, x1: 40, z0: 0, z1: 8, floor: 'floorWoodDark', wall: 'wallFilth', trim: 'base',
+    ceilings: [[30, 31.9, 0, 8], [33.2, 40, 0, 8], [31.9, 33.2, 6.4, 8]] },
   { id: 'uhall', name: 'UPSTAIRS HALL', L: 2, x0: 0, x1: 40, z0: 8, z1: 11, floor: 'floorWood', wall: 'wallC', trim: 'wainscot',
     ceilings: [[0, 21.8, 8, 11], [21.8, 25.5, 8, 9.5], [25.5, 40, 8, 11]] },
   { id: 'nursery', name: 'NURSERY', L: 2, x0: 0, x1: 10, z0: 11, z1: 21, floor: 'carpetB', wall: 'wallKids', trim: 'wainscotPale' },
@@ -102,7 +105,21 @@ export const ROOMS = [
   { id: 'pantry2', name: 'PANTRY', L: 1, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
   { id: 'secoffice', name: 'SECURITY OFFICE', L: 1, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
   // the walled garden behind the house (outdoors: no ceiling, its own ground; see garden.js)
-  { id: 'garden', name: 'GARDEN', L: 1, x0: 2, x1: 38, z0: -14, z1: 0, floor: 'floorConcrete', wall: 'wallBase', outdoor: true },
+  { id: 'garden', name: 'GARDEN', L: 1, x0: 2, x1: 38, z0: -14, z1: 0, floor: 'floorConcrete', wall: 'wallBase', outdoor: true, noFloor: true },
+  // ---- the third floor: over the north half of the house, at attic height (the attic and
+  // the club fill the south half). Reached by the stairs in Ajan's room.
+  { id: 'thall', name: 'THIRD FLOOR HALL', L: 3, x0: 0, x1: 40, z0: 5.6, z1: 8, floor: 'floorWoodDark', wall: 'wallFilth', trim: 'none',
+    floors: [[0, 31.9, 5.6, 8], [31.9, 33.2, 6.4, 8], [33.2, 40, 5.6, 8]] },
+  { id: 'dollroom', name: 'THE DOLL ROOM', L: 3, x0: 0, x1: 7, z0: 0, z1: 5.6, floor: 'carpetB', wall: 'wallKids', trim: 'none' },
+  { id: 'oldbath', name: 'OLD BATHROOM', L: 3, x0: 7, x1: 11, z0: 0, z1: 5.6, floor: 'floorBath', wall: 'wallTile', trim: 'none' },
+  { id: 'chapel', name: 'CHAPEL', L: 3, x0: 11, x1: 19, z0: 0, z1: 5.6, floor: 'floorWood', wall: 'wallPanel', trim: 'none' },
+  { id: 'studio', name: 'PAINTING STUDIO', L: 3, x0: 19, x1: 27, z0: 0, z1: 5.6, floor: 'floorWoodDark', wall: 'wallPlain', trim: 'none' },
+  { id: 'sewing', name: 'SEWING ROOM', L: 3, x0: 27, x1: 31.5, z0: 0, z1: 5.6, floor: 'carpet', wall: 'wallRose', trim: 'none' },
+  { id: 'observ', name: 'OBSERVATORY', L: 3, x0: 31.5, x1: 40, z0: 0, z1: 5.6, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'none',
+    floors: [[31.5, 31.9, 0, 5.6], [31.9, 33.2, 0, 1.0], [33.2, 40, 0, 5.6]] },
+  // balconies: over the garden (north) and on the east wing's roof
+  { id: 'balcony_n', name: 'BALCONY', L: 3, x0: 12, x1: 26, z0: -2.2, z1: 0, floor: 'floorWoodDark', wall: 'wallBase', outdoor: true },
+  { id: 'balcony_e', name: 'ROOF TERRACE', L: 3, x0: 40, x1: 48, z0: 0, z1: 5, floor: 'floorConcrete', wall: 'wallBase', outdoor: true },
   { id: 'uehall', name: 'EAST WING', L: 2, x0: 40, x1: 56, z0: 5, z1: 7, floor: 'floorWood', wall: 'wallFilth', trim: 'base' },
   { id: 'cageroom', name: 'THE CAGE', L: 2, x0: 40, x1: 46, z0: 0, z1: 5, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none' },
   { id: 'operating', name: 'OPERATING ROOM', L: 2, x0: 46, x1: 51, z0: 0, z1: 5, floor: 'floorTile', wall: 'wallTile', trim: 'none' },
@@ -124,6 +141,7 @@ export const SHAFTS = [
   { id: 'stairU', name: 'STAIRCASE', x0: 36, x1: 40, z0: 11, z1: 21, yMin: -0.5, yMax: 5.3, floors: { 1: [[36, 40, 19.5, 21]], 2: [[36, 40, 11, 13]] } },
   { id: 'stairA', name: 'ATTIC STAIRS', x0: 20, x1: 25.5, z0: 9.45, z1: 11, yMin: 3.9, yMax: 6.6 },
   { id: 'estair', name: 'BACK STAIRS', x0: 46, x1: 49, z0: 7, z1: 14, yMin: -0.5, yMax: 5.3, floors: { 1: [[46, 49, 7, 7.6]], 2: [[46, 49, 13, 14]] } },
+  { id: 'tstair', name: 'STAIRS', x0: 31.9, x1: 33.2, z0: 1.0, z1: 6.4, yMin: 4.3, yMax: 7.2 },
   { id: 'spiral', name: 'SPIRAL STAIRS', x0: 52, x1: 55, z0: 8.5, z1: 11.5, yMin: 4.3, yMax: 6.7 },
 ];
 
@@ -155,7 +173,9 @@ export function floorAt(L, x, z) {
 
 /** True for positions Ajan must never enter or attack (attic + attic stairs). */
 export function isSafeZone(p) {
-  if (levelIndex(p.y) === 3) return true;
+  // at attic height only the attic, the club and the TV room are safe: the new third
+  // floor over the north half of the house is not
+  if (levelIndex(p.y) === 3) return (p.x > 2 && p.x < 40 && p.z > 8 && p.z < 21) || (p.x > 49 && p.x < 56 && p.z > 7 && p.z < 14);
   // the upper steps of the attic stairs count as the attic
   return p.x > 21.0 && p.x < 25.6 && p.z > 9.45 && p.z < 11 && p.y > 4.0;
 }
@@ -209,6 +229,19 @@ export const DOORS = [
   { id: 'd_pantry2', line: 'x', c: 7, a0: 42.5, w: 1.1, swing: 1, y: GY, name: 'Pantry Door' },
   { id: 'd_wing_hall', line: 'z', c: 40, a0: 9.0, w: 1.1, swing: 1, y: GY, name: 'East Wing Door' },
   // Ajan's way in and out of the garden: players can't open it (bolted from his side)
+  // secret passages: bookcases on hinges, locked until their trigger is found (passages.js)
+  { id: 'd_secret_lib', line: 'z', c: 10, a0: 17.2, w: 1.0, swing: 1, y: UY, name: 'Bookcase', secret: true, lock: 'secret' },
+  { id: 'd_secret_wardrobe', line: 'z', c: 8, a0: 6.1, w: 0.9, swing: 1, y: GY, name: 'Coat Rack', secret: true, lock: 'secret' },
+  { id: 'd_secret_chapel', line: 'z', c: 19, a0: 3.4, w: 1.0, swing: 1, y: AY, name: 'Panel', secret: true, lock: 'secret' },
+  // third floor
+  { id: 'd_doll', line: 'x', c: 5.6, a0: 3.0, w: 1.1, swing: -1, y: AY, name: 'Door' },
+  { id: 'd_oldbath', line: 'x', c: 5.6, a0: 8.4, w: 1.0, swing: -1, y: AY, name: 'Bathroom Door' },
+  { id: 'd_chapel', line: 'x', c: 5.6, a0: 14.5, w: 1.1, swing: -1, y: AY, name: 'Chapel Door' },
+  { id: 'd_studio', line: 'x', c: 5.6, a0: 22.5, w: 1.1, swing: -1, y: AY, name: 'Studio Door' },
+  { id: 'd_sewing', line: 'x', c: 5.6, a0: 28.6, w: 1.0, swing: -1, y: AY, name: 'Door' },
+  { id: 'd_observ', line: 'x', c: 5.6, a0: 37.4, w: 1.1, swing: -1, y: AY, name: 'Observatory Door' },
+  { id: 'd_balcony_n', line: 'x', c: 0, a0: 17.5, w: 1.1, swing: -1, y: AY, name: 'Balcony Door' },
+  { id: 'd_balcony_e', line: 'z', c: 40, a0: 2.0, w: 1.1, swing: 1, y: AY, name: 'Terrace Door' },
   { id: 'd_garden', line: 'x', c: 0, a0: 3.2, w: 1.1, swing: -1, y: GY, name: 'Garden Door', ajanOnly: true },
   { id: 'd_east_u', line: 'z', c: 40, a0: 5.4, w: 1.1, swing: 1, y: UY, name: 'Door' },
   { id: 'd_cage', line: 'x', c: 5, a0: 42.5, w: 1.1, swing: -1, y: UY, name: 'Iron Door' },
@@ -281,6 +314,13 @@ export const WALLS = [
   // the TV room on top of the tower, with a rail round the spiral stair's opening (open to the north)
   ['x', 7, 49, 56, AY, 9.2], ['x', 14, 49, 56, AY, 9.2], ['z', 49, 7, 14, AY, 9.2], ['z', 56, 7, 14, AY, 9.2],
   ['x', 11.5, 52, 55, AY, 7.85], ['z', 52, 8.5, 11.5, AY, 7.85], ['z', 55, 8.5, 11.5, AY, 7.85],
+  // third floor: outside walls above the upstairs, the hall wall and the rooms
+  ['x', 0, 0, 40, 6.4, 9.4], ['z', 0, 0, 8, 6.4, 9.4], ['z', 40, 0, 8, 6.4, 9.4],
+  ['x', 5.6, 0, 40, AY, 9.4], ['z', 7, 0, 5.6, AY, 9.4], ['z', 11, 0, 5.6, AY, 9.4], ['z', 19, 0, 5.6, AY, 9.4], ['z', 27, 0, 5.6, AY, 9.4], ['z', 31.5, 0, 5.6, AY, 9.4],
+  // rails round the stairwell opening, and the balcony rails
+  ['z', 31.9, 1.0, 6.4, AY, AY + 1.05], ['z', 33.2, 1.0, 6.4, AY, AY + 1.05], ['x', 6.4, 31.9, 33.2, AY, AY + 1.05], ['x', 8, 0, 2, AY, 9.4],
+  ['x', -2.2, 12, 26, AY, AY + 1.05], ['z', 12, -2.2, 0, AY, AY + 1.05], ['z', 26, -2.2, 0, AY, AY + 1.05],
+  ['x', 5, 40, 48, AY, AY + 1.05], ['z', 48, 0, 5, AY, AY + 1.05],
 ];
 
 // Creaky floorboards (~1 x 1 m), 2-3 per dangerous level

@@ -509,6 +509,7 @@ export class Game {
       case 'door': {
         const d = H.doors.get(r.id);
         if (!d) return;
+        if (d.secret && d.locked) return; // looks like a bookcase until its trigger is found
         if (d.ajanOnly) { this.broadcast({ k: 'msg', text: 'It won\'t budge. Bolted from the other side… something uses this door.' }, pid); this.hostNoise(d.center, 4, 'rattle', pid); return; }
         if (d.chained) {
           if (!this.playerHas(pid, 'bolt_cutters')) { this.broadcast({ k: 'need', what: 'bolt_cutters' }, pid); return; }
@@ -1856,9 +1857,10 @@ export class Game {
     const me = this.localId;
     switch (it.kind) {
       case 'slotbtn': it.machine.pressButton(it.btn); return;
-      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': this.extras.interact(it); return;
+      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': this.extras.interact(it); return;
       case 'door': {
         const d = it.door;
+        if (d.secret && d.locked) return;
         const rattle = what => {
           this.message(this.needText(what));
           audio.play('rattle', { pos: d.center, vol: 0.5 });
@@ -1933,6 +1935,7 @@ export class Game {
     switch (it.kind) {
       case 'door': {
         const d = it.door;
+        if (d.secret && d.locked) return '';
         if (d.chained) return this.playerHas(me, 'bolt_cutters') ? 'E — CUT THE CHAIN' : 'E — OPEN  <span class="dim">[CHAINED]</span>';
         if (d.locked) {
           if (d.lock !== 'power' && this.playerHas(me, d.lock)) return `E — UNLOCK (${ITEM_INFO[d.lock].name})`;
@@ -1959,7 +1962,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': return this.extras.prompt(it);
+      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': return this.extras.prompt(it) || '';
     }
     return '';
   }

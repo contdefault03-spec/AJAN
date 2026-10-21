@@ -10,6 +10,7 @@ import {
   LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
   roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway } from './layout.js';
 import { buildWing } from './wing.js';
+import { buildThirdFloor } from './thirdfloor.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
 import { makeStairPieceMesh } from './attic.js';
@@ -246,9 +247,9 @@ export class House {
     // ---------------- floors, ceilings, baseboards
     for (const r of ROOMS) {
       const L = LEVELS[r.L];
-      if (r.outdoor) continue; // garden.js builds its own ground and there's no ceiling
-      for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane(r.floor, x0, z0, x1, z1, L.y, true);
-      if (r.L !== 3) for (const [x0, x1, z0, z1] of (r.ceilings || r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
+      if (!r.noFloor) for (const [x0, x1, z0, z1] of (r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane(r.floor, x0, z0, x1, z1, L.y, true);
+      if (r.outdoor) continue; // no ceiling outdoors (garden, balconies)
+      if (r.L !== 3 || !r.safe) for (const [x0, x1, z0, z1] of (r.ceilings || r.floors || [[r.x0, r.x1, r.z0, r.z1]])) G.plane('ceiling', x0, z0, x1, z1, L.top, false);
     }
     // Shaft landings and ceilings
     G.plane('floorWoodDark', 16, 17, 17, 21, 0, true);
@@ -258,6 +259,7 @@ export class House {
     G.plane('ceiling', 36, 11, 40, 21, 6.4, false);
     this.buildStairs();
     buildWing(this);
+    buildThirdFloor(this);
     this.buildAtticRoof();
     this.buildFloorboards();
 
@@ -621,7 +623,7 @@ export class House {
     this.register(id, 'note', [m], new THREE.Vector3(x, y, z), { text });
   }
 
-  painting(x, y, z, facing, w = 0.62, h = 0.86) {
+  painting(x, y, z, facing, w = 0.62, h = 0.86, pick12 = false) {
     if (onDoorway(x, z, y, w / 2 + 0.06)) { console.warn('painting over a doorway skipped', x, z); return null; }
     const [fx, fz] = DIR[facing];
     const g = new THREE.Group();
@@ -641,14 +643,14 @@ export class House {
     g.add(back, canvasMesh);
     g.rotation.z = (Math.sin(x * 13.1 + z * 7.7) * 0.04);
     this.group.add(g);
-    this.paintingSlots.push({ group: g, mesh: canvasMesh, pos: new THREE.Vector3(x + fx * 0.05, y, z + fz * 0.05) });
+    this.paintingSlots.push({ group: g, mesh: canvasMesh, pick12, pos: new THREE.Vector3(x + fx * 0.05, y, z + fz * 0.05) });
   }
 
   // ----------------------------------------------------------------- doors
   buildDoors() {
     for (const d of DOORS) {
       const pivot = new THREE.Group();
-      const mat = d.exit ? this.M.woodDark : this.M.wood;
+      const mat = d.exit || d.secret ? this.M.woodDark : this.M.wood;
       const panel = bx(d.line === 'x' ? d.w - 0.02 : 0.05, DOOR_H - 0.02, d.line === 'x' ? 0.05 : d.w - 0.02, mat);
       const knob = bx(0.05, 0.05, 0.05, this.M.brass);
       if (d.line === 'x') {
@@ -662,8 +664,20 @@ export class House {
       }
       const knob2 = knob.clone();
       if (d.line === 'x') knob2.position.z *= -1; else knob2.position.x *= -1;
+      if (d.secret) {
+        // a bookcase on hinges: shelves and books on both faces, no handles
+        knob.visible = knob2.visible = false;
+        for (const sgn of [-1, 1]) for (let k = 0; k < 4; k++) {
+          const y = 0.35 + k * 0.5;
+          const shelf = d.line === 'x' ? bx(d.w - 0.06, 0.03, 0.2, this.M.woodDark) : bx(0.2, 0.03, d.w - 0.06, this.M.woodDark);
+          const book = d.line === 'x' ? bx(d.w - 0.2, 0.26, 0.16, this.M.fabricRed || this.M.wood) : bx(0.16, 0.26, d.w - 0.2, this.M.fabricRed || this.M.wood);
+          if (d.line === 'x') { shelf.position.set(d.w / 2, y, sgn * 0.11); book.position.set(d.w / 2, y + 0.15, sgn * 0.11); }
+          else { shelf.position.set(sgn * 0.11, y, d.w / 2); book.position.set(sgn * 0.11, y + 0.15, d.w / 2); }
+          pivot.add(shelf, book);
+        }
+      }
       pivot.add(panel, knob, knob2);
-      if (d.lock && d.lock !== 'power') {
+      if (d.lock && d.lock !== 'power' && !d.secret) {
         // A padlock plate on both faces so locked doors read as locked.
         for (const s of [-1, 1]) {
           const plate = bx(d.line === 'x' ? 0.1 : 0.03, 0.14, d.line === 'x' ? 0.03 : 0.1, this.M.brass);
@@ -766,6 +780,12 @@ export class House {
     add('cageroom', 43, U, 2.5, 0xff3020, 3, 7, { flicker: 0.8 }); add('operating', 48.5, U, 2.5, 0xe0fff0, 6, 7, { flicker: 0.7 });
     add('chairroom', 53.5, U, 2.5, 0xfff4d0, 4, 7, { flicker: 0.9 });
     add('nurse', 43, U, 10.5, 0xe8f0ff, 4, 8, { flicker: 0.4 }); add('spiralroom', 51, U, 12.5, 0xffc98a, 4, 8);
+    // third floor (a little dimmer and flickery)
+    const T = 6.8 + 2.15;
+    add('thall', 6, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.5 }); add('thall', 20, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.3 }); add('thall', 34, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.6 });
+    add('dollroom', 3.5, T, 2.8, 0xffd0e0, 4, 8, { flicker: 0.4 }); add('oldbath', 9, T, 2.8, 0xe8f0ff, 3, 6, { flicker: 0.8 });
+    add('chapel', 15, T, 2.8, 0xff9a50, 4, 9, { flicker: 0.2 }); add('studio', 23, T, 2.8, 0xfff4e0, 5, 9);
+    add('sewing', 29.2, T, 2.8, 0xffd8b0, 3, 7, { flicker: 0.4 }); add('observ', 36.5, T, 2.8, 0xc0d0ff, 4, 9, { flicker: 0.2 });
     add('base', 6, B, 22, 0xffb070, 6, 10, { flicker: 0.4 }); add('base', 13, B, 24, 0xffb070, 6, 10);
     add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('garage', 33, B, 18, 0xfff0d0, 6, 10); add('garage', 35, B, 24.5, 0xfff0d0, 5, 9, { flicker: 0.3 });
     // Always-on: candles in the back room, emergency light, Ajan's red lamp, attic lamps.
@@ -858,7 +878,10 @@ export class House {
       ['z', 39.89, 9.5, 4.4, 1.0, 1.3, -1],
       // east wing
       ['x', 0.11, 44, 1.0, 1.4, 1.2, 1], ['x', 0.11, 52, 1.0, 1.4, 1.2, 1], ['z', 55.89, 10.5, 1.0, 1.4, 1.2, -1], ['x', 13.89, 43, 1.0, 1.4, 1.2, -1],
-      ['x', 0.11, 43, 4.4, 1.0, 1.0, 1], ['z', 55.89, 2.5, 4.4, 1.0, 1.0, -1], ['x', 13.89, 52.5, 4.4, 1.4, 1.2, -1], ['z', 55.89, 10.5, 7.8, 1.0, 1.0, -1],
+      ['x', 0.11, 43, 4.4, 1.0, 1.0, 1], ['z', 55.89, 2.5, 4.4, 1.0, 1.0, -1],
+      // third floor
+      ['x', 0.11, 3.5, 7.8, 1.0, 1.0, 1], ['x', 0.11, 9.0, 7.8, 0.8, 0.8, 1], ['x', 0.11, 13.0, 7.8, 1.0, 1.2, 1], ['x', 0.11, 23.0, 7.8, 1.4, 1.2, 1],
+      ['x', 0.11, 29.2, 7.8, 1.0, 1.0, 1], ['x', 0.11, 37.0, 7.8, 1.4, 1.2, 1], ['z', 0.11, 3.0, 7.8, 1.0, 1.0, 1], ['x', 13.89, 52.5, 4.4, 1.4, 1.2, -1], ['z', 55.89, 10.5, 7.8, 1.0, 1.0, -1],
     ];
     for (const [line, c, a, y, w, h, n] of W) {
       const g = new THREE.Group();
@@ -923,6 +946,7 @@ export class House {
     const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
     const s3 = [node(47.5, 8.2, 0, 'estair'), node(47.5, 10.3, 1.7, 'estair:ramp'), node(47.5, 13.4, 3.4, 'estair')];
+    const s5 = [node(32.55, 7.25, 3.4, 'ajanroom'), node(32.55, 3.7, 5.1, 'tstair:ramp'), node(32.55, 0.6, 6.8, 'tstair:top'), node(33.8, 0.62, 6.8, 'observ')];
     // The upstairs hall narrows to 1.3 m past the attic-stair footprint (z 9.4–10.9 is
     // off limits to him): a lane of nodes along its north side keeps the west half of
     // the upstairs (master, guest, nursery, library…) connected to the rest.
@@ -947,7 +971,7 @@ export class House {
       if (!blocked) link(a, b);
     }
     for (const [a, b, d] of portals) link(a, b, d);
-    for (const chain of [s1, s2, s3]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
+    for (const chain of [s1, s2, s3, s5]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
     // Keep only the main connected graph (all links, locked doors included): a node
     // boxed in by furniture would otherwise be a patrol target he can never reach.
     const comp = new Map();
@@ -1003,6 +1027,14 @@ export class House {
     let pool = [];
     this.paintingSlots.forEach((slot, i) => {
       if (!avail.length) { slot.mesh.material.color.set(0x2a2622); return; }
+      // the newer frames show image1 or image2, decided per round from the shared seed
+      // (so every player sees the same picture in the same frame)
+      if (slot.pick12 && (textures[0] || textures[1])) {
+        const k = textures[0] && textures[1] ? (rnd() < 0.5 ? 0 : 1) : textures[0] ? 0 : 1;
+        slot.mesh.material = new THREE.MeshStandardMaterial({ map: textures[k], roughness: 0.75, color: 0xbbbbbb });
+        slot.imageIndex = k;
+        return;
+      }
       if (!pool.length) pool = shuffle(avail.map((_, k) => k), rnd);
       const tex = avail[pool.pop()];
       slot.mesh.material = new THREE.MeshStandardMaterial({ map: tex, roughness: 0.75, color: 0xbbbbbb });
