@@ -579,6 +579,28 @@ class AudioEngine {
         d[i] = (lp2 * 1.6 + c) * edge;
       }
     });
+    // The skinwalker: a wet, sucking tongue lash, and a wrong, wavering scream.
+    this.buffers.skintongue = mk(1.6, (d, sr) => {
+      let lp = 0, ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * (0.08 + 0.3 * Math.max(0, 0.4 - t));
+        ph += 2 * Math.PI * (180 - t * 90 + Math.sin(t * 60) * 40) / sr;
+        const env = t < 0.08 ? t / 0.08 : Math.exp(-(t - 0.08) * 2.2);
+        d[i] = (lp * 1.6 + Math.sin(ph) * 0.35 * Math.max(0, Math.sin(t * 31))) * env;
+      }
+    });
+    this.buffers.skinscream = mk(2.6, (d, sr) => {
+      let p1 = 0, p2 = 0, p3 = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        const f = 420 + Math.sin(t * 7.3) * 120 + Math.sin(t * 2.1) * 220 - t * 60;
+        p1 += 2 * Math.PI * f / sr; p2 += 2 * Math.PI * f * 1.51 / sr; p3 += 2 * Math.PI * (f * 0.5 + Math.sin(t * 90) * 30) / sr;
+        const env = Math.min(1, t * 6) * Math.min(1, (2.6 - t) * 1.5);
+        const x = Math.sin(p1 + Math.sin(p2) * 2.4) * 0.5 + Math.sin(p3) * 0.25 + rnd() * 0.08;
+        d[i] = Math.tanh(x * 2.2) * env * 0.6;
+      }
+    });
     // A distant wolf howl: rises, holds, falls, with a few harmonics.
     this.buffers.howl = mk(4.5, (d, sr) => {
       let ph = 0;

@@ -433,6 +433,7 @@ export class Game {
   onRelay(from, t, d) {
     if (t === 'p') this.onPlayerState(from, d);
     else if (t === 'a') { if (!this.isHost) { this.ajanSnap = d; this.monsters.get('ajan').snap = d; } }
+    else if (t === 'k') { if (!this.isHost && this.extras?.skin) this.extras.skin.netSnap = d; }
     else if (t === 'm') { if (!this.isHost) for (const [id, sn] of Object.entries(d)) { const m = this.monsters.get(id); if (m) m.snap = sn; } }
     else if (t === 's') { if (!this.isHost) this.spider.snap = d; }
     else if (t === 'rq') { if (this.isHost) this.handleRequest(from, d); }
@@ -509,6 +510,7 @@ export class Game {
       case 'door': {
         const d = H.doors.get(r.id);
         if (!d) return;
+        if (d.secret && d.locked) return; // looks like a bookcase until its trigger is found
         if (d.ajanOnly) { this.broadcast({ k: 'msg', text: 'It won\'t budge. Bolted from the other side… something uses this door.' }, pid); this.hostNoise(d.center, 4, 'rattle', pid); return; }
         if (d.chained) {
           if (!this.playerHas(pid, 'bolt_cutters')) { this.broadcast({ k: 'need', what: 'bolt_cutters' }, pid); return; }
@@ -744,6 +746,8 @@ export class Game {
     if (this.freePlay) return;
     if (this.car?.state !== 'parked' && this.car?.riders.includes(pid)) return; // already driving away
     if (b.state === 'carry') return; // busy dragging someone: can't attack
+    // the skinwalker is right in front of them, staring: even Ajan backs off
+    if (this.extras?.skin?.facing(p)) { b.ignore.set(pid, 10); b.target = null; b.setState('patrol'); b.pickPatrol(); return; }
     p.dying = true;
     const left = this.lives.get(pid) ?? 0;
     // Not their last life (or Guy, who never eats anyone): a slap/punch knocks them out
@@ -918,6 +922,7 @@ export class Game {
 
   /** A small copy of an item to carry in the first-person hand. */
   heldModel(type) {
+    if (type === 'camcorder' && this.extras?.cam?.model) return this.extras.cam.remoteModel();
     const m = DRINKS[type] ? makeDrinkMesh(type) : makeItemMesh(type, this.house.M);
     const box = new THREE.Box3().setFromObject(m), size = box.getSize(V()), c = box.getCenter(V());
     const big = type === 'stair_lower' || type === 'stair_upper' || type === 'engine';
@@ -940,7 +945,8 @@ export class Game {
     if (want === 'revolver') {
       this.local.setWeapon(this.revolverModel ? this.revolverModel.clone() : this.heldModel('revolver'), true);
       if (!this.gunHinted) { this.gunHinted = true; this.message(`Revolver (${this.gunStatus()} rounds). LEFT CLICK to shoot. It holds 2 — bullets lie around on every floor.`, 6); }
-    } else this.local.setWeapon(want ? this.heldModel(want) : null, false);
+    } else if (want === 'camcorder' && this.extras?.cam?.model) this.local.setWeapon(this.extras.cam.localModel(), false);
+    else this.local.setWeapon(want ? this.heldModel(want) : null, false);
   }
 
   // ============================================================ nightclub
@@ -1809,6 +1815,7 @@ export class Game {
     document.exitPointerLock?.();
     audio.setMusic('off');
     this.app.showEnd(this.results || [], this);
+    this.extras?.cam?.offerReview(); // your tape, if you recorded anything
   }
 
   // ================================================================ play
@@ -1856,9 +1863,10 @@ export class Game {
     const me = this.localId;
     switch (it.kind) {
       case 'slotbtn': it.machine.pressButton(it.btn); return;
-      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': this.extras.interact(it); return;
+      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': this.extras.interact(it); return;
       case 'door': {
         const d = it.door;
+        if (d.secret && d.locked) return;
         const rattle = what => {
           this.message(this.needText(what));
           audio.play('rattle', { pos: d.center, vol: 0.5 });
@@ -1933,6 +1941,7 @@ export class Game {
     switch (it.kind) {
       case 'door': {
         const d = it.door;
+        if (d.secret && d.locked) return '';
         if (d.chained) return this.playerHas(me, 'bolt_cutters') ? 'E — CUT THE CHAIN' : 'E — OPEN  <span class="dim">[CHAINED]</span>';
         if (d.locked) {
           if (d.lock !== 'power' && this.playerHas(me, d.lock)) return `E — UNLOCK (${ITEM_INFO[d.lock].name})`;
@@ -1959,7 +1968,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': return this.extras.prompt(it);
+      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': return this.extras.prompt(it) || '';
     }
     return '';
   }

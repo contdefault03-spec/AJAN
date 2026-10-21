@@ -23,6 +23,7 @@ export const ASSETS = {
   ajanitaModel: { names: ['ajanita.glb'] },
   slotModel: { names: ['slot.glb'] },
   dollmaModel: { names: ['dollma.glb'] },
+  cameraModel: { names: ['camera.glb'] },
   menuVideo: { names: ['mainnew.mp4', 'menu.mp4'], webm: 'mainnew.webm' },
   escapeCarVideo: { names: ['escapecar.mp4'], webm: 'escapecar.webm' },
   tvVideo: { names: ['tv.mp4'], webm: 'tv.webm' },
@@ -116,6 +117,7 @@ export const ITEM_INFO = {
   battery: { name: 'Car Battery' },
   spray: { name: 'Poison Spray' },
   well_lever: { name: 'Well Crank Lever' },
+  camcorder: { name: 'Camcorder' },
 };
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a

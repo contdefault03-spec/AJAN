@@ -108,7 +108,7 @@ export class AjanBrain {
    * for "exact" sources like a creaking floorboard or a radio.
    */
   hear(n) {
-    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock'].includes(this.state)) return;
+    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock', 'peepscare'].includes(this.state)) return;
     if (isSafeZone(n.pos)) return;
     const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z) + Math.abs(n.pos.y - this.pos.y) * 0.5;
     // Low, booming sources (radio, elevator) carry through walls better than footsteps.
@@ -240,6 +240,7 @@ export class AjanBrain {
 
     if (this.state === 'carry') { this.updateCarry(dt); return; }
     if (this.state === 'knock') { this.updateKnock(dt); return; }
+    if (this.state === 'peepscare') { this.updatePeepScare(dt); return; }
     if (this.state === 'spot') { this.updateSpot(dt); return; }
     if (this.state === 'fridge') { this.updateFridge(dt); return; }
 
@@ -442,6 +443,39 @@ export class AjanBrain {
       this.giveUpAfter = true;
     } else {
       this.game.ajanSound(this, 'laugh');
+      this.setState('patrol');
+      this.pickPatrol();
+    }
+  }
+
+  /** Someone has been watching him through a peephole: he comes right up to it and grins in. */
+  startPeepScare(hole, pid) {
+    this.standUp();
+    this.peepScare = { hole, pid, t: 0, at: false };
+    this.target = null;
+    this.setState('peepscare');
+    if (!this.moveTo(hole.hall)) this.path = null;
+  }
+
+  updatePeepScare(dt) {
+    const s = this.peepScare;
+    s.t += dt;
+    if (!s.at) {
+      this.anim = 'move';
+      const arrived = !this.path || this.step(dt, this.v.chase * 1.1) || this.pos.distanceTo(s.hole.hall) < 0.6;
+      if (arrived || s.t > 10) {
+        s.at = true; s.t = 0; this.animT = 0;
+        this.game.broadcast({ k: 'peepscare', pid: s.pid, m: this.id });
+      }
+      return;
+    }
+    this.speed = 0;
+    this.anim = 'inspect';
+    this.faceTo(s.hole.side > 0 ? Math.PI : 0, dt, 12);
+    if (s.t > 2.6) {
+      this.game.ajanSound(this, 'laugh'); // the same sound he makes after failing to find someone
+      this.peepScare = null;
+      this.anim = 'move';
       this.setState('patrol');
       this.pickPatrol();
     }
