@@ -1,15 +1,15 @@
 // App controller: screens and flow (splash → mic setup → WHO ARE YOU? → menu →
 // single-player / multiplayer lobby → intro → game → escape/death → end).
 import * as THREE from 'three';
-import { discoverAssets, assetState, assetUrl, loadGLTF } from './assets.js';
+import { discoverAssets, assetState, assetUrl, loadGLTF, playerSpec } from './assets.js';
 import { audio } from './audio.js';
 import { settings, setSetting, profile, saveProfile, onSettingChange } from './settings.js';
 import { mic } from './voice.js';
-import { CHARACTERS, charById, DIFFICULTY } from './config.js';
+import { CHARACTERS, charById, DIFFICULTY, SOUND_KEYS } from './config.js';
 import { LocalNet, SocketNet } from './net.js';
 import { Game } from './game.js';
 import { Avatar } from './avatar.js';
-import { randomColor, sanitizeName, escapeHtml } from './util.js';
+import { sanitizeName, escapeHtml } from './util.js';
 
 const $ = id => document.getElementById(id);
 const SCREENS = ['splash', 'menu', 'micSetup', 'charSelect', 'mpScreen', 'settingsScreen', 'quitScreen', 'loading', 'cinema', 'pause', 'endScreen'];
@@ -77,7 +77,7 @@ class App {
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.setSize(innerWidth, innerHeight);
     $('gameRoot').appendChild(this.renderer.domElement);
-    await audio.loadAll(['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'music1', 'music2', 'musicchase', 'sleep', 'noise', 'song1', 'fai', 'yasmin']);
+    await audio.loadAll(SOUND_KEYS);
     // creaky floorboards use noise.mp3 (the synthesized creak stays as a fallback)
     if (audio.buffers.noise) audio.buffers.boardCreak = audio.buffers.noise;
     loadGLTF('objectModel');
@@ -204,12 +204,24 @@ class App {
       b.onmouseenter = () => audio.play('pickup', { vol: 0.1, rate: 0.7 });
       grid.appendChild(b);
     });
-    $('randomColors').onclick = () => {
-      this.draft.shirt = randomColor();
-      this.draft.pants = randomColor();
-      this.refreshPreview();
-      audio.play('drawer', { vol: 0.3, rate: 1.6 });
-    };
+    for (const part of ['shirt', 'pants']) {
+      const cv = $(part === 'shirt' ? 'wheelShirt' : 'wheelPants');
+      drawColorWheel(cv);
+      let down = false;
+      const pick = e => {
+        const r = cv.getBoundingClientRect();
+        const x = (e.clientX - r.left) / r.width * cv.width, y = (e.clientY - r.top) / r.height * cv.height;
+        const R = cv.width / 2, dx = x - R, dy = y - R;
+        if (Math.hypot(dx, dy) > R) return;
+        const [cr, cg, cb] = cv.getContext('2d').getImageData(Math.floor(x), Math.floor(y), 1, 1).data;
+        this.draft[part] = '#' + [cr, cg, cb].map(v => v.toString(16).padStart(2, '0')).join('');
+        this.draft.colorsDefault = false;
+        this.refreshPreview();
+      };
+      cv.onpointerdown = e => { down = true; cv.setPointerCapture(e.pointerId); pick(e); };
+      cv.onpointermove = e => { if (down) pick(e); };
+      cv.onpointerup = () => { down = false; audio.play('drawer', { vol: 0.2, rate: 1.8 }); };
+    }
     $('nameInput').oninput = () => this.validateChar();
     $('charConfirm').onclick = () => {
       if (!this.validateChar()) return;
@@ -284,7 +296,7 @@ class App {
       cam.position.set(0, 1.15, 4.3);
       cam.lookAt(0, 0.9, 0);
       const g = await loadGLTF('playerModel');
-      const av = new Avatar('player', g, { shirt: this.draft.shirt, pants: this.draft.pants });
+      const av = new Avatar('player', g, { shirt: this.draft.shirt, pants: this.draft.pants, spec: playerSpec() });
       scene.add(av.group);
       this.prev = { r, scene, cam, av, t: 0 };
     }
@@ -477,12 +489,12 @@ class App {
     return this.playVideo('introVideo', { startAt: net.online ? startAt : null, net, skippable, fallbackText: 'OCTOBER 13, 1996.\nTHE HOUSE AT THE END OF THE ROAD.' });
   }
 
-  playEscape(onDone) {
+  playEscape(onDone, car = false) {
     audio.setMusic('off');
     document.exitPointerLock?.();
-    let fired = false;
+    let fired = car; // the car clip has its own soundtrack
     $('hud').classList.remove('show');
-    this.playVideo('escapeVideo', {
+    this.playVideo(car ? 'escapeCarVideo' : 'escapeVideo', {
       fallbackText: 'YOU GOT OUT.',
       onTime: t => { if (!fired && t >= 5) { fired = true; audio.play('ajanescape', { vol: 1 }); } },
     }).then(() => {
@@ -564,6 +576,7 @@ class App {
 
   pause(on) {
     if (!this.game || this.game.phase !== 'play') return;
+    if (on && (this.cinemaPlaying || this.game.localEscaped)) return; // the escape video freed the mouse on purpose
     if (on) {
       this.paused = true;
       this.game.local.keys.clear();
@@ -633,3 +646,23 @@ const app = new App();
 app.step = (sec, dt = 1 / 30) => { for (let t = 0; t < sec; t += dt) app.game?.update(dt); };
 window.__ajan = app;
 app.boot();
+
+/** A hue/saturation colour wheel: hue around the rim, white in the middle, darker toward the edge. */
+function drawColorWheel(cv) {
+  const c = cv.getContext('2d', { willReadFrequently: true });
+  const R = cv.width / 2;
+  const img = c.createImageData(cv.width, cv.height);
+  for (let y = 0; y < cv.height; y++) {
+    for (let x = 0; x < cv.width; x++) {
+      const dx = x - R, dy = y - R, d = Math.hypot(dx, dy) / R;
+      if (d > 1) continue;
+      const h = (Math.atan2(dy, dx) / (Math.PI * 2) + 1) % 1;
+      const sat = Math.min(1, d * 1.35), l = 0.92 - Math.min(1, d) * 0.62;
+      const q = l < 0.5 ? l * (1 + sat) : l + sat - l * sat, pp = 2 * l - q;
+      const f = t => { t = (t + 1) % 1; return t < 1 / 6 ? pp + (q - pp) * 6 * t : t < 0.5 ? q : t < 2 / 3 ? pp + (q - pp) * (2 / 3 - t) * 6 : pp; };
+      const i = (y * cv.width + x) * 4;
+      img.data[i] = f(h + 1 / 3) * 255; img.data[i + 1] = f(h) * 255; img.data[i + 2] = f(h - 1 / 3) * 255; img.data[i + 3] = 255;
+    }
+  }
+  c.putImageData(img, 0, 0);
+}

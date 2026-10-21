@@ -47,7 +47,7 @@ if (uRecolor > 0.5) {
       .replace('#include <dithering_fragment>', `#include <dithering_fragment>
 gl_FragColor.rgb += dEdge * vec3(1.6, 0.35, 0.08);`);
   };
-  mat.customProgramCacheKey = () => 'ajan-avatar-' + (spec.shirt ? 'p' : 'a');
+  mat.customProgramCacheKey = () => 'ajan-avatar-' + (spec.shirt ? 'p' : 'a') + spec.height;
 }
 
 /**
@@ -91,9 +91,9 @@ export class Avatar {
    * kind: 'player' | 'ajan'
    * gltf: loaded GLTF (or null → fallback figure)
    */
-  constructor(kind, gltf, { height, shirt, pants, jiggle = false } = {}) {
+  constructor(kind, gltf, { height, shirt, pants, jiggle = false, spec: specKey } = {}) {
     this.kind = kind;
-    const spec = RIG_SPECS[kind];
+    const spec = RIG_SPECS[specKey || kind];
     this.spec = spec;
     this.height = height || (kind === 'ajan' ? 2.25 : 1.75);
     this.group = new THREE.Group();
@@ -269,7 +269,7 @@ export class Avatar {
     const runK = clamp((sp - 2.2) / 2, 0, 1);
     const walkK = clamp(sp / 1, 0, 1);
     const breath = Math.sin(t * 1.3) * 0.04;
-    const DOWN = 1.12;
+    const DOWN = this.spec.armDown ?? 1.12;
     const mode = st.mode || 'move';
     const mt = st.modeT || 0;
 

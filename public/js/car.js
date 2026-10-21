@@ -43,9 +43,8 @@ const TL = [
 ];
 export const IMPACTS = [2.1, 4.8, 7.4];
 const BREAK_AT = 7.4;
-const CUT_AT = 11.6;      // riders: cut to Ajan
-const AJAN_SHOT = 4.6;    // seconds on Ajan
-export const DRIVE_TOTAL = CUT_AT + 0.4 + AJAN_SHOT + 1.6; // host sends the escape at this point
+const CUT_AT = 9.8;       // riders: out through the broken door → escapecar.mp4
+export const DRIVE_TOTAL = CUT_AT + 0.2; // host sends the escape at this point
 
 const DRIVE = RAMPS.find(r => r.id === 'R4');
 /** Ground under the car / debris: garage floor, the driveway, then the yard. */
@@ -149,8 +148,17 @@ export class Car {
     box(hw * 2, 0.04, 1.9, 0, roof, -0.45, new THREE.MeshStandardMaterial({ color: 0x4a443c, roughness: 1 })); // headliner
     for (const s of [-1, 1]) {
       box(0.06, belt - 0.3, LEN - 1.0, s * hw, 0.33 + (belt - 0.3) / 2, -0.25);  // door cards
-      // (the car body supplies its own pillars and window frames)
+      // The Tripo body is a closed shell that is invisible from inside (back faces), so the
+      // cabin needs its own pillars, roof rails and sills to read as "inside a car".
+      box(0.09, (roof - belt) * 1.15, 0.09, s * (hw - 0.05), (roof + belt) / 2, 0.72, plastic, -0.55); // A pillar
+      box(0.1, roof - belt, 0.14, s * (hw - 0.04), (roof + belt) / 2, -0.35);                          // B pillar
+      box(0.12, (roof - belt) * 1.1, 0.2, s * (hw - 0.05), (roof + belt) / 2, -1.25, plastic, 0.45);   // C pillar
+      box(0.12, 0.08, 2.2, s * (hw - 0.05), roof - 0.02, -0.3);                                         // roof rail
+      box(0.1, 0.07, LEN - 1.0, s * (hw - 0.02), belt, -0.25);                                          // window sill
     }
+    // sun visors and the rear-view mirror
+    box(0.4, 0.03, 0.18, 0.45, roof - 0.04, 0.55); box(0.4, 0.03, 0.18, -0.45, roof - 0.04, 0.55);
+    box(0.22, 0.06, 0.03, 0, roof - 0.12, 0.62, new THREE.MeshStandardMaterial({ color: 0x8090a0, metalness: 0.9, roughness: 0.1 }));
     // windscreen and rear window
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, (roof - belt) * 1.2), glass);
     ws.position.set(0, (roof + belt) / 2, 0.88); ws.rotation.x = -0.55; I.add(ws);
@@ -276,7 +284,7 @@ export class Car {
     this.seats = SEATS.map(s => {
       const inside = g.localToWorld(new THREE.Vector3(s.lx, 0, s.lz));
       const exit = g.localToWorld(new THREE.Vector3(s.lx > 0 ? 1.75 : -1.75, 0, s.lz));
-      const spot = { id: s.id, type: 'seat', seat: s.seat, local: s, doors: [], open: 0, target: 0, inside, exit, yaw: HEADING + Math.PI, camY: 1.42, occupant: null, label: s.label };
+      const spot = { id: s.id, type: 'seat', seat: s.seat, local: s, doors: [], open: 0, target: 0, inside, exit, yaw: HEADING + Math.PI, camY: 1.22, occupant: null, label: s.label };
       // camera yaw: the player camera looks down −z at yaw 0, so facing +x is yaw −π/2
       spot.yaw = -HEADING;
       this.house.hides.set(s.id, spot);
@@ -393,46 +401,8 @@ export class Car {
       u.fade.value = t > CUT_AT - 0.5 ? (t - (CUT_AT - 0.5)) / 0.5 : 0;
       return;
     }
-    // ---- cut: Ajan, alone in the garage, furious
-    const ts = t - CUT_AT;
-    G.cineAjan = true;
-    u.fade.value = ts < 0.4 ? 1 : Math.max(0, 1 - (ts - 0.4) * 3);
-    if (ts > 0.4 && !this.ajanCut) {
-      this.ajanCut = true;
-      audio.play('ajan', { vol: 1.0 });
-      setTimeout(() => audio.play('growl', { vol: 0.9, rate: 0.75 }), 1600);
-      setTimeout(() => audio.play('roar', { vol: 0.8, rate: 0.85 }), 3200);
-    }
-    const aj = G.ajan;
-    const seat = this.house.wallChairs.find(c => Math.abs(c.seat.x - 34.5) < 0.1 && c.seat.y < -1);
-    const at = seat ? seat.seat : new THREE.Vector3(34.5, BY, 24.8);
-    aj.group.visible = true;
-    aj.group.position.copy(at);
-    aj.group.rotation.y = seat ? seat.ry : HEADING;
-    aj.state = { speed: 0, mode: 'sit', modeT: ts, headYaw: Math.sin(ts * 1.7) * 0.08 };
-    aj.update(dt);
-    aj.group.updateMatrixWorld(true);
-    if (!this.eyes) {
-      const em = new THREE.MeshBasicMaterial({ color: 0xff2010 });
-      this.eyes = [0, 1].map(() => { const e = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), em); G.scene.add(e); return e; });
-    }
-    const mouth = aj.mouth();
-    const fwd = new THREE.Vector3(Math.sin(aj.group.rotation.y), 0, Math.cos(aj.group.rotation.y));
-    const side = new THREE.Vector3(fwd.z, 0, -fwd.x);
-    this.eyes.forEach((e, i) => e.position.copy(mouth).addScaledVector(side, i ? 0.07 : -0.07).add(new THREE.Vector3(0, 0.14, 0)).addScaledVector(fwd, 0.05));
-    // slow push-in toward his face from the broken doorway
-    const k = Math.min(1, ts / AJAN_SHOT);
-    const from = new THREE.Vector3(38.6, BY + 1.5, 23.2), to = new THREE.Vector3(36.4, BY + 1.35, 24.4);
-    cam.position.lerpVectors(from, to, k * k * (3 - 2 * k));
-    cam.position.y += Math.sin(ts * 20) * 0.003;
-    cam.lookAt(mouth.x, mouth.y + 0.05, mouth.z);
-    // light him: a warm key light from the doorway and a red glow under his face
-    G.hideLight.position.copy(cam.position).lerp(mouth, 0.4).add(new THREE.Vector3(0, 0.8, 0));
-    G.hideLight.intensity = 30;
-    G.muzzle.color.setHex(0xff3018);
-    G.muzzle.position.copy(mouth).addScaledVector(fwd, 0.9).add(new THREE.Vector3(0, -0.6, 0));
-    G.muzzle.intensity = 10 + Math.sin(ts * 9) * 2;
-    if (ts > AJAN_SHOT + 0.4) $hud('escapeTitle', true);
+    // ---- out: hold black until escapecar.mp4 takes over (no Ajan cut any more)
+    u.fade.value = 1;
   }
 
   dispose() {

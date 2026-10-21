@@ -13,7 +13,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const ASSET_DIR = path.join(__dirname, 'assets');
 const MAX_PLAYERS = 8;
-const CHARACTERS = ['MAX', 'AJAN', 'MASKED', 'RIZE', 'LUCKY', 'MIDO', 'NONE'];
+const CHARACTERS = ['MAX', 'AJAN', 'MASKED', 'RIZE', 'LUCKY', 'MIDO', 'ROT', 'BANANA', 'VANEX', 'NONE'];
 
 const app = express();
 app.disable('x-powered-by');

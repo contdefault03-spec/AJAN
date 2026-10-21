@@ -30,6 +30,29 @@ export const RIG_SPECS = {
     shoulderX: 0.14, shoulderY: 0.8, armHalf: 0.035, elbowX: 0.31,
     legX: 0.055, hipJointY: 0.46, kneeY: 0.27,
   },
+  // player1.glb (the current player model), measured from its vertex profile.
+  player1: {
+    height: 1.0,
+    hipsY: 0.47, spineY: 0.57, chestY: 0.68, neckY: 0.85,
+    shoulderX: 0.135, shoulderY: 0.765, armHalf: 0.04, elbowX: 0.3,
+    legX: 0.065, hipJointY: 0.41, kneeY: 0.22,
+    shirt: { yMin: 0.47, yMax: 0.855, xMax: 0.2 },
+    pants: { yMin: 0.05, yMax: 0.48, xMax: 0.2 },
+  },
+  // guy.glb: a big man in T-pose, arms slightly raised.
+  guy: {
+    height: 1.0,
+    hipsY: 0.47, spineY: 0.57, chestY: 0.69, neckY: 0.86,
+    shoulderX: 0.15, shoulderY: 0.815, armHalf: 0.05, elbowX: 0.3,
+    legX: 0.065, hipJointY: 0.4, kneeY: 0.21, armDown: 1.42,
+  },
+  // ajanita.glb: female gorilla in a long gown (legs never separate), arms out at ~0.51.
+  ajanita: {
+    height: 0.747,
+    hipsY: 0.29, spineY: 0.37, chestY: 0.45, neckY: 0.62,
+    shoulderX: 0.18, shoulderY: 0.515, armHalf: 0.05, elbowX: 0.33,
+    legX: 0.12, hipJointY: 0.25, kneeY: 0.12, armDown: 1.25,
+  },
   ajan: {
     height: 0.696,
     hipsY: 0.29, spineY: 0.37, chestY: 0.45, neckY: 0.555,

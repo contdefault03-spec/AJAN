@@ -252,3 +252,32 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 /* thin scratchy horror lettering: a touch of spacing and a dim blood glow */
 .logo { letter-spacing: 0.04em; }
 .mbtn, .btn, .charBtn, .panel h2, .who, .bigLabel, #splashBtn { font-weight: 400; text-shadow: 0 0 10px rgba(150, 0, 0, 0.35), 1px 1px 0 #000; }
+
+.wheels { display: flex; gap: 20px; justify-content: flex-start; margin: 8px 0; }
+.wheels label { display: flex; flex-direction: column; align-items: center; gap: 6px; font-size: 15px; letter-spacing: 0.1em; }
+.wheel { width: 76px; height: 76px; border-radius: 50%; cursor: crosshair; touch-action: none; box-shadow: 0 0 0 2px #000, 0 0 12px rgba(255, 0, 0, 0.25); }
+
+/* ---------- lives, knocked out, tied up, slot machine ---------- */
+.livesHud { position: absolute; top: 96px; right: 24px; font-size: 26px; color: #d02020; letter-spacing: 0.12em; text-shadow: 0 0 8px #000; }
+.comingBack { position: absolute; inset: 0; display: none; flex-direction: column; align-items: center; justify-content: center; pointer-events: none; text-shadow: 0 0 16px #000, 0 0 4px #000; }
+.comingBack.show { display: flex; }
+.comingBack .cbTitle { font-size: 64px; color: #e8e0d0; letter-spacing: 0.2em; }
+.comingBack .cbNum { font-size: 120px; color: #d01818; line-height: 1; }
+.comingBack .cbSub { font-size: 22px; color: #bbb; margin-top: 10px; }
+.struggle { position: absolute; left: 50%; bottom: 34%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; gap: 8px; text-shadow: 0 0 8px #000; }
+.struggle.show { display: flex; }
+.struggle .stTitle { font-size: 34px; color: #e04040; letter-spacing: 0.15em; }
+.struggle .stSub { font-size: 22px; color: #ddd; }
+.struggle .stBar { width: 320px; height: 16px; border: 2px solid #ddd; background: rgba(0, 0, 0, 0.6); }
+.struggle .stBar i { display: block; height: 100%; width: 0; background: #c01818; transition: width 0.1s; }
+.slotUI { position: fixed; left: 50%; bottom: 6%; transform: translateX(-50%); z-index: 45; display: none; flex-direction: column; align-items: center; gap: 10px; padding: 16px 22px; background: rgba(20, 2, 8, 0.92); border: 2px solid #d4a020; max-width: calc(100vw - 32px); }
+.slotUI.show { display: flex; }
+.slotUI .slTitle { font-size: 30px; color: #ffd040; letter-spacing: 0.15em; }
+.slotUI .slBal { font-size: 26px; color: #8f8; }
+.slotUI .slBets { display: flex; flex-wrap: wrap; gap: 6px; justify-content: center; }
+.slotUI .slBets button { font: inherit; font-size: 20px; padding: 4px 10px; background: #2a0a10; color: #eee; border: 1px solid #a07020; cursor: pointer; }
+.slotUI .slBets button.sel { background: #d4a020; color: #200; }
+.slotUI .slBets button:disabled { opacity: 0.35; cursor: default; }
+.slotUI .slRow { display: flex; gap: 12px; }
+.slotUI .slMsg { font-size: 24px; color: #fff; min-height: 28px; }
+.slotUI .slTable { font-size: 16px; color: #c9b88a; text-align: center; }

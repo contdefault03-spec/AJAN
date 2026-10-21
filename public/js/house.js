@@ -990,6 +990,17 @@ export class House {
 /** Item meshes (keys, fuse, bolt cutters). */
 export function makeItemMesh(type, M) {
   const g = new THREE.Group();
+  if (type === 'spray') {
+    // a small aerosol can with a red cap and a skull label
+    const can = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.16, 14), new THREE.MeshStandardMaterial({ color: 0x3a7a20, metalness: 0.6, roughness: 0.35 }));
+    can.position.y = 0.08;
+    const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.03, 0.04, 12), new THREE.MeshStandardMaterial({ color: 0xb01010, roughness: 0.5 }));
+    cap.position.y = 0.18;
+    const label = new THREE.Mesh(new THREE.CylinderGeometry(0.0355, 0.0355, 0.06, 14, 1, true), new THREE.MeshStandardMaterial({ color: 0xe8e0a0, roughness: 0.8 }));
+    label.position.y = 0.08;
+    g.add(can, cap, label);
+    return g;
+  }
   if (type === 'fuse') {
     const glass = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 0.09, 12), new THREE.MeshStandardMaterial({ color: 0xa0d0ff, transparent: true, opacity: 0.7, emissive: 0x112233, roughness: 0.1 }));
     const c1 = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.025, 12), M.brass);

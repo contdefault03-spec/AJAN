@@ -70,3 +70,6 @@ export function loadAudioBuffer(ctx, key) {
   bufferCache.set(key, p);
   return p;
 }
+
+/** Rig spec for whichever player model was found (player1.glb is the current one). */
+export const playerSpec = () => (assetUrl('playerModel') || '').endsWith('player1.glb') ? 'player1' : 'player';
