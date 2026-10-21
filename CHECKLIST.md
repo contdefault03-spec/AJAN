@@ -24,6 +24,12 @@ game's own clock, not by playing at full speed.
 - [x] AJAN's private dance at his club table (Yasmin's dance1 routine on his rig)
 - [x] New character names in the selection list; colour wheels set shirt and pants; `player1.glb` shown in the preview
 - [x] Menu shows "v.1.3 MADE BY MAXIM"
+- [x] **Garden** behind the house (walls, fence, hedges, flower beds, bench, hose reel, lamp post). You get in and out by climbing through the child's bedroom window (E, both directions)
+- [x] **Ajan's garden door** (north bedroom): players can't open it (refused on both clients). Monsters' routes do go through it (checked: a path from the garden into the bedroom)
+- [x] **Well:** the crank lever spawns at one of 7 spots in the house each round. Without it the well refuses. Fitting it uses the lever up. Cranking raises the bucket with a poison spray inside. Two players grabbing at once: only one gets it (two clients)
+- [x] **Security office** (east wing, ground floor, open any time; the old security room with the front-door key is unchanged): the steel shutter slams down or lifts from the button inside (refused from outside), blocks movement and the monsters' routes, and both clients agree. It lifts by itself when nobody is inside. The LIGHT button lights the hall outside the window for 4 s, on both clients
+- [x] **Knock routine:** with the shutter down and Ajan chasing you in, he walks to the shutter, knocks 3 times, steps over to the window, stares in, plays his "leaves" sound and goes back to patrol, ignoring you for 20 s. No kill (stepped through in single-player)
+- [x] **CCTV console:** sit at the desk (E). A/D or the mouse wheel switch between 14 live camera feeds (6 new: garden, east hall, east wing upstairs, back stairs, staircase, outside the security door); E or Esc to stand up. The feeds use a night-vision illuminator, the HUD hides, and the old room's monitors are brighter
 - [x] Navigation fixes: the whole upstairs hall was cut in two for the AI (a pre-existing bug at the attic-stair puzzle footprint); unreachable nav nodes went from 118 to 12. The new wing is fully reachable
 
 ## Done, not tested yet
@@ -39,8 +45,7 @@ game's own clock, not by playing at full speed.
 
 ## Not done yet
 - [ ] Extra floor before the attic and balconies (the east wing adds 11 rooms on two floors plus the tower; there is no new floor across the whole house)
-- [ ] Garden, window climb, well and lever, and Ajan's garden door
-- [ ] Security room rebuild (separate room, FNAF lights and slam door, camera damage and repair)
+- [ ] Camera damage and repair (Ajan disabling cameras, glitches, a repair interaction); the security office's 4 wall screens only show labels (the console has the live feeds)
 - [ ] Peepholes and the door scares
 - [ ] Secret passages; paintings randomised from `image1.png` and `image2.png`
 - [ ] Skinwalker
@@ -52,3 +57,5 @@ game's own clock, not by playing at full speed.
 ## Known issues
 - The office still has a few nav nodes the AI can't reach (pre-existing; furniture blocks them). Monsters reach the wing's ground floor through the back stairs, not through the office.
 - A request for a missing file (probably the favicon) logs one 404 in the browser console.
+- While you sit at the CCTV console, your own body isn't drawn in the feeds (other players and the monsters are).
+- The garden is dark except near its lamps; the feeds light it with a night-vision lamp.

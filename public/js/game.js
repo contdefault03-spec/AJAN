@@ -509,6 +509,7 @@ export class Game {
       case 'door': {
         const d = H.doors.get(r.id);
         if (!d) return;
+        if (d.ajanOnly) { this.broadcast({ k: 'msg', text: 'It won\'t budge. Bolted from the other side… something uses this door.' }, pid); this.hostNoise(d.center, 4, 'rattle', pid); return; }
         if (d.chained) {
           if (!this.playerHas(pid, 'bolt_cutters')) { this.broadcast({ k: 'need', what: 'bolt_cutters' }, pid); return; }
           this.broadcast({ k: 'chain', id: d.id, by: pid });
@@ -539,7 +540,7 @@ export class Game {
       }
       case 'pickup': {
         const it = this.items.get(r.id);
-        if (!it || it.holder || it.used) return;
+        if (!it || it.holder || it.used || it.inWell) return;
         if (it.type === 'bullet') {
           const gun = this.items.get('revolver');
           if (!this.playerHas(pid, 'revolver')) { this.broadcast({ k: 'msg', text: 'Bullets. You need the revolver to use them (it\'s in a safe).' }, pid); return; }
@@ -1855,6 +1856,7 @@ export class Game {
     const me = this.localId;
     switch (it.kind) {
       case 'slotbtn': it.machine.pressButton(it.btn); return;
+      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': this.extras.interact(it); return;
       case 'door': {
         const d = it.door;
         const rattle = what => {
@@ -1957,7 +1959,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slotbtn': return this.extras.prompt(it);
+      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': return this.extras.prompt(it);
     }
     return '';
   }
@@ -2285,10 +2287,10 @@ export class Game {
     if (!L.hidden && sk > 0.01) this.hideLight.position.copy(this.camera.position).add(V(0, 0.6, 0));
     const bk = Math.max(hk, sk);
     this.hideLight.intensity = this.cineAjan ? 30 : Math.max(hk * 18, sk * 16);
-    this.app.renderer.toneMappingExposure = 1.15 + Math.max(hk * 0.45, sk * 0.55);
+    this.app.renderer.toneMappingExposure = 1.15 + Math.max(hk * 0.45, sk * 0.55) + (this.camBoost || 0);
     this.hemi.intensity = 1.0 + lk * 4 + bk * 1.6;
     H.M.glassWin.emissiveIntensity = 1 + lk * 25;
-    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + Math.max(hk * 2.0, sk * 2.4);
+    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + Math.max(hk * 2.0, sk * 2.4) + (this.camBoost || 0) * 2.5;
 
     // Local avatar mirrors us (for cameras and the death cam)
     if (me && !me.dying) {

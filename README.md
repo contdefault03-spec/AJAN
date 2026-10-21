@@ -66,6 +66,8 @@ Single-player runs entirely in your browser. The server only serves files and re
 - **East wing:** a new two-storey wing east of the office and Ajan's room, with a gallery, smoking room, pantry, servants' quarters, nurse's room and tower room, the capture rooms, a narrow back staircase, and a spiral stair up to the TV room. The ground-floor door is in the office.
 - **Outside:** a 3D night forest around the house, with crickets and distant wolves.
 - **Ajan's private dance:** at his club table while he's at his pole, **Q** ($50) makes him do Yasmin's private-dance routine.
+- **Garden and well:** climb out through the window in the child's bedroom (ground floor, north side). The well's crank lever is hidden somewhere in the house: fit it, crank the bucket up and take what's inside. Ajan has his own garden door; you can't open it.
+- **Security office** (east wing, ground floor): **E** on the red button slams the steel shutter down or lifts it, the yellow button lights the hall outside the window for a few seconds, and the desk is a CCTV console (A/D or the wheel to switch cameras, E or Esc to stand up). If Ajan chases you in and the shutter is down, he knocks, looks in through the window, grins and leaves.
 - See `CHECKLIST.md` for what has been tested and what is still to do.
 
 ## Difficulty

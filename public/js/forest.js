@@ -3,7 +3,7 @@
 // all as a handful of draw calls. Fog does the distance.
 import * as THREE from 'three';
 
-const HOUSE = { x0: -3, x1: 59, z0: -3, z1: 33 }; // house, wing, porch, driveway and yard stay clear
+const HOUSE = { x0: -3, x1: 59, z0: -16, z1: 33 }; // house, wing, garden, porch, driveway and yard stay clear
 
 export function buildForest(scene, rnd = Math.random) {
   const g = new THREE.Group();
@@ -45,11 +45,6 @@ export function buildForest(scene, rnd = Math.random) {
   inst(new THREE.CylinderGeometry(0.06, 0.14, 7, 5), birch, dead, ([x, z, k, r], m) => m.compose(new THREE.Vector3(x, 3.5 * k, z), q.setFromEuler(new THREE.Euler(0.08 * Math.sin(r), r, 0.08 * Math.cos(r))), new THREE.Vector3(k, k, k)));
   const bushes = spots.filter(s => s[4] < 20).slice(0, 80);
   inst(new THREE.IcosahedronGeometry(0.7, 0), needleMat, bushes, ([x, z, k, r], m) => m.compose(new THREE.Vector3(x + 1.6, 0.35, z - 1.2), q.setFromAxisAngle(up, r), new THREE.Vector3(k * 1.3, k * 0.7, k)));
-  // a moon you can glimpse through the windows (no extra light: it would leak through every wall)
-  const disc = new THREE.Mesh(new THREE.CircleGeometry(3, 24), new THREE.MeshBasicMaterial({ color: 0xdfe6ff, fog: false }));
-  disc.position.set(-60, 45, -50);
-  disc.lookAt(28, 2, 10);
-  g.add(disc);
   scene.add(g);
   return g;
 }
