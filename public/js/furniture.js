@@ -242,7 +242,7 @@ function buildUpstairs(h) {
   h.bed(35.0, 0.4, 38.6, 3.0, U, false);
   h.ajanBed = { stand: new THREE.Vector3(36.8, U, 4.0), seat: new THREE.Vector3(36.8, U + 0.32, 1.25), ry: 0 };
   h.furnitureBox(30.2, U, 6.6, 31.8, U + 0.8, 7.85, 'woodDark');
-  h.furnitureBox(39.1, U, 4.5, 39.85, U + 1.4, 6.5, 'woodDark');
+  h.furnitureBox(39.1, U, 3.05, 39.85, U + 1.4, 5.0, 'woodDark'); // clear of the door to the east wing
   h.painting(30.12, U + 1.7, 3.5, '+x');
 
   // Upstairs hall

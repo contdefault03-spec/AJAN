@@ -44,7 +44,7 @@ export const RIG_SPECS = {
     height: 1.0,
     hipsY: 0.47, spineY: 0.57, chestY: 0.69, neckY: 0.86,
     shoulderX: 0.15, shoulderY: 0.815, armHalf: 0.05, elbowX: 0.3,
-    legX: 0.065, hipJointY: 0.4, kneeY: 0.21, armDown: 1.42,
+    legX: 0.065, hipJointY: 0.4, kneeY: 0.21, armDown: 1.42, human: true,
   },
   // ajanita.glb: female gorilla in a long gown (legs never separate), arms out at ~0.51.
   ajanita: {

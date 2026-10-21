@@ -24,11 +24,31 @@ export const RAMPS = [
   { id: 'R4', x0: 40.0, x1: 49, z0: 19.4, z1: 22.6, axis: 'x', a: 40.6, ya: BY, b: 49, yb: GY, outside: true },
   // attic ladder: in the middle of the upstairs hall, against its south wall, up through the trapdoor (rises eastward, steep)
   { id: 'R3', puzzle: true, x0: 23.4, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 23.4, ya: UY, b: 25.5, yb: AY },
+  // east wing: a narrow servants' staircase, and the spiral stair up to the TV room
+  { id: 'R5', x0: 46.3, x1: 48.7, z0: 7.6, z1: 13.0, axis: 'z', a: 7.6, ya: GY, b: 13.0, yb: UY },
+  { id: 'R6', spiral: true, cx: 53.5, cz: 10, r0: 0.28, r1: 1.45, x0: 52, x1: 55, z0: 8.5, z1: 11.5, ya: UY, yb: AY, a0: Math.PI, turns: 1.25 },
 ];
+
+/** Height of a spiral ramp at (x, z), picking the turn closest to `y` (null if off the steps). */
+export function spiralHeight(r, x, z, y) {
+  const dx = x - r.cx, dz = z - r.cz, d = Math.hypot(dx, dz);
+  if (d < r.r0 - 0.05 || d > r.r1 + 0.05) return null;
+  const total = r.turns * Math.PI * 2;
+  const base = ((Math.atan2(dz, dx) - r.a0) % (Math.PI * 2) + Math.PI * 2) % (Math.PI * 2);
+  let best = null;
+  for (let k = 0; k <= Math.ceil(r.turns); k++) {
+    const t = base + k * Math.PI * 2;
+    if (t > total + 0.05) break;
+    const h = r.ya + (r.yb - r.ya) * Math.min(1, t / total);
+    if (best === null || Math.abs(h - y) < Math.abs(best - y)) best = h;
+  }
+  return best;
+}
 // The hole in the attic floor above the attic stairs (closed by the trapdoor).
 export const ATTIC_OPENING = { x0: 21.8, x1: 25.5, z0: 9.5, z1: 11 };
 
 export function rampHeight(r, x, z) {
+  if (r.spiral) return spiralHeight(r, x, z, r.ya) ?? r.ya;
   const c = r.axis === 'x' ? x : z;
   let t = (c - r.a) / (r.b - r.a);
   t = Math.max(0, Math.min(1, t));
@@ -75,6 +95,21 @@ export const ROOMS = [
   { id: 'music', name: 'MUSIC ROOM', L: 2, x0: 24, x1: 30, z0: 11, z1: 21, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'rail' },
   { id: 'sitting', name: 'SITTING ROOM', L: 2, x0: 30, x1: 36, z0: 11, z1: 21, floor: 'floorWood', wall: 'wallStripe', trim: 'wainscot', floors: [[30, 33.4, 11, 21], [33.4, 36, 13.4, 21], [35.8, 36, 11, 13.4]] },
   // ---- attic (safe zone)
+  // ---- the east wing (ground floor, upstairs, and the TV room on top of its tower)
+  { id: 'ehall', name: 'EAST HALL', L: 1, x0: 40, x1: 56, z0: 5, z1: 7, floor: 'floorWoodDark', wall: 'wallA', trim: 'wainscot' },
+  { id: 'gallery', name: 'GALLERY', L: 1, x0: 40, x1: 48, z0: 0, z1: 5, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'wainscot' },
+  { id: 'smoking', name: 'SMOKING ROOM', L: 1, x0: 48, x1: 56, z0: 0, z1: 5, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'rail' },
+  { id: 'pantry2', name: 'PANTRY', L: 1, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
+  { id: 'servants', name: "SERVANTS' QUARTERS", L: 1, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorWoodDark', wall: 'wallC', trim: 'base' },
+  { id: 'uehall', name: 'EAST WING', L: 2, x0: 40, x1: 56, z0: 5, z1: 7, floor: 'floorWood', wall: 'wallFilth', trim: 'base' },
+  { id: 'cageroom', name: 'THE CAGE', L: 2, x0: 40, x1: 46, z0: 0, z1: 5, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none' },
+  { id: 'operating', name: 'OPERATING ROOM', L: 2, x0: 46, x1: 51, z0: 0, z1: 5, floor: 'floorTile', wall: 'wallTile', trim: 'none' },
+  { id: 'chairroom', name: 'THE CHAIR', L: 2, x0: 51, x1: 56, z0: 0, z1: 5, floor: 'floorConcrete', wall: 'wallBase', trim: 'none' },
+  { id: 'nurse', name: "NURSE'S ROOM", L: 2, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorBath', wall: 'wallPlain', trim: 'base' },
+  { id: 'spiralroom', name: 'TOWER ROOM', L: 2, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'rail',
+    ceilings: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [55, 56, 8.5, 11.5], [49, 56, 11.5, 14]] },
+  { id: 'tvroom', name: 'THE TV ROOM', L: 3, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none', safe: true,
+    floors: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [55, 56, 8.5, 11.5], [49, 56, 11.5, 14]] },
   { id: 'club', name: 'THE CLUB', L: 3, x0: 2, x1: 18, z0: 8, z1: 21, floor: 'floorClub', wall: 'wallClub', trim: 'none', safe: true },
   { id: 'attic', name: 'ATTIC', L: 3, x0: 18, x1: 40, z0: 8, z1: 21, floor: 'floorWood', wall: 'wallBase', safe: true,
     floors: [[18, 21.8, 8, 21], [21.8, 25.5, 8, 9.5], [21.8, 25.5, 11, 21], [25.5, 33.4, 8, 21], [33.4, 35.8, 8, 11], [33.4, 35.8, 13.4, 21], [35.8, 40, 8, 21]] },
@@ -86,6 +121,8 @@ export const SHAFTS = [
   { id: 'stairB', name: 'STAIRWELL', x0: 11, x1: 17, z0: 17, z1: 21, yMin: -4, yMax: 1.9, floors: { 1: [[16, 17.2, 17, 21]] } },
   { id: 'stairU', name: 'STAIRCASE', x0: 36, x1: 40, z0: 11, z1: 21, yMin: -0.5, yMax: 5.3, floors: { 1: [[36, 40, 19.5, 21]], 2: [[36, 40, 11, 13]] } },
   { id: 'stairA', name: 'ATTIC STAIRS', x0: 20, x1: 25.5, z0: 9.45, z1: 11, yMin: 3.9, yMax: 6.6 },
+  { id: 'estair', name: 'BACK STAIRS', x0: 46, x1: 49, z0: 7, z1: 14, yMin: -0.5, yMax: 5.3, floors: { 1: [[46, 49, 7, 7.6]], 2: [[46, 49, 13, 14]] } },
+  { id: 'spiral', name: 'SPIRAL STAIRS', x0: 52, x1: 55, z0: 8.5, z1: 11.5, yMin: 4.3, yMax: 6.7 },
 ];
 
 export function roomAt(x, z, y = 0) {
@@ -163,6 +200,20 @@ export const DOORS = [
   { id: 'd_club', line: 'z', c: 18, a0: 14.0, w: 1.1, swing: 1, y: AY, name: 'Unmarked Door' },
   // basement
   { id: 'd_workshop', line: 'z', c: 30, a0: 22.0, w: 1.1, swing: 1, y: BY, name: 'Garage Door' },
+  // east wing
+  { id: 'd_east_g', line: 'z', c: 40, a0: 1.7, w: 1.1, swing: 1, y: GY, name: 'East Wing Door' }, // from the office (behind the office key)
+  { id: 'd_gallery', line: 'x', c: 5, a0: 43.5, w: 1.1, swing: -1, y: GY, name: 'Gallery Door' },
+  { id: 'd_smoking', line: 'x', c: 5, a0: 51.5, w: 1.1, swing: -1, y: GY, name: 'Smoking Room Door' },
+  { id: 'd_pantry2', line: 'x', c: 7, a0: 42.5, w: 1.1, swing: 1, y: GY, name: 'Pantry Door' },
+  { id: 'd_servants', line: 'x', c: 7, a0: 52.0, w: 1.1, swing: 1, y: GY, name: "Servants' Door" },
+  { id: 'd_east_u', line: 'z', c: 40, a0: 5.4, w: 1.1, swing: 1, y: UY, name: 'Door' },
+  { id: 'd_cage', line: 'x', c: 5, a0: 42.5, w: 1.1, swing: -1, y: UY, name: 'Iron Door' },
+  { id: 'd_operating', line: 'x', c: 5, a0: 48.0, w: 1.1, swing: -1, y: UY, name: 'Operating Room Door' },
+  { id: 'd_chair', line: 'x', c: 5, a0: 53.0, w: 1.1, swing: -1, y: UY, name: 'Door' },
+  { id: 'd_nurse', line: 'x', c: 7, a0: 42.5, w: 1.1, swing: 1, y: UY, name: "Nurse's Door" },
+  { id: 'd_tower', line: 'x', c: 7, a0: 52.0, w: 1.1, swing: 1, y: UY, name: 'Tower Room Door' },
+  { id: 'd_land_w', line: 'z', c: 46, a0: 13.05, w: 0.85, swing: -1, y: UY, name: 'Door' },
+  { id: 'd_land_e', line: 'z', c: 49, a0: 13.05, w: 0.85, swing: 1, y: UY, name: 'Door' },
 ];
 export const DOOR_H = 2.3;
 
@@ -172,6 +223,7 @@ export const OPENINGS = [
   { id: 'o_boiler', line: 'z', c: 17, a0: 23.0, w: 1.6, y0: BY, h: 2.3 },
   // the garage door (props: car.js closes it with a breakable door; nobody paths through it)
   { id: 'o_garage', line: 'z', c: 40, a0: 19.4, w: 3.2, y0: BY, h: 2.5, noNav: true },
+  { id: 'o_estair', line: 'x', c: 7, a0: 46.3, w: 2.4, y0: GY, h: 2.6 },
 ];
 // Elevator landing doorways (sliding doors live in props.js)
 export const ELEV_DOORS = [
@@ -213,6 +265,13 @@ export const WALLS = [
   ['z', 2, 17, 27, BY, -0.25], ['x', 27, 2, 40, BY, -0.25], ['x', 17, 2, 11, BY, -0.25], ['z', 8, 21, 27, BY, -0.25],
   ['z', 17, 21, 27, BY, -0.25], ['x', 17, 17, 30, BY, -0.25], ['z', 30, 13.4, 27, BY, -0.25],
   ['x', 13.4, 30, 33.4, BY, -0.25], ['x', 13.4, 35.8, 40, BY, -0.25], ['z', 40, 13.4, 27, BY, -0.25],
+  // east wing: outside walls, ground floor, upstairs
+  ['x', 0, 40, 56, GY, 6.4], ['x', 14, 40, 56, GY, 6.4], ['z', 56, 0, 14, GY, 6.4],
+  ['x', 5, 40, 56, GY, 3], ['x', 7, 40, 56, GY, 3], ['z', 48, 0, 5, GY, 3], ['z', 46, 7, 14, GY, 3], ['z', 49, 7, 14, GY, 3],
+  ['x', 5, 40, 56, UY, 6.4], ['x', 7, 40, 56, UY, 6.4], ['z', 46, 0, 5, UY, 6.4], ['z', 51, 0, 5, UY, 6.4], ['z', 46, 7, 14, UY, 6.4], ['z', 49, 7, 14, UY, 6.4],
+  // the TV room on top of the tower, with a rail round the spiral stair's opening (open to the north)
+  ['x', 7, 49, 56, AY, 9.2], ['x', 14, 49, 56, AY, 9.2], ['z', 49, 7, 14, AY, 9.2], ['z', 56, 7, 14, AY, 9.2],
+  ['x', 11.5, 52, 55, AY, 7.85], ['z', 52, 8.5, 11.5, AY, 7.85], ['z', 55, 8.5, 11.5, AY, 7.85],
 ];
 
 // Creaky floorboards (~1 x 1 m), 2-3 per dangerous level
