@@ -19,7 +19,17 @@ const app = express();
 app.disable('x-powered-by');
 app.use('/assets', express.static(ASSET_DIR, { maxAge: '1h' }));
 app.use('/vendor/three', express.static(path.join(__dirname, 'node_modules/three'), { maxAge: '7d' }));
-app.use(express.static(path.join(__dirname, 'public'), { maxAge: 0 }));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: 0,
+  setHeaders(res, filePath) {
+    // Never let browsers/CDNs keep an old game client after a deployment.
+    if (/\.(?:html?|mjs|js|css)$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+    }
+  },
+}));
 
 app.get('/api/assets', (req, res) => {
   let files = [];
@@ -39,6 +49,11 @@ app.get('/api/config', (req, res) => {
     });
   }
   res.json({ iceServers });
+});
+
+app.get('/api/version', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate');
+  res.json({ version: '1.4', commit: process.env.RENDER_GIT_COMMIT || 'local', deployId: process.env.RENDER_SERVICE_ID || 'local' });
 });
 
 app.get('/healthz', (req, res) => res.send('ok'));
