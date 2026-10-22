@@ -2702,8 +2702,6 @@ export class Game {
       if (scare) {
         scare.classList.remove('show'); void scare.offsetWidth; scare.classList.add('show');
         clearTimeout(this.tripJumpTimer);
-    for (const c of (this.fartClouds || [])) { this.scene.remove(c.group); c.group.traverse(o => { o.geometry?.dispose?.(); o.material?.dispose?.(); }); }
-    if (this.fartClouds) this.fartClouds.length = 0;
         this.tripJumpTimer = setTimeout(() => scare.classList.remove('show'), 700);
       }
       audio.play('roar', { vol: 0.75, rate: 0.7 + Math.random() * 0.7 });
@@ -2742,6 +2740,8 @@ export class Game {
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     document.removeEventListener('pointerlockchange', this.onLockChange);
     clearTimeout(this.tripJumpTimer);
+    for (const c of (this.fartClouds || [])) { this.scene.remove(c.group); c.group.traverse(o => { o.geometry?.dispose?.(); o.material?.dispose?.(); }); }
+    if (this.fartClouds) this.fartClouds.length = 0;
     document.getElementById('tripOverlay')?.classList.remove('active', 'figure', 'flashfigure');
     document.getElementById('tripJumpscare')?.classList.remove('show');
     this.local?.dispose();
