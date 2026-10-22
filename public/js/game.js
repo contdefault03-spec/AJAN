@@ -2332,13 +2332,14 @@ export class Game {
     H.M.glassWin.emissiveIntensity = 1 + lk * 25;
     this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + Math.max(hk * 2.0, sk * 2.4) + (this.camBoost || 0) * 2.5;
 
-    // Local avatar mirrors us (for cameras and the death cam)
+    // Full body for mirrors/security cameras; layer 1 keeps it out of first person.
     if (me && !me.dying) {
       const av = me.avatar;
-      av.group.visible = !L.hidden && !this.localDead && !this.localEscaped;
-      av.group.position.copy(L.pos);
-      av.group.rotation.y = L.yaw + Math.PI;
-      av.state = { speed: L.speed, crouch: L.crouchK, run: L.run, flash: L.flash, interactT: L.actT, turn: L.turnRate, pitch: L.pitch, mode: 'normal' };
+      const seat = L.hidden && ['seat', 'clubseat'].includes(L.hidden.type) ? L.hidden : null;
+      av.group.visible = (!L.hidden || !!seat) && !this.localDead && !this.localEscaped;
+      av.group.position.copy(seat ? seat.inside : L.pos);
+      av.group.rotation.y = (seat ? seat.yaw : L.yaw) + Math.PI;
+      av.state = { speed: seat ? 0 : L.speed, crouch: seat ? 0 : L.crouchK, run: L.run, flash: seat ? false : L.flash, interactT: L.actT, turn: L.turnRate, pitch: L.pitch, mode: seat ? 'sit' : 'normal' };
       av.update(dt);
     }
 
@@ -2671,6 +2672,7 @@ export class Game {
     this.sleepSound?.stop();
     if (this.amb) Object.values(this.amb).forEach(h => h?.stop());
     this.props?.dispose();
+    for (const mirror of this.house?.mirrors || []) mirror.dispose();
     for (const p of this.players.values()) p.label?.remove();
     $('labels').innerHTML = '';
     $('hud').classList.remove('show', 'dying');

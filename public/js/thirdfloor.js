@@ -35,8 +35,7 @@ export function buildThirdFloor(h) {
   // ---- old bathroom: a clawfoot tub, sink and a cracked mirror
   h.furnitureBox(7.2, Y, 0.2, 8.9, Y + 0.6, 1.0, 'porcelain');
   h.furnitureBox(10.2, Y, 2.4, 10.85, Y + 0.85, 3.2, 'porcelain');
-  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.6, 0.8), new THREE.MeshStandardMaterial({ color: 0x9aa4ac, metalness: 0.9, roughness: 0.12 }));
-  mirror.position.set(10.94, Y + 1.6, 2.8); mirror.rotation.y = -Math.PI / 2; add(mirror);
+  h.addMirror(0.6, 0.8, [10.885, Y + 1.6, 2.8], -Math.PI / 2, 'old_bathroom_mirror');
 
   // ---- chapel: pews, an altar with candles, a cross; hide under the altar cloth
   for (let r = 0; r < 4; r++) for (const x of [12.4, 16.2]) {

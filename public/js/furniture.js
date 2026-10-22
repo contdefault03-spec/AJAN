@@ -55,9 +55,7 @@ function buildGround(h) {
   G.box(12.2, 0.45, 0.12, 12.8, 0.95, 0.3, 'porcelain');
   h.furnitureBox(11.0, 0, 0.12, 11.9, 0.85, 0.62, 'porcelain');
   G.box(11.05, 1.25, 0.11, 11.85, 1.95, 0.13, 'metal');
-  const mirror = new THREE.Mesh(new THREE.PlaneGeometry(0.7, 0.6), new THREE.MeshStandardMaterial({ color: 0x9aa4a6, metalness: 0.9, roughness: 0.25 }));
-  mirror.position.set(11.45, 1.6, 0.135);
-  h.group.add(mirror);
+  h.addMirror(0.7, 0.6, [11.45, 1.6, 0.135], 0, 'bathroom_mirror');
   h.collider(12.4, 2.95, 12.9, 4.25, 0, 0.9);
   h.container('c_bath', 'cabinet', 12.65, 0.05, 3.6, 1.2, 0.85, 0.5, '-x', 'woodPale', 'Cabinet');
   h.painting(8.12, 1.75, 5.5, '+x', 0.5, 0.7);

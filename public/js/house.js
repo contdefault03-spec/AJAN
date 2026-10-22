@@ -15,6 +15,7 @@ import { buildThirdFloor } from './thirdfloor.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
 import { makeStairPieceMesh } from './attic.js';
+import { LiveMirror } from './mirrors.js';
 
 export { roomAt, SPAWN_POINTS };
 
@@ -127,6 +128,7 @@ export class House {
     this.windows = [];
     this.paintingSlots = [];
     this.monitors = [];
+    this.mirrors = [];
     this.notes = [];
     this.wallChairs = [];
     this.staticMeshes = [];
@@ -134,6 +136,16 @@ export class House {
     this.blackout = 0;
     this.geo = new GeoBuilder();
     this.build();
+  }
+
+  addMirror(width, height, position, rotationY = 0, name = 'mirror', parent = this.group) {
+    const mirror = new LiveMirror(width, height);
+    mirror.name = name;
+    mirror.position.fromArray(position);
+    mirror.rotation.y = rotationY;
+    parent.add(mirror);
+    this.mirrors.push(mirror);
+    return mirror;
   }
 
   collider(x0, z0, x1, z1, y0, y1, opts = {}) {

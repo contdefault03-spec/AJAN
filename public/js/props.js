@@ -397,8 +397,7 @@ export class Props {
   buildMirror() {
     const a = this.house.anchors.mirror;
     if (!a) return;
-    const glass = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.65), new THREE.MeshStandardMaterial({ color: 0x2c3436, metalness: 0.6, roughness: 0.15 }));
-    glass.position.copy(a);
+    this.house.addMirror(0.75, 0.65, a.toArray(), 0, 'upstairs_bathroom_mirror', this.group);
     const cv = document.createElement('canvas');
     cv.width = 512; cv.height = 440;
     const tex = new THREE.CanvasTexture(cv);
@@ -406,7 +405,7 @@ export class Props {
     const text = new THREE.Mesh(new THREE.PlaneGeometry(0.75, 0.65), new THREE.MeshBasicMaterial({ map: tex, transparent: true, depthWrite: false }));
     text.position.copy(a).add(V(0, 0, 0.004));
     text.renderOrder = 2;
-    this.group.add(glass, text);
+    this.group.add(text);
     this.mirror = { cv, tex, index: -1 };
     this.setMirror(0);
     // Redraw once the horror font is available to the canvas.
