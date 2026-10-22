@@ -231,13 +231,15 @@ export class AjanBrain {
     if (this.id === 'ajan' && !this.game.freePlay && !['dormant','kill','drag','stun','carry'].includes(this.state)) {
       if (this.fartPauseLeft > 0) {
         this.fartPauseLeft -= dt; this.speed = 0; this.anim = 'move';
-        if (this.fartPauseLeft <= 0) this.fartNext = 55 + this.rnd() * 85;
+        if (this.fartPauseLeft <= 0) {
+          this.game.broadcast({ k: 'ajanFart', x: this.pos.x, y: this.pos.y, z: this.pos.z, ry: this.ry });
+          this.fartNext = 55 + this.rnd() * 85;
+        }
         return;
       }
       this.fartNext -= dt;
       if (this.fartNext <= 0) {
         this.fartPauseLeft = 5; this.speed = 0; this.anim = 'move';
-        this.game.broadcast({ k: 'ajanFart', x: this.pos.x, y: this.pos.y, z: this.pos.z, ry: this.ry });
         return;
       }
     }
