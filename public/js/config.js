@@ -48,7 +48,6 @@ export const ASSETS = {
   image3: { names: ['image3.png', '3.png'] },
   image4: { names: ['image4.png', '4.png'] },
   image5: { names: ['image5.png', '5.png'] },
-  ajan: { names: ['ajan.mp3'] },
   ajandie: { names: ['ajandie.mp3'] },
   ajanescape: { names: ['ajanescape.mp3'] },
   max: { names: ['max.mp3'] },
@@ -78,7 +77,7 @@ export const ASSETS = {
   snort: { names: ['snort.mp3'] },
   music5: { names: ['music5.mp3'] },
 };
-export const SOUND_KEYS = ['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'rot', 'banana', 'vanex', 'ajannew',
+export const SOUND_KEYS = ['ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'rot', 'banana', 'vanex', 'ajannew',
   'music1', 'music2', 'musicchase', 'sleep', 'noise', 'song1', 'fai', 'yasmin', 'ajansleep', 'ajancatch', 'ajansee', 'ajanleaves',
   'ajanitasleep', 'ajanitasee', 'ajanitaleave', 'ajanita', 'guyseesyou', 'guyleaves', 'guy', 'eat', 'snort', 'music5'];
 
@@ -86,7 +85,7 @@ export const SOUND_KEYS = ['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'ri
 // kill: 'eat' (grab and eat, like Ajan) or 'punch' (knock down and drag the body away).
 export const MONSTERS = {
   ajan: { id: 'ajan', name: 'Ajan', model: 'ajanModel', spec: 'ajan', height: 2.25, speed: 1, kill: 'eat', bed: 'ajanBed', from: 'easy',
-    sounds: { see: 'ajansee', catch: 'ajancatch', leave: 'ajanleaves', sleep: 'ajansleep', whisper: 'ajan' } },
+    sounds: { see: 'ajansee', catch: 'ajancatch', leave: 'ajanleaves', sleep: 'ajansleep', whisper: 'noise' } },
   guy: { id: 'guy', name: 'Guy', model: 'guyModel', spec: 'guy', height: 2.0, speed: 0.95, kill: 'punch', bed: null, from: 'medium',
     sounds: { see: 'guyseesyou', catch: 'guy', leave: 'guyleaves' } },
   ajanita: { id: 'ajanita', name: 'Ajanita', model: 'ajanitaModel', spec: 'ajanita', height: 2.1, speed: 0.97, kill: 'eat', bed: 'ajanitaBed', from: 'hard',
