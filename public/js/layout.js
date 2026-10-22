@@ -25,7 +25,8 @@ export const RAMPS = [
   // attic ladder: in the middle of the upstairs hall, against its south wall, up through the trapdoor (rises eastward, steep)
   { id: 'R3', puzzle: true, x0: 23.4, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 23.4, ya: UY, b: 25.5, yb: AY },
   // east wing: a narrow servants' staircase, and the spiral stair up to the TV room
-  { id: 'R5', x0: 46.3, x1: 48.7, z0: 7.6, z1: 13.0, axis: 'z', a: 7.6, ya: GY, b: 13.0, yb: UY },
+  // a U-turn: walk in along the side passage, turn at the end, climb back toward the hall
+  { id: 'R5', x0: 46.25, x1: 47.6, z0: 7.4, z1: 13.2, axis: 'z', a: 13.2, ya: GY, b: 7.4, yb: UY },
   // the third-floor stairs: up the east side of Ajan's room, from the door end to the north wall
   { id: 'R7', x0: 31.95, x1: 33.15, z0: 1.0, z1: 6.4, axis: 'z', a: 6.4, ya: UY, b: 1.0, yb: AY },
   { id: 'R6', spiral: true, cx: 53.5, cz: 10, r0: 0.28, r1: 1.45, x0: 52, x1: 55, z0: 8.5, z1: 11.5, ya: UY, yb: AY, a0: Math.PI, turns: 1.25 },
@@ -105,6 +106,11 @@ export const ROOMS = [
   { id: 'pantry2', name: 'PANTRY', L: 1, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
   { id: 'secoffice', name: 'SECURITY OFFICE', L: 1, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorTile', wall: 'wallPlain', trim: 'base' },
   // the walled garden behind the house (outdoors: no ceiling, its own ground; see garden.js)
+  // the shed at the bottom of the garden (locked: the SHED KEY is somewhere in the house)
+  { id: 'shed', name: 'THE SHED', L: 1, x0: 26, x1: 37, z0: -13.2, z1: -7, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'none' },
+  // a narrow alley down the west side of the house, behind a fence, off the garden
+  { id: 'alley', name: 'ALLEY', L: 1, x0: -3.2, x1: 2, z0: -14, z1: 21, floor: 'floorConcrete', wall: 'wallBase', outdoor: true, noFloor: true,
+    floors: [[-3.2, 2, -14, 0], [-3.2, 0, 0, 21]] },
   { id: 'garden', name: 'GARDEN', L: 1, x0: 2, x1: 38, z0: -14, z1: 0, floor: 'floorConcrete', wall: 'wallBase', outdoor: true, noFloor: true },
   // ---- the third floor: over the north half of the house, at attic height (the attic and
   // the club fill the south half). Reached by the stairs in Ajan's room.
@@ -126,9 +132,9 @@ export const ROOMS = [
   { id: 'chairroom', name: 'THE CHAIR', L: 2, x0: 51, x1: 56, z0: 0, z1: 5, floor: 'floorConcrete', wall: 'wallBase', trim: 'none' },
   { id: 'nurse', name: "NURSE'S ROOM", L: 2, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorBath', wall: 'wallPlain', trim: 'base' },
   { id: 'spiralroom', name: 'TOWER ROOM', L: 2, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'rail',
-    ceilings: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [55, 56, 8.5, 11.5], [49, 56, 11.5, 14]] },
+    ceilings: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [53.5, 56, 8.5, 10], [55, 56, 10, 11.5], [49, 56, 11.5, 14]] },
   { id: 'tvroom', name: 'THE TV ROOM', L: 3, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none', safe: true,
-    floors: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [55, 56, 8.5, 11.5], [49, 56, 11.5, 14]] },
+    floors: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [53.5, 56, 8.5, 10], [55, 56, 10, 11.5], [49, 56, 11.5, 14]] }, // the top step lands on the 53.5–55 / 8.5–10 corner
   { id: 'club', name: 'THE CLUB', L: 3, x0: 2, x1: 18, z0: 8, z1: 21, floor: 'floorClub', wall: 'wallClub', trim: 'none', safe: true },
   { id: 'attic', name: 'ATTIC', L: 3, x0: 18, x1: 40, z0: 8, z1: 21, floor: 'floorWood', wall: 'wallBase', safe: true,
     floors: [[18, 21.8, 8, 21], [21.8, 25.5, 8, 9.5], [21.8, 25.5, 11, 21], [25.5, 33.4, 8, 21], [33.4, 35.8, 8, 11], [33.4, 35.8, 13.4, 21], [35.8, 40, 8, 21]] },
@@ -140,7 +146,7 @@ export const SHAFTS = [
   { id: 'stairB', name: 'STAIRWELL', x0: 11, x1: 17, z0: 17, z1: 21, yMin: -4, yMax: 1.9, floors: { 1: [[16, 17.2, 17, 21]] } },
   { id: 'stairU', name: 'STAIRCASE', x0: 36, x1: 40, z0: 11, z1: 21, yMin: -0.5, yMax: 5.3, floors: { 1: [[36, 40, 19.5, 21]], 2: [[36, 40, 11, 13]] } },
   { id: 'stairA', name: 'ATTIC STAIRS', x0: 20, x1: 25.5, z0: 9.45, z1: 11, yMin: 3.9, yMax: 6.6 },
-  { id: 'estair', name: 'BACK STAIRS', x0: 46, x1: 49, z0: 7, z1: 14, yMin: -0.5, yMax: 5.3, floors: { 1: [[46, 49, 7, 7.6]], 2: [[46, 49, 13, 14]] } },
+  { id: 'estair', name: 'BACK STAIRS', x0: 46, x1: 49, z0: 7, z1: 14, yMin: -0.5, yMax: 5.3, floors: { 1: [[46, 49, 7, 14]], 2: [[47.65, 49, 7, 14], [46, 47.65, 13.2, 14]] } },
   { id: 'tstair', name: 'STAIRS', x0: 31.9, x1: 33.2, z0: 1.0, z1: 6.4, yMin: 4.3, yMax: 7.2 },
   { id: 'spiral', name: 'SPIRAL STAIRS', x0: 52, x1: 55, z0: 8.5, z1: 11.5, yMin: 4.3, yMax: 6.7 },
 ];
@@ -242,6 +248,7 @@ export const DOORS = [
   { id: 'd_observ', line: 'x', c: 5.6, a0: 37.4, w: 1.1, swing: -1, y: AY, name: 'Observatory Door' },
   { id: 'd_balcony_n', line: 'x', c: 0, a0: 17.5, w: 1.1, swing: -1, y: AY, name: 'Balcony Door' },
   { id: 'd_balcony_e', line: 'z', c: 40, a0: 2.0, w: 1.1, swing: 1, y: AY, name: 'Terrace Door' },
+  { id: 'd_shed', line: 'x', c: -7, a0: 30.6, w: 1.1, swing: 1, y: GY, lock: 'shed_key', name: 'Shed Door' },
   { id: 'd_garden', line: 'x', c: 0, a0: 3.2, w: 1.1, swing: -1, y: GY, name: 'Garden Door', ajanOnly: true },
   { id: 'd_east_u', line: 'z', c: 40, a0: 5.4, w: 1.1, swing: 1, y: UY, name: 'Door' },
   { id: 'd_cage', line: 'x', c: 5, a0: 42.5, w: 1.1, swing: -1, y: UY, name: 'Iron Door' },
@@ -249,8 +256,6 @@ export const DOORS = [
   { id: 'd_chair', line: 'x', c: 5, a0: 53.0, w: 1.1, swing: -1, y: UY, name: 'Door' },
   { id: 'd_nurse', line: 'x', c: 7, a0: 42.5, w: 1.1, swing: 1, y: UY, name: "Nurse's Door" },
   { id: 'd_tower', line: 'x', c: 7, a0: 52.0, w: 1.1, swing: 1, y: UY, name: 'Tower Room Door' },
-  { id: 'd_land_w', line: 'z', c: 46, a0: 13.05, w: 0.85, swing: -1, y: UY, name: 'Door' },
-  { id: 'd_land_e', line: 'z', c: 49, a0: 13.05, w: 0.85, swing: 1, y: UY, name: 'Door' },
 ];
 export const DOOR_H = 2.3;
 
@@ -260,7 +265,9 @@ export const OPENINGS = [
   { id: 'o_boiler', line: 'z', c: 17, a0: 23.0, w: 1.6, y0: BY, h: 2.3 },
   // the garage door (props: car.js closes it with a breakable door; nobody paths through it)
   { id: 'o_garage', line: 'z', c: 40, a0: 19.4, w: 3.2, y0: BY, h: 2.5, noNav: true },
-  { id: 'o_estair', line: 'x', c: 7, a0: 46.3, w: 2.4, y0: GY, h: 2.6 },
+  { id: 'o_estair', line: 'x', c: 7, a0: 47.7, w: 1.2, y0: GY, h: 2.3 },
+  { id: 'o_alleygate', line: 'z', c: 2, a0: -3.4, w: 2, y0: GY, h: 2.2 }, // the garden gate into the alley
+  { id: 'o_estair_u', line: 'x', c: 7, a0: 46.25, w: 1.35, y0: UY, h: 2.3 },
   // the security office: a doorway closed by a steel shutter (security.js) and a window onto the hall
   { id: 'o_secoffice', line: 'x', c: 7, a0: 51.4, w: 1.2, y0: GY, h: 2.3, navDoor: 'd_secoffice' },
   { id: 'o_secwin', line: 'x', c: 7, a0: 53.6, w: 1.6, y0: GY + 1.0, h: 0.9, noNav: true },
@@ -308,9 +315,15 @@ export const WALLS = [
   // east wing: outside walls, ground floor, upstairs
   ['x', 0, 40, 56, GY, 6.4], ['x', 14, 40, 56, GY, 6.4], ['z', 56, 0, 14, GY, 6.4],
   // the garden's back wall and side walls (a fence on top is in garden.js)
-  ['x', -14, 2, 38, GY, 1.2], ['z', 2, -14, 0, GY, 1.2], ['z', 38, -14, 0, GY, 1.2],
+  ['x', -14, -3.2, 38, GY, 1.2], ['z', 2, -14, -3.4, GY, 1.2], ['z', 2, -1.4, 0, GY, 1.2], ['z', 38, -14, 0, GY, 1.2],
+  // the alley's fence line and its far end
+  ['z', -3.2, -14, 21, GY, 1.2], ['x', 21, -3.2, 0, GY, 2.2],
+  // the shed
+  ['x', -13.2, 26, 37, GY, 3], ['x', -7, 26, 37, GY, 3], ['z', 26, -13.2, -7, GY, 3], ['z', 37, -13.2, -7, GY, 3],
   ['x', 5, 40, 56, GY, 3], ['x', 7, 40, 56, GY, 3], ['z', 48, 0, 5, GY, 3], ['z', 46, 7, 14, GY, 3], ['z', 49, 7, 14, GY, 3],
-  ['x', 5, 40, 56, UY, 6.4], ['x', 7, 40, 56, UY, 6.4], ['z', 46, 0, 5, UY, 6.4], ['z', 51, 0, 5, UY, 6.4], ['z', 46, 7, 14, UY, 6.4], ['z', 49, 7, 14, UY, 6.4],
+  ['x', 5, 40, 56, UY, 6.4], ['x', 7, 40, 56, UY, 6.4],
+  // back stairs: a wall between the side passage and the underside of the flight, a rail beside it upstairs
+  ['z', 47.65, 7, 13.2, GY, 3], ['z', 47.65, 7, 13.2, UY, UY + 1.05], ['z', 46, 0, 5, UY, 6.4], ['z', 51, 0, 5, UY, 6.4], ['z', 46, 7, 14, UY, 6.4], ['z', 49, 7, 14, UY, 6.4],
   // the TV room on top of the tower, with a rail round the spiral stair's opening (open to the north)
   ['x', 7, 49, 56, AY, 9.2], ['x', 14, 49, 56, AY, 9.2], ['z', 49, 7, 14, AY, 9.2], ['z', 56, 7, 14, AY, 9.2],
   ['x', 11.5, 52, 55, AY, 7.85], ['z', 52, 8.5, 11.5, AY, 7.85], ['z', 55, 8.5, 11.5, AY, 7.85],
@@ -348,4 +361,37 @@ export function onDoorway(x, z, y, hw = 0.4) {
     if (along + hw > d.a0 - 0.12 && along - hw < d.a0 + d.w + 0.12) return true;
   }
   return false;
+}
+
+// Windows: line, wall coordinate (inner face), along, sill y, width, height, inward normal sign.
+export const WINDOWS = [
+      ['x', 0.11, 4.4, 1.0, 1.4, 1.2, 1], ['x', 0.11, 16.0, 1.0, 1.4, 1.2, 1], ['x', 0.11, 22.3, 1.0, 1.4, 1.2, 1],
+      ['x', 0.11, 36.5, 1.0, 1.4, 1.2, 1],
+      ['z', 0.11, 18.2, 1.0, 1.4, 1.2, 1], ['x', 20.89, 8.2, 1.0, 1.4, 1.2, -1], ['x', 20.89, 19.5, 1.0, 1.4, 1.2, -1],
+      ['x', 20.89, 32.5, 1.0, 1.4, 1.2, -1],
+      ['z', 0.11, 9.5, 1.0, 1.0, 1.3, 1],
+      ['x', 0.11, 5.0, 4.4, 1.4, 1.2, 1], ['x', 0.11, 19.5, 4.4, 1.4, 1.2, 1], ['x', 0.11, 37.0, 4.4, 1.4, 1.2, 1],
+      ['z', 0.11, 16.0, 4.4, 1.4, 1.2, 1], ['x', 20.89, 15.0, 4.4, 1.4, 1.2, -1], ['x', 20.89, 29.0, 4.4, 1.4, 1.2, -1],
+      ['z', 39.89, 9.5, 4.4, 1.0, 1.3, -1],
+      // east wing
+      ['x', 0.11, 44, 1.0, 1.4, 1.2, 1], ['x', 0.11, 52, 1.0, 1.4, 1.2, 1], ['z', 55.89, 10.5, 1.0, 1.4, 1.2, -1], ['x', 13.89, 43, 1.0, 1.4, 1.2, -1],
+      ['x', 0.11, 43, 4.4, 1.0, 1.0, 1], ['z', 55.89, 2.5, 4.4, 1.0, 1.0, -1],
+      // third floor
+      ['x', 0.11, 3.5, 7.8, 1.0, 1.0, 1], ['x', 0.11, 9.0, 7.8, 0.8, 0.8, 1], ['x', 0.11, 13.0, 7.8, 1.0, 1.2, 1], ['x', 0.11, 23.0, 7.8, 1.4, 1.2, 1],
+      ['x', 0.11, 29.2, 7.8, 1.0, 1.0, 1], ['x', 0.11, 37.0, 7.8, 1.4, 1.2, 1], ['z', 0.11, 3.0, 7.8, 1.0, 1.0, 1], ['x', 13.89, 52.5, 4.4, 1.4, 1.2, -1], ['z', 55.89, 10.5, 7.8, 1.0, 1.0, -1],
+];
+// The ones in outside walls are real openings (you see the garden / forest through them, and
+// the window from outside); the wall builder cuts them like doorways.
+export const WINDOW_CUTS = new Set();
+// a window never sits over a doorway (it would wall the doorway's lower half back in)
+for (let i = WINDOWS.length - 1; i >= 0; i--) {
+  const [line, face, a, y, w] = WINDOWS[i], c = Math.round(face);
+  if ([...DOORS, ...OPENINGS].some(d => d.line === line && Math.abs(d.c - c) < 0.3 && Math.abs((d.y ?? d.y0 ?? 0) - y) < 2.5 && d.a0 < a + w / 2 + 0.15 && d.a0 + d.w > a - w / 2 - 0.15)) WINDOWS.splice(i, 1);
+}
+for (const [line, face, a, y, w, h, n] of WINDOWS) {
+  const c = Math.round(face);
+  const out = line === 'x' ? roomAt(a, c - n * 0.6, y + 0.5) : roomAt(c - n * 0.6, a, y + 0.5);
+  if (out && !out.outdoor) continue; // opens onto another room: leave it a painted window
+  OPENINGS.push({ id: `win_${line}_${c}_${a}_${y}`, line, c, a0: a - w / 2, w, y0: y, h, noNav: true, window: true });
+  WINDOW_CUTS.add(`${line}:${face}:${a}:${y}`);
 }

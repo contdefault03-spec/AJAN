@@ -122,6 +122,7 @@ export class Game {
     progress(0.3, 'Loading models...');
     const [pg, ag] = await Promise.all([loadGLTF('playerModel'), loadGLTF('ajanModel')]);
     this.playerGLTF = pg;
+    this.ajanGLTF = ag;
     progress(0.55, 'Hanging the paintings...');
     const tex = await Promise.all([1, 2, 3, 4, 5].map(i => loadTexture('image' + i)));
     this.paintingTextures = tex;
@@ -339,7 +340,7 @@ export class Game {
       if (e.code === 'Escape' && $('noteView').classList.contains('show')) { this.closeNote(); return; }
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if (e.code === 'KeyM' && !e.repeat) { mic.setMuted(!settings.micMuted); this.updateHUD(); }
-      if (this.drinkMenuOpen) {
+      if (this.drinkMenuOpen && !this.extras?.shed?.menuOpen) {
         const pick = { Digit1: 'vodka', Digit2: 'beer', Digit3: 'wine' }[e.code];
         if (pick) { this.chooseDrink(pick); return; }
         if (e.code === 'Escape') { this.closeDrinkMenu(true); return; }
@@ -744,6 +745,8 @@ export class Game {
     if (!p || !p.alive || p.dying || this.kills.has(pid)) return;
     if (isSafeZone(p.pos)) return; // the attic is sacred
     if (this.freePlay) return;
+    if (p.highUntil > this.time) return; // too high to die
+    if (b.state === 'gotoshed' || b.state === 'shedsit') return; // he's off for a smoke
     if (this.car?.state !== 'parked' && this.car?.riders.includes(pid)) return; // already driving away
     if (b.state === 'carry') return; // busy dragging someone: can't attack
     // the skinwalker is right in front of them, staring: even Ajan backs off
@@ -1000,6 +1003,7 @@ export class Game {
   tryShoot() {
     const L = this.local;
     const held = this.selectedItem();
+    if ((held?.type === 'joint' || held?.type === 'mushroom') && !this.localDead && !L.frozen && !this.me?.dying) { this.extras.shed.use(held); return true; }
     if (held?.type === 'spray' && !this.localDead && !L.frozen && !L.hidden && !this.me?.dying) { this.extras.useSpray(held); return true; }
     // a drink in hand: left click drinks it
     if (held && DRINKS[held.type] && !this.localDead && !L.frozen && !this.me?.dying) { this.request({ k: 'drink', id: held.id }); return true; }
@@ -1078,7 +1082,7 @@ export class Game {
   /** The nursery spider caught someone: a fast, brutal death (no eating sequence). */
   hostSpiderKill(pid) {
     const p = this.players.get(pid);
-    if (!p || !p.alive || p.dying || this.kills.has(pid) || this.freePlay) return;
+    if (!p || !p.alive || p.dying || this.kills.has(pid) || this.freePlay || p.highUntil > this.time) return;
     p.dying = true;
     const sp = this.spider.pos;
     this.broadcast({ k: 'spiderkill', pid, x: sp.x, z: sp.z });
@@ -1863,7 +1867,7 @@ export class Game {
     const me = this.localId;
     switch (it.kind) {
       case 'slotbtn': it.machine.pressButton(it.btn); return;
-      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': this.extras.interact(it); return;
+      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': this.extras.interact(it); return;
       case 'door': {
         const d = it.door;
         if (d.secret && d.locked) return;
@@ -1968,7 +1972,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': return this.extras.prompt(it) || '';
+      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': return this.extras.prompt(it) || '';
     }
     return '';
   }
@@ -2313,6 +2317,7 @@ export class Game {
 
     // Camera / spectator
     if (this.isSpectating()) this.updateSpectateCam(dt);
+    this.extras?.cam?.applyPOV(this.camera); // your dropped camcorder, still filming
 
     // Interaction focus
     this.pickT -= dt;

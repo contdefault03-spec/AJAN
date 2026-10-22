@@ -88,7 +88,7 @@ export class AjanBrain {
 
   canSee(p) {
     if (p.hidden || isSafeZone(p.pos)) return false;
-    if (['sleep', 'dormant', 'stun', 'carry', 'dance', 'eatsit'].includes(this.state)) return false;
+    if (['sleep', 'dormant', 'stun', 'carry', 'dance', 'eatsit', 'gotoshed', 'shedsit'].includes(this.state)) return false;
     if (this.ignore.get(p.id) > 0) return false;
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
     const d = Math.hypot(dx, dz) + Math.abs(p.pos.y - this.pos.y) * 0.5;
@@ -108,7 +108,7 @@ export class AjanBrain {
    * for "exact" sources like a creaking floorboard or a radio.
    */
   hear(n) {
-    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock', 'peepscare'].includes(this.state)) return;
+    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock', 'peepscare', 'gotoshed', 'shedsit'].includes(this.state)) return;
     if (isSafeZone(n.pos)) return;
     const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z) + Math.abs(n.pos.y - this.pos.y) * 0.5;
     // Low, booming sources (radio, elevator) carry through walls better than footsteps.
@@ -243,6 +243,7 @@ export class AjanBrain {
     if (this.state === 'peepscare') { this.updatePeepScare(dt); return; }
     if (this.state === 'spot') { this.updateSpot(dt); return; }
     if (this.state === 'fridge') { this.updateFridge(dt); return; }
+    if (this.state === 'shedsit') { this.anim = 'sit'; this.restLeft -= dt; if (this.restLeft <= 0) { this.standUp(); for (const id of this.game.players.keys()) this.ignore.set(id, 60); this.sleepTimer = 0; this.setState('patrol'); this.goToBed(); } return; }
 
     this.sleepTimer -= dt;
     this.sitTimer -= dt;
@@ -314,6 +315,9 @@ export class AjanBrain {
         break;
       case 'gotodance':
         if (this.step(dt, this.v.patrol)) this.startDance();
+        break;
+      case 'gotoshed':
+        if (this.step(dt, this.v.patrol)) this.sitInShed();
         break;
       case 'chase':
         this.updateChase(dt);
@@ -881,6 +885,29 @@ export class AjanBrain {
     this.anim = 'sit';
     this.animT = 0;
     this.setState('eatsit');
+  }
+
+  /** Host: the shed's hotboxed — he wanders over for a smoke, then goes to bed. */
+  startShedVisit(seat) {
+    if (!['patrol', 'investigate', 'search', 'sit', 'gotochair'].includes(this.state)) return false;
+    this.standUp();
+    this.shedSeat = seat;
+    this.target = null;
+    if (!this.moveTo(seat.front)) return false;
+    this.setState('gotoshed');
+    return true;
+  }
+
+  sitInShed() {
+    const c = this.shedSeat;
+    if (!c || this.pos.distanceTo(c.front) > 1.6) { this.setState('patrol'); this.pickPatrol(); return; }
+    this.restFrom = c.front.clone();
+    this.pos.copy(c.seat);
+    this.ry = c.ry;
+    this.restLeft = 25;
+    this.anim = 'sit';
+    this.animT = 0;
+    this.setState('shedsit');
   }
 
   startDance() {

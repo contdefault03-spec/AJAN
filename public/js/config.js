@@ -72,10 +72,12 @@ export const ASSETS = {
   guyleaves: { names: ['guyleaves.mp3'] },
   guy: { names: ['guy.mp3'] },
   eat: { names: ['eat.mp3'] },
+  snort: { names: ['snort.mp3'] },
+  music5: { names: ['music5.mp3'] },
 };
 export const SOUND_KEYS = ['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'rot', 'banana', 'vanex', 'ajannew',
   'music1', 'music2', 'musicchase', 'sleep', 'noise', 'song1', 'fai', 'yasmin', 'ajansleep', 'ajancatch', 'ajansee', 'ajanleaves',
-  'ajanitasleep', 'ajanitasee', 'ajanitaleave', 'ajanita', 'guyseesyou', 'guyleaves', 'guy', 'eat'];
+  'ajanitasleep', 'ajanitasee', 'ajanitaleave', 'ajanita', 'guyseesyou', 'guyleaves', 'guy', 'eat', 'snort', 'music5'];
 
 // The monsters. Ajan is always in the house; Guy joins on Medium and Hard, Ajanita on Hard.
 // kill: 'eat' (grab and eat, like Ajan) or 'punch' (knock down and drag the body away).
@@ -118,6 +120,12 @@ export const ITEM_INFO = {
   spray: { name: 'Poison Spray' },
   well_lever: { name: 'Well Crank Lever' },
   camcorder: { name: 'Camcorder' },
+  shed_key: { name: 'Shed Key' },
+  bag_mushrooms: { name: 'Bag of Mushrooms (4)' },
+  bag_flour: { name: 'Bags of Flour (4)' },
+  bag_weed: { name: 'Pack of Joints (4)' },
+  mushroom: { name: 'Mushroom' },
+  joint: { name: 'Joint' },
 };
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a

@@ -130,7 +130,7 @@ export class Skinwalker {
   /** Host: the tongue. The victim dies (or, with lives left, wakes up later in a capture room). */
   hostEat(p) {
     const G = this.game, b = this.brain;
-    if (p.dying || G.freePlay) return;
+    if (p.dying || G.freePlay || p.highUntil > G.time) return;
     b.state = 'eat'; b.t = 0;
     p.dying = true;
     const left = G.lives.get(p.id) ?? 0;
