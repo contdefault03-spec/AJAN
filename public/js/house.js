@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { buildMaterials } from './textures.js';
 import { segmentBlockers } from './physics.js';
+import { AJAN } from './config.js';
 import { shuffle } from './util.js';
 import {
   LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
@@ -199,7 +200,10 @@ export class House {
       ...OPENINGS,
       ...ELEV_DOORS,
     ];
-    for (const [line, c, a0, a1, y0, y1] of WALLS) {
+    for (const [line, c, a0, a1, y0, wallTop] of WALLS) {
+      // Floor/ceiling planes have no slab sides: close the band up to the next floor.
+      const nextFloor = LEVELS.find((L, i) => i > 0 && LEVELS[i - 1].top === wallTop);
+      const y1 = nextFloor?.y ?? wallTop;
       const mine = cuts.filter(d => d.line === line && d.c === c && d.a0 >= a0 - 0.01 && d.a0 + d.w <= a1 + 0.01 && d.y0 < y1 && d.y0 + d.h > y0);
       const bands = [];
       let ya = y0;
@@ -903,9 +907,10 @@ export class House {
    * along the two staircases he can use. The attic, its stairs and the elevator
    * are deliberately absent, so he can never plan a path into them.
    */
-  buildNav() {
+  buildNav(extraColliders = []) {
     const N = [];
     const solid = this.colliders.filter(c => !c.door && !c.playerOnly);
+    const extra = new Set(extraColliders);
     const clear = (x, z, y, r = 0.5) => !solid.some(c => !c.off && c.minY < y + 1.5 && c.maxY > y + 0.3 && x > c.minX - r && x < c.maxX + r && z > c.minZ - r && z < c.maxZ + r);
     let k = 0;
     const node = (x, z, y, room) => { const n = { id: 'n' + (k++), x, z, y, room, edges: [] }; N.push(n); return n; };
@@ -918,7 +923,7 @@ export class House {
         const nx = Math.max(1, Math.round((x1 - x0 - 0.9) / 2.0)), nz = Math.max(1, Math.round((z1 - z0 - 0.9) / 2.0));
         for (let i = 0; i < nx; i++) for (let j = 0; j < nz; j++) {
           const x = x0 + 0.45 + (x1 - x0 - 0.9) * (i + 0.5) / nx, z = z0 + 0.45 + (z1 - z0 - 0.9) * (j + 0.5) / nz;
-          for (const [ox, oz] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [0.6, 0.6], [-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6]]) {
+          for (const [ox, oz] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [0.6, 0.6], [-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6], [0, 0.2], [0, -0.2]]) {
             const px = x + ox, pz = z + oz;
             if (px < x0 + 0.45 || px > x1 - 0.45 || pz < z0 + 0.45 || pz > z1 - 0.45) continue;
             const at = roomAt(px, pz, y + 0.5);
@@ -928,6 +933,18 @@ export class House {
         }
       }
       this.roomNodes[r.id] = list;
+    }
+    // Keep narrow routes around late furniture connected when the room grid misses them.
+    for (const c of extraColliders) {
+      if (c.off || c.door || c.playerOnly) continue;
+      for (const L of LEVELS) {
+        if (c.minY > L.y + AJAN.height || c.maxY < L.y + 0.35) continue;
+        for (const x of [c.minX - 0.5, c.maxX + 0.5]) for (const z of [c.minZ - 0.5, c.maxZ + 0.5]) {
+          const room = roomAt(x, z, L.y + 0.5), list = this.roomNodes[room?.id];
+          if (!list || room.safe || !clear(x, z, L.y)) continue;
+          if (!list.some(n => Math.hypot(n.x - x, n.z - z) < 0.05)) list.push(node(x, z, L.y, room.id));
+        }
+      }
     }
     const portals = [];
     const addPortal = (d, y, doorId) => {
@@ -941,7 +958,7 @@ export class House {
     for (const o of OPENINGS) if (!o.noNav) addPortal(o, o.y0, o.navDoor || null);
     const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
-    const s3 = [node(48.3, 7.75, 0, 'estair'), node(48.3, 13.55, 0, 'estair'), node(46.95, 13.6, 0, 'estair'), node(46.95, 10.3, 1.7, 'estair:ramp'), node(46.95, 6.25, 3.4, 'uehall')];
+    const s3 = [node(48.3, 7.75, 0, 'estair'), node(48.3, 13.15, 0, 'estair'), node(46.95, 13.15, 0, 'estair'), node(46.95, 9.9, 1.7, 'estair:ramp'), node(46.95, 6.25, 3.4, 'uehall')];
     const s5 = [node(32.55, 7.25, 3.4, 'ajanroom'), node(32.55, 3.7, 5.1, 'tstair:ramp'), node(32.55, 0.6, 6.8, 'tstair:top'), node(33.8, 0.62, 6.8, 'observ')];
     // The upstairs hall narrows to 1.3 m past the attic-stair footprint (z 9.4–10.9 is
     // off limits to him): a lane of nodes along its north side keeps the west half of
@@ -963,7 +980,9 @@ export class House {
       // only test colliders near the segment
       const mnx = Math.min(a.x, b.x) - 0.5, mxx = Math.max(a.x, b.x) + 0.5, mnz = Math.min(a.z, b.z) - 0.5, mxz = Math.max(a.z, b.z) + 0.5;
       const near = solid.filter(c => c.maxX > mnx && c.minX < mxx && c.maxZ > mnz && c.minZ < mxz);
-      const blocked = segmentBlockers(a.x, a.z, b.x, b.z, a.y + 0.6, near, { pad: 0.42, occludeOnly: false, max: 1, who: 'ajan' });
+      // Late props include sofas/tables below the original graph's 0.6 m sample.
+      const blocked = segmentBlockers(a.x, a.z, b.x, b.z, a.y + 0.6, near, { pad: AJAN.radius, occludeOnly: false, max: 1, who: 'ajan' }) ||
+        segmentBlockers(a.x, a.z, b.x, b.z, a.y + 0.35, near.filter(c => extra.has(c)), { pad: AJAN.radius, height: AJAN.height - 0.35, occludeOnly: false, max: 1, who: 'ajan' });
       if (!blocked) link(a, b);
     }
     for (const [a, b, d] of portals) link(a, b, d);

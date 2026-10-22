@@ -54,6 +54,7 @@ export class Extras {
 
   async init() {
     const G = this.game, H = this.house, scene = G.scene;
+    const colliderStart = H.colliders.length;
     this.group = new THREE.Group();
     H.group.add(this.group);
     const mat = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.7, ...o });
@@ -207,6 +208,8 @@ export class Extras {
     this.shed = new Shed(G);
     await this.shed.init();
     await hangGuitars(G);
+    // Include every late obstacle (garden, capture rooms, security office and shed).
+    H.buildNav(H.colliders.slice(colliderStart));
     this.buildUI();
   }
 

@@ -102,7 +102,8 @@ function buildGround(h) {
   h.container('c_office', 'drawer', 36.3, 0.55, 2.39, 0.6, 0.16, 0.42, '+z', 'wood', 'Desk');
   h.underHide('u_desk', 35.0, 1.6, 37.6, 2.6, 0, '+z', 'HIDE UNDER DESK', 0.45);
   h.chair(36.3, 3.3);
-  h.shelf(39.3, 0.3, 39.88, 4.3, 2.2, 'woodDark', 0, true);
+  // North wall: keep the east-wing doorway and its approach completely clear.
+  h.shelf(34.3, 0.12, 38.3, 0.7, 2.2, 'woodDark', 0, true);
   h.shelf(39.3, 5.0, 39.88, 7.6, 2.0, 'woodDark', 0, true);
   h.furnitureBox(30.2, 0, 0.2, 30.8, 1.3, 1.0, 'metal');
   h.furnitureBox(30.2, 0, 1.1, 30.8, 1.3, 1.9, 'metal');

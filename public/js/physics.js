@@ -97,7 +97,7 @@ function segHitsBox(ax, az, bx, bz, c, pad = 0) {
 
 /**
  * Count blocking colliders between two points at height y.
- * opts: { pad, occludeOnly (default true), max, who }
+ * opts: { pad, height (vertical span above y, default 0), occludeOnly (default true), max, who }
  */
 export function segmentBlockers(ax, az, bx, bz, y, colliders, opts = {}) {
   const pad = opts.pad || 0;
@@ -109,7 +109,7 @@ export function segmentBlockers(ax, az, bx, bz, y, colliders, opts = {}) {
     if ((opts.occludeOnly ?? true) && !c.occlude) continue;
     if (c.ajanOnly && opts.who !== 'ajan') continue;
     if (c.playerOnly && opts.who === 'ajan') continue;
-    if (y < c.minY || y > c.maxY) continue;
+    if (y + (opts.height ?? 0) < c.minY || y > c.maxY) continue;
     if (segHitsBox(ax, az, bx, bz, c, pad)) { n++; if (n >= max) return n; }
   }
   return n;
