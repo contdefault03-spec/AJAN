@@ -15,7 +15,7 @@ export const DEFAULTS = {
   difficulty: 'medium', // solo games, and the room's difficulty when you host
   micConfigured: false,
   mouse: 1.0,
-  quality: 'medium', // low | medium | high
+  quality: 'medium', // performance | low | medium | high
   vhs: 'full', // off | low | full
   invertY: false,
 };
