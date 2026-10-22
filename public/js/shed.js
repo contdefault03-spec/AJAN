@@ -430,7 +430,6 @@ export class Shed {
         // Use the existing item replication path for model removal, held state,
         // selection and HUD updates on every client.
         G.applyEvent({ k: 'item', id: e.id, holder: e.pid });
-        audio.play('pickup', { vol: 0.7 });
         return true;
       }
       case 'snorted': {
