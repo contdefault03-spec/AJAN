@@ -197,9 +197,9 @@ export class Game {
     // reconnecting can't reset them).
     this.lives = new Map();
     for (const p of this.players.values()) this.lives.set(p.id, DIFFICULTY[this.difficulty].respawns);
-    if (this.isHost) this.makeBrains(this.seed ^ 0x9e3779b9);
     this.extras = new Extras(this);
     await this.extras.init();
+    if (this.isHost) this.makeBrains(this.seed ^ 0x9e3779b9);
 
     this.post = new PostFX(this.renderer, scene, this.camera);
     this.applyGraphics();

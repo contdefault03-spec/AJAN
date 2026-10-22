@@ -155,7 +155,7 @@ export class AjanBrain {
     this.path = path.map(id => { const n = this.house.nav.byId[id]; return { x: n.x, y: n.y, z: n.z, id }; });
     // Only walk the last stretch off-graph if it's actually clear (and not into the attic).
     const last = this.path[this.path.length - 1];
-    const clear = segmentBlockers(last.x, last.z, p.x, p.z, last.y + 0.6, cols, { pad: AJAN.radius, occludeOnly: false, max: 1, who: 'ajan' }) === 0;
+    const clear = segmentBlockers(last.x, last.z, p.x, p.z, last.y + 0.35, cols, { pad: AJAN.radius, height: AJAN.height - 0.35, occludeOnly: false, max: 1, who: 'ajan' }) === 0;
     if (clear && Math.abs(p.y - last.y) < 1.2 && !isSafeZone(p)) this.path.push({ x: p.x, y: p.y, z: p.z, id: null });
     this.pathIdx = 0;
     if (this.path.length > 2) {

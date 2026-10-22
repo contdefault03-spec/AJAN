@@ -26,7 +26,7 @@ export const RAMPS = [
   { id: 'R3', puzzle: true, x0: 23.4, x1: 25.5, z0: 9.55, z1: 10.92, axis: 'x', a: 23.4, ya: UY, b: 25.5, yb: AY },
   // east wing: a narrow servants' staircase, and the spiral stair up to the TV room
   // a U-turn: walk in along the side passage, turn at the end, climb back toward the hall
-  { id: 'R5', x0: 46.25, x1: 47.6, z0: 7.4, z1: 13.2, axis: 'z', a: 13.2, ya: GY, b: 7.4, yb: UY },
+  { id: 'R5', x0: 46.25, x1: 47.6, z0: 7.4, z1: 12.4, axis: 'z', a: 12.4, ya: GY, b: 7.4, yb: UY },
   // the third-floor stairs: up the east side of Ajan's room, from the door end to the north wall
   { id: 'R7', x0: 31.95, x1: 33.15, z0: 1.0, z1: 6.4, axis: 'z', a: 6.4, ya: UY, b: 1.0, yb: AY },
   { id: 'R6', spiral: true, cx: 53.5, cz: 10, r0: 0.28, r1: 1.45, x0: 52, x1: 55, z0: 8.5, z1: 11.5, ya: UY, yb: AY, a0: Math.PI, turns: 1.25 },
@@ -146,7 +146,7 @@ export const SHAFTS = [
   { id: 'stairB', name: 'STAIRWELL', x0: 11, x1: 17, z0: 17, z1: 21, yMin: -4, yMax: 1.9, floors: { 1: [[16, 17.2, 17, 21]] } },
   { id: 'stairU', name: 'STAIRCASE', x0: 36, x1: 40, z0: 11, z1: 21, yMin: -0.5, yMax: 5.3, floors: { 1: [[36, 40, 19.5, 21]], 2: [[36, 40, 11, 13]] } },
   { id: 'stairA', name: 'ATTIC STAIRS', x0: 20, x1: 25.5, z0: 9.45, z1: 11, yMin: 3.9, yMax: 6.6 },
-  { id: 'estair', name: 'BACK STAIRS', x0: 46, x1: 49, z0: 7, z1: 14, yMin: -0.5, yMax: 5.3, floors: { 1: [[46, 49, 7, 14]], 2: [[47.65, 49, 7, 14], [46, 47.65, 13.2, 14], [46, 47.65, 7, 7.4]] } },
+  { id: 'estair', name: 'BACK STAIRS', x0: 46, x1: 49, z0: 7, z1: 14, yMin: -0.5, yMax: 5.3, floors: { 1: [[46, 49, 7, 14]], 2: [[47.65, 49, 7, 14], [46, 47.65, 12.4, 14], [46, 47.65, 7, 7.4]] } },
   { id: 'tstair', name: 'STAIRS', x0: 31.9, x1: 33.2, z0: 1.0, z1: 6.4, yMin: 4.3, yMax: 7.2 },
   { id: 'spiral', name: 'SPIRAL STAIRS', x0: 52, x1: 55, z0: 8.5, z1: 11.5, yMin: 4.3, yMax: 6.7 },
 ];
@@ -322,8 +322,8 @@ export const WALLS = [
   ['x', -13.2, 26, 37, GY, 3], ['x', -7, 26, 37, GY, 3], ['z', 26, -13.2, -7, GY, 3], ['z', 37, -13.2, -7, GY, 3],
   ['x', 5, 40, 56, GY, 3], ['x', 7, 40, 56, GY, 3], ['z', 48, 0, 5, GY, 3], ['z', 46, 7, 14, GY, 3], ['z', 49, 7, 14, GY, 3],
   ['x', 5, 40, 56, UY, 6.4], ['x', 7, 40, 56, UY, 6.4],
-  // back stairs: a wall between the side passage and the underside of the flight, a rail beside it upstairs
-  ['z', 47.65, 7, 13.2, GY, 3], ['z', 47.65, 7, 13.2, UY, UY + 1.05], ['z', 46, 0, 5, UY, 6.4], ['z', 51, 0, 5, UY, 6.4], ['z', 46, 7, 14, UY, 6.4], ['z', 49, 7, 14, UY, 6.4],
+  // back stairs: leave a 1.4 m clear lower turn beyond the divider (Ajan is 0.84 m wide)
+  ['z', 47.65, 7, 12.4, GY, 3], ['z', 47.65, 7, 12.4, UY, UY + 1.05], ['z', 46, 0, 5, UY, 6.4], ['z', 51, 0, 5, UY, 6.4], ['z', 46, 7, 14, UY, 6.4], ['z', 49, 7, 14, UY, 6.4],
   // the TV room on top of the tower, with a rail round the spiral stair's opening (open to the north)
   ['x', 7, 49, 56, AY, 9.2], ['x', 14, 49, 56, AY, 9.2], ['z', 49, 7, 14, AY, 9.2], ['z', 56, 7, 14, AY, 9.2],
   ['x', 11.5, 52, 55, AY, 7.85], ['z', 52, 8.5, 11.5, AY, 7.85], ['z', 55, 8.5, 11.5, AY, 7.85],

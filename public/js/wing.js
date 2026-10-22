@@ -9,7 +9,7 @@ export function buildWing(h) {
   const GY = LEVELS[1].y, UY = LEVELS[2].y, AY = LEVELS[3].y;
   // back stairs: bottom and top landings, ceiling over the stairwell
   G.plane('floorWoodDark', 46, 7, 49, 14, GY, true);
-  for (const [x0, x1, z0, z1] of [[47.65, 49, 7, 14], [46, 47.65, 13.2, 14], [46, 47.65, 7, 7.4]]) { G.plane('floorWood', x0, z0, x1, z1, UY, true); G.plane('ceiling', x0, z0, x1, z1, UY - 0.01, false); }
+  for (const [x0, x1, z0, z1] of [[47.65, 49, 7, 14], [46, 47.65, 12.4, 14], [46, 47.65, 7, 7.4]]) { G.plane('floorWood', x0, z0, x1, z1, UY, true); G.plane('ceiling', x0, z0, x1, z1, UY - 0.01, false); }
   G.plane('ceiling', 46, 7, 49, 14, 6.4, false);
   // flat roof over the wing (seen from the TV room windows) and the TV room's ceiling
   G.plane('floorConcrete', 40, 0, 56, 7, 6.42, true);
