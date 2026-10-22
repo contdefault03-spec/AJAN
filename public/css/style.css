@@ -316,3 +316,22 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 .doorWarn span { font-size: 18px; color: #e8e0d0; letter-spacing: 0.05em; }
 .rainbowFX { position: absolute; inset: -20%; pointer-events: none; opacity: 0.32; mix-blend-mode: screen; background: conic-gradient(from 0deg, #ff0040, #ff9a00, #fff200, #28e040, #00c8ff, #6a40ff, #ff40c8, #ff0040); animation: rainbowSpin 6s linear infinite; filter: blur(30px); }
 @keyframes rainbowSpin { to { transform: rotate(360deg) scale(1.15); } }
+
+
+/* TRIP MODE: intentionally unsettling, local-only hallucinations. */
+#tripOverlay { position:fixed; inset:0; z-index:8; pointer-events:none; display:none; overflow:hidden; mix-blend-mode:screen; }
+#tripOverlay.active { display:block; }
+.tripVignette { position:absolute; inset:-8%; background:radial-gradient(ellipse at center, transparent 28%, rgba(70,0,95,.18) 64%, rgba(0,0,0,.7) 100%); animation:tripBreath 5s ease-in-out infinite alternate; }
+.tripFigure,.tripFlashFigure { position:absolute; opacity:0; color:#080609; text-shadow:0 0 10px #a20e5c,0 0 28px #d21d78; font:160px/1 monospace; transform:scaleY(2.1); }
+.tripFigure { left:var(--trip-x,72%); top:var(--trip-y,24%); }
+.tripFlashFigure { right:9%; bottom:5%; font-size:100px; }
+#tripOverlay.figure .tripFigure { opacity:.8; animation:tripAppear 1.8s steps(2,end) forwards; }
+#tripOverlay.flashfigure .tripFlashFigure { opacity:.9; animation:tripAppear .7s steps(2,end) forwards; }
+.tripWords { position:absolute; top:18%; left:0; width:100%; text-align:center; font:22px monospace; letter-spacing:.5em; color:rgba(240,190,255,.22); }
+#tripJumpscare { position:fixed; inset:0; z-index:30; pointer-events:none; display:none; align-items:center; justify-content:center; background:rgba(0,0,0,.92); }
+#tripJumpscare.show { display:flex; animation:tripJump .62s steps(2,end); }
+.tripFace { color:#eee; font:min(45vw,360px)/1 monospace; transform:scaleX(1.25); text-shadow:0 0 8px #f00,0 0 45px #a00; animation:tripFace .12s infinite alternate; }
+@keyframes tripBreath { to { transform:scale(1.1) rotate(2deg); filter:hue-rotate(90deg); } }
+@keyframes tripAppear { 0% { opacity:0; transform:translateY(20px) scaleY(2.4); } 12% { opacity:.9; } 75% { opacity:.65; } 100% { opacity:0; transform:translateY(-15px) scaleY(1.8); } }
+@keyframes tripJump { 0%,100% { opacity:0; } 10%,70% { opacity:1; } }
+@keyframes tripFace { to { transform:scaleX(.7) translateX(8px); filter:hue-rotate(100deg); } }
