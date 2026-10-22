@@ -77,6 +77,7 @@ export class Game {
     this.heartT = 0;
     this.tripEventT = 5 + Math.random() * 7;
     this.tripJumpTimer = null;
+    this.fartClouds = [];
   }
 
   get me() { return this.players.get(this.localId); }
@@ -254,11 +255,14 @@ export class Game {
 
   applyGraphics() {
     const q = settings.quality;
-    const pr = q === 'low' ? 0.7 : q === 'high' ? Math.min(devicePixelRatio, 1.5) : 1;
+    const perf = q === 'performance';
+    const pr = perf ? 0.5 : q === 'low' ? 0.65 : q === 'high' ? Math.min(devicePixelRatio, 1.25) : Math.min(devicePixelRatio, 0.85);
     this.renderer.setPixelRatio(pr);
-    this.renderer.shadowMap.enabled = q !== 'low';
-    this.local?.setShadows(q);
-    this.post?.setLevel(settings.vhs);
+    this.renderer.shadowMap.enabled = !perf && q !== 'low';
+    this.local?.setShadows(perf ? 'low' : q);
+    this.post?.setLevel(perf ? 'off' : settings.vhs);
+    if (this.dust) this.dust.visible = !perf && q !== 'low';
+    if (this.scene?.fog) this.scene.fog.density = perf ? 0.025 : 0.045;
     this.resize();
   }
 
@@ -266,8 +270,9 @@ export class Game {
     if (!this.camera) return;
     this.camera.aspect = innerWidth / innerHeight;
     this.camera.updateProjectionMatrix();
-    this.renderer.setSize(innerWidth, innerHeight);
-    this.post?.setSize(innerWidth, innerHeight);
+    const scale = settings.quality === 'performance' ? 0.62 : 1;
+    this.renderer.setSize(Math.max(320, Math.floor(innerWidth * scale)), Math.max(200, Math.floor(innerHeight * scale)), false);
+    this.post?.setSize(Math.max(320, Math.floor(innerWidth * scale)), Math.max(200, Math.floor(innerHeight * scale)));
   }
 
   placeItems() {
@@ -1366,6 +1371,7 @@ export class Game {
       }
       case 'escape': this.applyEscape(e); break;
       case 'music': this.chase = e.chase; this.updateMusic(); break;
+      case 'ajanFart': this.spawnAjanFart(V(e.x, e.y, e.z), e.ry || 0); break;
       case 'ajs': {
         const mon = this.monsters.get(e.m || 'ajan');
         if (!mon) break;
@@ -1726,12 +1732,21 @@ export class Game {
 
   // ============================================================ spectating
   startSpectating() {
+    if (!this.spectateCandidates().length) {
+      this.spectate.active = false;
+      this.spectate.target = null;
+      $('spectateHud').classList.remove('show');
+      this.camera.layers.disable(1);
+      this.updateHUD();
+      return false;
+    }
     this.spectate.active = true;
     this.spectate.target = null;
     this.camera.layers.enable(1);
     this.cycleSpectate(1);
     $('spectateHud').classList.add('show');
     this.updateHUD();
+    return true;
   }
 
   spectateCandidates() {
@@ -1740,7 +1755,7 @@ export class Game {
 
   cycleSpectate(dir) {
     const list = this.spectateCandidates();
-    if (!list.length) { this.spectate.target = null; this.updateHUD(); return; }
+    if (!list.length) { this.spectate.target = null; this.spectate.active = false; $('spectateHud').classList.remove('show'); this.camera.layers.disable(1); this.updateHUD(); return; }
     const i = list.findIndex(p => p.id === this.spectate.target);
     const next = list[(i + dir + list.length) % list.length];
     this.spectate.target = next.id;
@@ -1752,7 +1767,11 @@ export class Game {
   updateSpectateCam(dt) {
     let p = this.players.get(this.spectate.target);
     if (!p || !p.alive || p.escaped) { this.cycleSpectate(1); p = this.players.get(this.spectate.target); }
-    if (!p) return;
+    if (!p) {
+      const local = this.players.get(this.localId);
+      if (local?.knocked) { this.camera.position.copy(local.avatar.group.position).add(V(0, 1.8, 2.5)); this.camera.lookAt(local.avatar.group.position); }
+      return;
+    }
     const sp = this.spectate;
     const focus = p.pos.clone().add(V(0, 1.45, 0));
     let dist = sp.dist;
@@ -2270,6 +2289,7 @@ export class Game {
     if (this.club.music ? !this.clubDuckOn : this.clubDuckOn) { this.clubDuckOn = !!this.club.music; this.updateMusic(); }
     this.updateHeld();
     this.updateTripMode(dt);
+    this.updateFartClouds(dt);
     if (this.dizzy > 0) {
       // wobbling view and a soft blur that fade out over ~20 s
       this.dizzy = Math.max(0, this.dizzy - dt / 20);
@@ -2314,11 +2334,11 @@ export class Game {
     const sk = this.specK = damp(this.specK || 0, (this.localDead || this.localEscaped) && this.phase === 'play' ? 1 : 0, 2, dt);
     if (!L.hidden && sk > 0.01) this.hideLight.position.copy(this.camera.position).add(V(0, 0.6, 0));
     const bk = Math.max(hk, sk);
-    this.hideLight.intensity = this.cineAjan ? 30 : Math.max(hk * 18, sk * 16);
-    this.app.renderer.toneMappingExposure = 1.15 + Math.max(hk * 0.45, sk * 0.55) + (this.camBoost || 0);
-    this.hemi.intensity = 1.0 + lk * 4 + bk * 1.6;
-    H.M.glassWin.emissiveIntensity = 1 + lk * 25;
-    this.ambient.intensity = 0.6 + (H.power ? 0.2 : 0) + Math.max(hk * 2.0, sk * 2.4) + (this.camBoost || 0) * 2.5;
+    this.hideLight.intensity = this.cineAjan ? 8 : hk * 5;
+    this.app.renderer.toneMappingExposure = 1.05 + hk * 0.08 + (this.camBoost || 0) * 0.25;
+    this.hemi.intensity = 0.75 + lk * 2.5 + hk * 0.25;
+    H.M.glassWin.emissiveIntensity = 1 + lk * 12;
+    this.ambient.intensity = 0.42 + (H.power ? 0.12 : 0) + hk * 0.35 + (this.camBoost || 0) * 0.5;
 
     // Full body for mirrors/security cameras; layer 1 keeps it out of first person.
     if (me && !me.dying) {
@@ -2615,6 +2635,39 @@ export class Game {
   }
 
   // Hallucinations are client-local so each multiplayer player gets their own trips.
+  spawnAjanFart(pos, ry = 0) {
+    const group = new THREE.Group();
+    group.position.copy(pos);
+    group.rotation.y = ry;
+    this.scene.add(group);
+    const clouds = [];
+    for (let i = 0; i < 9; i++) {
+      const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.22 + Math.random() * 0.28, 7, 5),
+        new THREE.MeshBasicMaterial({ color: 0x91a78c, transparent: true, opacity: 0.36, depthWrite: false }));
+      mesh.position.set((Math.random() - 0.5) * 0.6, 0.25 + Math.random() * 0.65, -0.45 - Math.random() * 0.65);
+      group.add(mesh);
+      clouds.push({ mesh, vx: (Math.random() - 0.5) * 0.22, vy: 0.18 + Math.random() * 0.25, vz: -0.2 - Math.random() * 0.25 });
+    }
+    this.fartClouds.push({ group, clouds, age: 0 });
+    audio.play('fart', { pos, vol: 0.95, ref: 4, rate: 0.85 + Math.random() * 0.3 });
+  }
+
+  updateFartClouds(dt) {
+    for (let i = this.fartClouds.length - 1; i >= 0; i--) {
+      const c = this.fartClouds[i]; c.age += dt;
+      for (const p of c.clouds) {
+        p.mesh.position.x += p.vx * dt; p.mesh.position.y += p.vy * dt; p.mesh.position.z += p.vz * dt;
+        p.mesh.scale.multiplyScalar(1 + dt * 0.3);
+        p.mesh.material.opacity = Math.max(0, 0.36 * (1 - c.age / 7));
+      }
+      if (c.age > 7) {
+        this.scene.remove(c.group);
+        c.group.traverse(o => { o.geometry?.dispose?.(); o.material?.dispose?.(); });
+        this.fartClouds.splice(i, 1);
+      }
+    }
+  }
+
   updateTripMode(dt) {
     const overlay = document.getElementById('tripOverlay');
     if (this.difficulty !== 'trip' || this.phase !== 'play' || this.localDead || this.localEscaped || this.me?.dying) {
@@ -2649,6 +2702,8 @@ export class Game {
       if (scare) {
         scare.classList.remove('show'); void scare.offsetWidth; scare.classList.add('show');
         clearTimeout(this.tripJumpTimer);
+    for (const c of (this.fartClouds || [])) { this.scene.remove(c.group); c.group.traverse(o => { o.geometry?.dispose?.(); o.material?.dispose?.(); }); }
+    if (this.fartClouds) this.fartClouds.length = 0;
         this.tripJumpTimer = setTimeout(() => scare.classList.remove('show'), 700);
       }
       audio.play('roar', { vol: 0.75, rate: 0.7 + Math.random() * 0.7 });
