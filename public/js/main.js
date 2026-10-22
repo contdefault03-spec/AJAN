@@ -48,6 +48,17 @@ class App {
 
   // ---------------------------------------------------------------- boot
   async boot() {
+    // Show the actual server build instead of the old hard-coded v1.3 label.
+    try {
+      const response = await fetch('/api/version', { cache: 'no-store' });
+      if (response.ok) {
+        const build = await response.json();
+        const shortCommit = typeof build.commit === 'string' && build.commit !== 'local' ? build.commit.slice(0, 7) : 'LOCAL';
+        const label = $('menuVersion');
+        if (label) label.textContent = `v${build.version} · BUILD ${shortCommit}`;
+        document.documentElement.dataset.ajanBuild = `${build.version}-${shortCommit}`;
+      }
+    } catch { /* offline/local fallback */ }
     await discoverAssets();
     if (assetState.missing.length) {
       const w = $('assetWarn');
