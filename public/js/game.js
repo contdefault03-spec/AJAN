@@ -384,7 +384,7 @@ export class Game {
     this.onMouseDown = e => {
       if (this.phase !== 'play') return;
       if (document.pointerLockElement !== this.canvas) {
-        if (!this.app.paused && !$('noteView').classList.contains('show') && !this.drinkMenuOpen) this.lockPointer();
+        if (!this.extras?.arcade?.active && !this.app.paused && !$('noteView').classList.contains('show') && !this.drinkMenuOpen) this.lockPointer();
         return;
       }
       if (this.isSpectating()) { this.cycleSpectate(e.button === 2 ? -1 : 1); return; }
@@ -401,7 +401,7 @@ export class Game {
       // Notes and Fai's drink menu free the mouse on purpose; anything else means "pause".
       // (The lock events arrive asynchronously, so allow a moment after the menu closes.)
       const menu = this.drinkMenuOpen || performance.now() - (this.drinkMenuClosedAt || -1e9) < 1500;
-      if (this.localEscaped || this.app.cinemaPlaying) return; // the escape video freed the mouse
+      if (this.localEscaped || this.app.cinemaPlaying || this.extras?.arcade?.releasesPointer) return; // these modes release the mouse deliberately
       if (document.pointerLockElement !== this.canvas && !$('noteView').classList.contains('show') && !menu) this.app.pause(true);
     };
     // Mouse wheel: cycle the selected inventory item (only while actually playing).
@@ -461,7 +461,10 @@ export class Game {
     else if (t === 'm') { if (!this.isHost) for (const [id, sn] of Object.entries(d)) { const m = this.monsters.get(id); if (m) m.snap = sn; } }
     else if (t === 's') { if (!this.isHost) this.spider.snap = d; }
     else if (t === 'rq') { if (this.isHost) this.handleRequest(from, d); }
-    else if (t === 'ev') this.applyEvent(d);
+    else if (t === 'ev') {
+      if ((d?.k === 'arcadeLease' || d?.k === 'arcadeDenied') && from !== this.net.room?.hostId) return;
+      this.applyEvent(d);
+    }
     else if (t === 'spk') { const p = this.players.get(from); if (p) p.speaking = !!d; }
   }
 
@@ -502,6 +505,7 @@ export class Game {
     p.label?.remove();
     this.scene.remove(p.avatar.group);
     if (p.hideId) { const h = this.house.hides.get(p.hideId); if (h) { h.occupant = null; h.target = 0; } }
+    this.extras?.arcade?.releasePeer(id);
     this.players.delete(id);
     this.toast(`${p.name} left the game.`);
     if (this.spectate.target === id) this.cycleSpectate(1);
@@ -1890,7 +1894,7 @@ export class Game {
     const me = this.localId;
     switch (it.kind) {
       case 'slotbtn': it.machine.pressButton(it.btn); return;
-      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': this.extras.interact(it); return;
+      case 'arcade': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': this.extras.interact(it); return;
       case 'door': {
         const d = it.door;
         if (d.secret && d.locked) return;
@@ -1995,7 +1999,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': return this.extras.prompt(it) || '';
+      case 'slotbtn': case 'arcade': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': return this.extras.prompt(it) || '';
     }
     return '';
   }
