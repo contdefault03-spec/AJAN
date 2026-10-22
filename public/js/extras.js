@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { audio } from './audio.js';
 import { loadGLTF, assetUrl } from './assets.js';
 import { settings } from './settings.js';
-import { FRIDGE, SNACK_CHAIR, MUSIC_SPOT } from './ajan.js';
+import { FRIDGE, MUSIC_SPOT } from './ajan.js';
 import { lineOfSight } from './physics.js';
 import { SlotMachine } from './slots.js';
 import { Garden } from './garden.js';
@@ -415,8 +415,7 @@ export class Extras {
       if (st === 'eatsit') hand.lerp(aj.avatar.mouth(), 0.5 + Math.sin(G.time * 2.2) * 0.35);
       this.dollma.position.copy(hand);
     }
-    if (st === 'eatsit' && !this.eatSound) this.eatSound = audio.play('eat', { pos: SNACK_CHAIR.seat.clone().add(V(0, 1.4, 0)), loop: true, vol: 1.5, ref: 2.5, limit: true });
-    else if (st !== 'eatsit' && this.eatSound) { this.eatSound.stop(0.4); this.eatSound = null; }
+    this.updateEatingAudio(aj);
     if (st === 'dance' && !this.danceSound) this.danceSound = audio.play('song1', { pos: MUSIC_SPOT.clone().add(V(0, 1.5, 0)), loop: true, vol: 0.9, ref: 3, rolloff: 1.4 });
     else if (st !== 'dance' && this.danceSound) { this.danceSound.stop(1); this.danceSound = null; }
     for (const m of this.slots) m.update(dt);
@@ -453,6 +452,16 @@ export class Extras {
   /** E on one of this module's interactables. */
   interact(it) {
     return this.garden.interact(it) || this.security.interact(it) || this.passages.interact(it) || this.shed.interact(it);
+  }
+
+  // Replicated monster state drives the same positional loop on host and guests.
+  updateEatingAudio(aj) {
+    const eating = aj?.vis.st === 'eatsit' || aj?.vis.st === 'butcher';
+    if (eating) {
+      const pos = aj.vis.pos.clone().add(V(0, 1.4, 0));
+      if (!this.eatSound) this.eatSound = audio.play('eat', { pos, loop: true, vol: 1.5, ref: 2.5, limit: true });
+      else this.eatSound.setPos(pos);
+    } else if (this.eatSound) { this.eatSound.stop(0.4); this.eatSound = null; }
   }
 
   dispose() {

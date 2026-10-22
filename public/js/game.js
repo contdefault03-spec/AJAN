@@ -22,7 +22,7 @@ import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
 import { Spider } from './spider.js';
 import { Car, DRIVE_TOTAL, CAR_PARTS } from './car.js';
 import { AtticPuzzle } from './attic.js';
-import { Club, inClub, DRINKS, RAIN_COST, LAP_COST, makeDrinkMesh } from './club.js';
+import { Club, inClub, DRINKS, RAIN_COST, LAP_COST, START_MONEY, makeDrinkMesh } from './club.js';
 import { isSafeZone, levelIndex, LEVELS, inElevator } from './layout.js';
 import { mulberry32, clamp, damp, angleLerp, escapeHtml } from './util.js';
 import { lineOfSight, segmentBlockers, levelOf, inStairs, elevatorState, soundTransmission, groundAt } from './physics.js';
@@ -978,7 +978,7 @@ export class Game {
   // ============================================================ nightclub
   makeItRain() {
     const L = this.local;
-    if (this.club.balance(this.localId) < RAIN_COST) { this.message(`Out of money ($${this.club.balance(this.localId)}).`, 3); audio.play('click', { vol: 0.4 }); return; }
+    if (this.club.balance(this.localId) < RAIN_COST) { this.message(`Out of money (€${this.club.balance(this.localId)}).`, 3); audio.play('click', { vol: 0.4 }); return; }
     if ((L.throwT ?? 9) < 0.55) return; // still throwing the last handful
     this.request({ k: 'rain', target: this.club.aimTarget() });
   }
@@ -1478,7 +1478,7 @@ export class Game {
         this.local.hideLook = 0;
         this.local.pitch = 0;
         $('hideOverlay').classList.toggle('car', h.type === 'seat' || h.type === 'clubseat');
-        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? (h.id === 'club_seat2' ? 'AT AJAN\'S POLE' : 'AT YASMIN\'S TABLE') + ' — [E] make it rain  ·  [Q] private dance ($50)  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
+        $('hideOverlay').querySelector('p').textContent = h.type === 'clubseat' ? (h.id === 'club_seat2' ? 'AT AJAN\'S POLE' : 'AT YASMIN\'S TABLE') + ' — [E] make it rain  ·  [Q] private dance (€50)  ·  [SPACE] stand up' : h.type === 'seat' ? (h.seat === 'driver' ? 'IN THE DRIVER\'S SEAT — [W] drive  ·  [E] get out' : 'IN THE CAR — waiting for the driver  ·  [E] get out') : 'HIDING — hold still. Talking can give you away. [E] leave';
         $('hideOverlay').classList.add('show');
       }
     } else {
@@ -2002,7 +2002,7 @@ export class Game {
 
   updateFocus() {
     const L = this.local;
-    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : L.hidden.type === 'clubseat' ? `E — MAKE IT RAIN ($${RAIN_COST})  ·  Q — PRIVATE DANCE ($${LAP_COST})  ·  SPACE — STAND UP  <span class="dim">$${this.club.balance(this.localId)} left</span>` : 'E — LEAVE'); this.focus = null; return; }
+    if (L.hidden) { this.setPrompt(L.hidden.type === 'seat' ? this.seatPrompt(L.hidden) : L.hidden.type === 'clubseat' ? `E — MAKE IT RAIN (€${RAIN_COST})  ·  Q — PRIVATE DANCE (€${LAP_COST})  ·  SPACE — STAND UP  <span class="dim">€${this.club.balance(this.localId)} left</span>` : 'E — LEAVE'); this.focus = null; return; }
     if (L.frozen || this.localDead || this.localEscaped) { this.setPrompt(''); this.focus = null; return; }
     const rc = this.raycaster || (this.raycaster = new THREE.Raycaster());
     this.camera.updateMatrixWorld();
@@ -2091,7 +2091,7 @@ export class Game {
       ? inv.map(i => `<div class="slot${i === sel ? ' sel' : ''}"><span class="ico ${i.type}"></span>${escapeHtml(ITEM_INFO[i.type].name)}${i.type === 'revolver' ? ` <span class="dim">${this.gunStatus()}</span>` : ''}</div>`).join('') +
         `<div class="hint">${this.slotsUsed(this.localId)}/${INV_SLOTS} SLOTS  ·  IN HAND: ${escapeHtml(ITEM_INFO[sel.type].name)}  ·  ${DRINKS[sel.type] ? 'CLICK — drink  ·  ' : ''}${inv.length > 1 ? 'WHEEL — switch  ·  ' : ''}G — drop</div>`
       : '<div class="slot empty">— empty —</div>';
-    $('money').textContent = `$${this.club ? this.club.balance(this.localId) : 500}`;
+    $('money').textContent = `€${this.club ? this.club.balance(this.localId) : START_MONEY}`;
     $('micState').classList.toggle('muted', settings.micMuted || !mic.stream);
     $('micState').title = !mic.stream ? 'No microphone' : settings.micMuted ? 'Muted (M)' : 'Mic on (M to mute)';
     $('spectateHud').classList.toggle('show', this.isSpectating());
@@ -2105,6 +2105,15 @@ export class Game {
     this.storm?.strike(seed);
     const d = 0.4 + mulberry32(seed)() * 1.4;
     setTimeout(() => !this.disposed && audio.play('thunder', { vol: 0.65 }), d * 1000);
+  }
+
+  // The host chooses once per entry, including another player entering an occupied room.
+  updateMirrorVisits() {
+    const visitors = new Set([...this.players.values()]
+      .filter(p => p.alive && !p.escaped && roomAt(p.pos.x, p.pos.z, p.pos.y + 0.5)?.id === 'ubath')
+      .map(p => p.id));
+    if ([...visitors].some(id => !this.bathVisitors?.has(id))) this.broadcast({ k: 'mirror', i: Math.floor(this.rnd() * MIRROR_TEXTS.length) });
+    this.bathVisitors = visitors;
   }
 
   // ============================================================== director
@@ -2135,14 +2144,7 @@ export class Game {
       const someone = [...this.players.values()].some(p => p.alive && !p.escaped && roomAt(p.pos.x, p.pos.z, p.pos.y + 0.5)?.id === 'guest');
       if (someone && !P.phone?.playing && this.rnd() < 0.3) this.broadcast({ k: 'phone', offset: +(this.rnd() * 190).toFixed(1) });
     }
-    // The bathroom mirror changes its message between visits.
-    const inBath = [...this.players.values()].some(p => p.alive && !p.escaped && roomAt(p.pos.x, p.pos.z, p.pos.y + 0.5)?.id === 'ubath');
-    if (inBath && !this.bathOccupied) {
-      this.bathVisits = (this.bathVisits || 0) + 1;
-      if (this.bathVisits > 1 && this.time - (this.bathLeftT || 0) > 3) this.broadcast({ k: 'mirror', i: (this.bathVisits - 1) % MIRROR_TEXTS.length });
-    }
-    if (!inBath && this.bathOccupied) this.bathLeftT = this.time;
-    this.bathOccupied = inBath;
+    this.updateMirrorVisits();
     D.flash -= dt;
     if (D.flash <= 0) { D.flash = 25 + this.rnd() * 40; this.broadcast({ k: 'flash', seed: Math.floor(this.rnd() * 2 ** 31) }); }
     const tvMode = this.screens.tv.mode;

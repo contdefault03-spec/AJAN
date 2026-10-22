@@ -414,6 +414,16 @@ export function buildMaterials() {
   M.wallPlain = std(wallpaper(211, '#a3a08f', '#000000', 'plain', 1.4));
   M.wallPanel = std(wallpaper(213, '#3b2717', '#120a04', 'panel', 0.6));
   M.wallFilth = std(wallpaper(215, '#858572', '#1a0e08', 'plain', 3.0));
+  M.wallFadedBlue = std(wallpaper(301, '#777f86', '#293941', 'floral', 1.6));
+  M.wallOchre = std(wallpaper(303, '#928365', '#4b3925', 'diamond', 1.4));
+  M.wallLinen = std(wallpaper(305, '#88877b', '#43483e', 'stripe', 1.3));
+  M.wallLime = std(wallpaper(307, '#929482', '#364334', 'plain', 1.8));
+  M.wallTileBlue = std(tiles(309, [140, 151, 151], [104, 122, 127], 'rgba(37,42,39,0.9)', 10));
+  M.facadePlaster = std(concrete(311, [155, 151, 130]));
+  M.facadeOchre = std(concrete(313, [132, 118, 88]));
+  M.facadeMoss = std(concrete(315, [106, 120, 106]));
+  M.facadeBrick = std(brick(317));
+  M.facadeBoards = std(planks(319, [78, 78, 65]));
   M.wallTile = std(tiles(41, [175, 174, 153], [151, 159, 142], 'rgba(40,40,30,0.8)', 10), { roughness: 0.55 });
   M.wallBase = std(concrete(51, [80, 78, 72]));
   M.floorWood = std(planks(61, [91, 79, 58]));

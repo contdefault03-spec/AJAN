@@ -14,7 +14,7 @@ import { CHARACTERS, DEATH_GAIN } from './config.js';
 import { splatTexture } from './textures.js';
 
 export const DEATH_KEYS = ['max', 'masked', 'rize', 'lucky', 'mido', 'ajandie'];
-export const MIRROR_TEXTS = ['I HAVE NO\nLOVE LIFE BRO', 'WHO WANTS\nMY CUCK', 'IM AN\nUNLOVEABLE\nFRACK BRO'];
+export const MIRROR_TEXTS = ['PUS, GET UP BRO\nWE NEED TO WORK', '5 MORE MINUTES\nDADDY'];
 const LEVEL_LABEL = ['B', '1', '2', 'A'];
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 

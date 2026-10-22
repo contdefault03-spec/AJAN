@@ -23,7 +23,7 @@ export const POLE_Y = new THREE.Vector3(5.0, AY, 18.2);   // Yasmin's pole
 export const POLE_A = new THREE.Vector3(8.8, AY, 18.2);   // AJAN's pole
 export const DRINKS = { vodka: { x: 5.4, name: 'Vodka' }, beer: { x: 8.0, name: 'Beer' }, wine: { x: 10.6, name: 'Glass of Wine' } };
 export const RAIN_COST = 20;
-export const START_MONEY = 500;
+export const START_MONEY = 100;
 const SEAT = new THREE.Vector3(5.0, AY, 15.3);
 const TABLE = new THREE.Vector3(5.0, AY, 16.05);
 // a second table and chair, right in front of AJAN's pole
@@ -669,7 +669,7 @@ export class Club {
     this.lastRain = this.lastRain || new Map();
     if (now - (this.lastRain.get(pid) || 0) < 650) return; // one throw at a time
     const bal = this.balance(pid);
-    if (bal < RAIN_COST) { G.broadcast({ k: 'msg', text: `You're out of money ($${bal}).` }, pid); return; }
+    if (bal < RAIN_COST) { G.broadcast({ k: 'msg', text: `You're out of money (€${bal}).` }, pid); return; }
     if (target === 'ajan' && !(b?.state === 'club' && (b.clubPhase === 'dance' || b.clubPhase === 'enter'))) target = null;
     if (target !== 'yasmin' && target !== 'ajan') target = null;
     this.lastRain.set(pid, now);
@@ -697,7 +697,7 @@ export class Club {
     const busy = ajan ? this.ajanLap && now < this.ajanLap.end : this.lap && now < this.lap.end;
     if (busy) { G.broadcast({ k: 'msg', text: `${ajan ? 'AJAN' : 'Yasmin'} is busy with someone else.` }, pid); return; }
     const bal = this.balance(pid);
-    if (bal < LAP_COST) { G.broadcast({ k: 'msg', text: `A private dance is $${LAP_COST}. You have $${bal}.` }, pid); return; }
+    if (bal < LAP_COST) { G.broadcast({ k: 'msg', text: `A private dance is €${LAP_COST}. You have €${bal}.` }, pid); return; }
     const dance = Math.min(30, Math.max(12, this.lapPlayer?.duration || 20));
     G.broadcast({ k: 'lap', pid, seat: p.hideId, at: now + 200, dance, money: bal - LAP_COST, who: ajan ? 'ajan' : 'yasmin' });
   }

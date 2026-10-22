@@ -40,7 +40,7 @@ Single-player runs entirely in your browser. The server only serves files and re
 | Mouse wheel | Choose the item in your hand (the selected item is highlighted in the inventory) |
 | G | Drop the item in your hand |
 | Left click | Fire the revolver (draws it first if another item is in your hand) |
-| E (at a club table) | Make it rain ($20 a throw) |
+| E (at a club table) | Make it rain (€20 a throw) |
 | Space (at a club table) | Stand up |
 | 1 / 2 / 3 (Fai's menu) | Vodka / beer / wine (or click; Esc cancels) |
 | W (in the driver's seat) | Drive the car out through the garage door (once it's fixed) |
@@ -58,14 +58,14 @@ Single-player runs entirely in your browser. The server only serves files and re
 - **Poison sprays:** two one-use cans, one on the kitchen counter and one in the library. Select a can and **left click** at a monster within about 3.5 m to blind it for exactly 60 s.
 - **No more camping:** if a monster can't reach you (inside the elevator, or anywhere it makes no progress for about 6 s), it tries to squeeze in, gives up, and ignores you for a while.
 - **Ajan's routines:** now and then he walks to the kitchen, opens the fridge, takes out a dollma (`dollma.glb`) and eats it at the table for 20 s (`eat.mp3`). He also goes to the music room and dances for 30 s to the club track.
-- **Slot machine** (`slot.glb`) in the club. There is no menu: walk up to it and press **E** on its buttons (BET −, SPIN $x, BET +). The reels spin on the machine's own screen. The host draws the result and moves the money.
+- **Slot machine** (`slot.glb`) in the club. There is no menu: walk up to it and press **E** on its buttons (BET −, SPIN €x, BET +). The reels spin on the machine's own screen. The host draws the result and moves the money.
 - **Characters:** ROT (`rot.mp3`), BANANA (`banana.mp3`) and VANEX (`vanex.mp3`). AJAN's death sound is now `ajannew.mp3`, and MASKED's is boosted to 4×. The player model is `player1.glb`, and the shirt and pants colours are picked on two colour wheels.
 - **Videos:** the main menu loops `mainnew.mp4`. Escaping by the front door plays `escape.mp4`, and escaping in the car plays `escapecar.mp4` as soon as the car is out of the garage. The end screen only opens once the clip has finished. (A pause bug used to hide the escape video and leave only its audio.) The car cabin has pillars and roof rails, so the first-person ride reads as being inside the car. Riders stay visible in their seats for everyone else.
 - **Seen by others:** players hiding in closets stand visible behind the louvers, and the item in a player's hand, the revolver included, shows in their hand for everyone.
 
 - **East wing:** a new two-storey wing east of the office and Ajan's room, with a gallery, smoking room, pantry, servants' quarters, nurse's room and tower room, the capture rooms, a narrow back staircase, and a spiral stair up to the TV room. The office's east wall is solid; its only entrance requires the Office Key. Reach the wing's ground floor through the back stairs.
 - **Outside:** a 3D night forest around the house, with crickets and distant wolves.
-- **Ajan's private dance:** at his club table while he's at his pole, **Q** ($50) makes him do Yasmin's private-dance routine.
+- **Ajan's private dance:** at his club table while he's at his pole, **Q** (€50) makes him do Yasmin's private-dance routine.
 - **Garden and well:** climb out through the window in the child's bedroom (ground floor, north side). The well's crank lever is hidden somewhere in the house: fit it, crank the bucket up and take what's inside. Ajan has his own garden door; you can't open it.
 - **Security office** (east wing, ground floor): **E** on the red button slams the steel shutter down or lifts it, the yellow button lights the hall outside the window for a few seconds, and the desk is a CCTV console (A/D or the wheel to switch cameras, E or Esc to stand up). If Ajan chases you in and the shutter is down, he knocks, looks in through the window, grins and leaves.
 - **Third floor:** up the stairs in Ajan's room: hall, doll room, old bathroom, chapel, painting studio, butcher room, observatory, a balcony over the garden and a roof terrace.
@@ -124,7 +124,7 @@ Behind the unmarked door in the attic is **THE CLUB**: a bar with stocked shelve
 - **Music:** only `song1.mp3`. It starts when you walk in, loops while you're inside, and fades out and stops when you leave. You can only hear it inside the club, there is only ever one copy playing, and the house music is ducked while it plays.
 - **Fai** (`bartender.glb`) stands behind the bar, wiping the counter and glancing at whoever is closest. **E — TALK TO FAI** plays `fai.mp3`, then a menu opens: **VODKA**, **BEER**, **WINE**. Fai turns, walks to that drink's station on the back bar, picks it up and carries it over in her hand. She sets it on the counter in front of you as a real item you can pick up. Each drink looks different (a clear vodka bottle, a brown beer bottle, a glass of red wine). While she's busy nobody else can order, and talking to her again does nothing.
 - **Yasmin** (`yasmin.glb`) pole-dances continuously: she circles the pole with one hand on it, with hip sway, spins and the odd pause. Her chest and hips have a bouncy spring-driven secondary motion that follows her moves (capped so it never warps the mesh or clothing).
-- **The tables:** **E** on either chair (Yasmin's, or the one in front of AJAN's pole) sits you down facing that pole, and **Space** stands you up. Seated, aim and press **E** to **make it rain**: your hand throws a wad of bills and seven $20 notes flutter down with gravity and settle on the floor near whoever you aimed at (Yasmin or AJAN). Everyone starts with **$500**, shown bottom right. Each throw costs $20, the host checks your balance, and with less than $20 the throw is refused. Throws are rate-limited.
+- **The tables:** **E** on either chair (Yasmin's, or the one in front of AJAN's pole) sits you down facing that pole, and **Space** stands you up. Seated, aim and press **E** to **make it rain**: your hand throws a wad of bills and seven €20 notes flutter down with gravity and settle on the floor near whoever you aimed at (Yasmin or AJAN). Everyone starts with **€100**, shown bottom right. Each throw costs €20, the host checks your balance, and with less than €20 the throw is refused. Throws are rate-limited.
 - **`yasmin.mp3`** plays exactly **2 s** after the first throw at Yasmin on a visit, once, only for people in the club.
 - **AJAN visits:** about **5 s** after the first money ever thrown at Yasmin, AJAN comes up the attic stairs, walks across the attic, opens the club door himself and goes to his pole. He doesn't attack (the normal chase is suspended), and dances a clumsy routine of his own: raise-the-roof, chest drumming, the sprinkler. Throwing money at him plays the same `sleep.mp3` laugh. **15–20 s** after the first money he gets (the timer is never reset), he yawns and leaves: back out through the club door, across the attic, down the hall stairs and through the house to **his own bedroom**, where he lies down on his bed and sleeps with the usual `sleep.mp3` snoring.
 - **How he gets there:** he walks through the house on his normal navigation to the foot of the hall stairs, so you may hear him coming. He doesn't attack on the way, and walking in the club is scripted.
@@ -300,7 +300,7 @@ Saved to localStorage:
 ### Update: dances, private dance, ladder, 3-slot inventory
 
 - **Dances (Mixamo FBX, retargeted at runtime onto the auto-rigs):** AJAN dances `dance2.fbx` in front of his pole. Yasmin's normal dance is `dance3.fbx`, in front of her pole facing her chair. All players see the same moment of the dance (it follows server time). If a file is missing, the old procedural dance is used and the file is reported.
-- **Private dance ($50):** while seated at either club chair, press **Q**. Yasmin walks over, dances `dance1.fbx` right in front of your chair, then walks back. The host checks your money, and only one private dance runs at a time. The little tables in front of the chairs are gone.
+- **Private dance (€50):** while seated at either club chair, press **Q**. Yasmin walks over, dances `dance1.fbx` right in front of your chair, then walks back. The host checks your money, and only one private dance runs at a time. The little tables in front of the chairs are gone.
 - **Jiggle:** stronger springs and a higher cap (about 4.4 cm on her body), driven by her real dance motion.
 - **Inventory:** each player carries at most **3 slots**. A ladder section takes **2**. Picking up beyond that is refused ("Your hands are full"), and the HUD shows `n/3 SLOTS`.
 - **Attic ladder:** the staircase is now a steep ladder (rails and rungs) in the same spot under the trapdoor, made from the same two sections (*Ladder Section I/II*). Walk into it to climb up or down.
@@ -310,3 +310,10 @@ Saved to localStorage:
 The former decorative sewing room on the third floor is now a butcher room with a workbench, bodies, severed limbs, rusted hooks/pipes and blood stains. Its existing door and room IDs are retained. Ajan is due to visit every **8 minutes of active play**, waits until a busy encounter finishes, walks there, and spends **30 seconds** cutting/eating before returning to patrol. An inaccessible route is retried; free play keeps Ajan dormant. The host runs the routine and replicates its animation/timer state, including host migration.
 
 Peeling wallpaper, damp plaster, cracked stained tiles, worn wood/enamel, floor debris and dried blood take their appearance from the supplied room references. Random shared lightning events now draw branching bolts in the outdoor sky as well as the existing flashes/thunder. HUD, menus and controls are unchanged.
+
+### Starting money, mirror and room finishes
+
+- New games start each player with **€100**; money displays and existing club/slot prices use euros.
+- Every entry into the upstairs bathroom lets the host randomly select **“PUS, GET UP BRO WE NEED TO WORK”** or **“5 MORE MINUTES DADDY”** for the blood-written mirror. All players see the same choice; a random choice can repeat.
+- Rooms have additional faded blue floral, ochre diamond, linen stripe, lime plaster and blue tile finishes. The exterior follows room sections with weathered plaster, mossy/ochre render, exposed brick and shed boarding. Collision and navigation geometry are preserved.
+- Ajan's butcher-room activity uses the same positional **eat.mp3** loop as his kitchen meal, stopping when the activity ends.
