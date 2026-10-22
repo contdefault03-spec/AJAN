@@ -101,7 +101,7 @@ function makeCode() {
   do { c = Array.from({ length: 5 }, () => A[Math.floor(Math.random() * A.length)]).join(''); } while (rooms.has(c));
   return c;
 }
-const DIFFICULTIES = ['easy', 'medium', 'hard'];
+const DIFFICULTIES = ['trip', 'easy', 'medium', 'hard'];
 function roomInfo(room) {
   return {
     code: room.code,
