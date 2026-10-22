@@ -63,12 +63,12 @@ Single-player runs entirely in your browser. The server only serves files and re
 - **Videos:** the main menu loops `mainnew.mp4`. Escaping by the front door plays `escape.mp4`, and escaping in the car plays `escapecar.mp4` as soon as the car is out of the garage. The end screen only opens once the clip has finished. (A pause bug used to hide the escape video and leave only its audio.) The car cabin has pillars and roof rails, so the first-person ride reads as being inside the car. Riders stay visible in their seats for everyone else.
 - **Seen by others:** players hiding in closets stand visible behind the louvers, and the item in a player's hand, the revolver included, shows in their hand for everyone.
 
-- **East wing:** a new two-storey wing east of the office and Ajan's room, with a gallery, smoking room, pantry, servants' quarters, nurse's room and tower room, the capture rooms, a narrow back staircase, and a spiral stair up to the TV room. The ground-floor door is in the office.
+- **East wing:** a new two-storey wing east of the office and Ajan's room, with a gallery, smoking room, pantry, servants' quarters, nurse's room and tower room, the capture rooms, a narrow back staircase, and a spiral stair up to the TV room. The office's east wall is solid; its only entrance requires the Office Key. Reach the wing's ground floor through the back stairs.
 - **Outside:** a 3D night forest around the house, with crickets and distant wolves.
 - **Ajan's private dance:** at his club table while he's at his pole, **Q** ($50) makes him do Yasmin's private-dance routine.
 - **Garden and well:** climb out through the window in the child's bedroom (ground floor, north side). The well's crank lever is hidden somewhere in the house: fit it, crank the bucket up and take what's inside. Ajan has his own garden door; you can't open it.
 - **Security office** (east wing, ground floor): **E** on the red button slams the steel shutter down or lifts it, the yellow button lights the hall outside the window for a few seconds, and the desk is a CCTV console (A/D or the wheel to switch cameras, E or Esc to stand up). If Ajan chases you in and the shutter is down, he knocks, looks in through the window, grins and leaves.
-- **Third floor:** up the stairs in Ajan's room: hall, doll room, old bathroom, chapel, painting studio, sewing room, observatory, a balcony over the garden and a roof terrace.
+- **Third floor:** up the stairs in Ajan's room: hall, doll room, old bathroom, chapel, painting studio, butcher room, observatory, a balcony over the garden and a roof terrace.
 - **Secret passages:** some bookcases aren't bookcases. Look for a red book that sticks out, a coat hook in the wardrobe, or a candlestick on the chapel altar.
 - **Peepholes:** **E** on a door that opens onto a hallway to look through it (E, Esc or move to stop). Don't stare too long if something is walking the hall.
 - **Camcorder:** on the back-room table. With it in hand: **R** record or pause, **Z/X** zoom, **V** selfie, **T** light. At the end you can watch the tape and save it.
@@ -304,3 +304,9 @@ Saved to localStorage:
 - **Jiggle:** stronger springs and a higher cap (about 4.4 cm on her body), driven by her real dance motion.
 - **Inventory:** each player carries at most **3 slots**. A ladder section takes **2**. Picking up beyond that is refused ("Your hands are full"), and the HUD shows `n/3 SLOTS`.
 - **Attic ladder:** the staircase is now a steep ladder (rails and rungs) in the same spot under the trapdoor, made from the same two sections (*Ladder Section I/II*). Walk into it to climb up or down.
+
+### Butcher room and storm ambience
+
+The former decorative sewing room on the third floor is now a butcher room with a workbench, bodies, severed limbs, rusted hooks/pipes and blood stains. Its existing door and room IDs are retained. Ajan is due to visit every **8 minutes of active play**, waits until a busy encounter finishes, walks there, and spends **30 seconds** cutting/eating before returning to patrol. An inaccessible route is retried; free play keeps Ajan dormant. The host runs the routine and replicates its animation/timer state, including host migration.
+
+Peeling wallpaper, damp plaster, cracked stained tiles, worn wood/enamel, floor debris and dried blood take their appearance from the supplied room references. Random shared lightning events now draw branching bolts in the outdoor sky as well as the existing flashes/thunder. HUD, menus and controls are unchanged.

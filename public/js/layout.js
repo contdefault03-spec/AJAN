@@ -120,7 +120,7 @@ export const ROOMS = [
   { id: 'oldbath', name: 'OLD BATHROOM', L: 3, x0: 7, x1: 11, z0: 0, z1: 5.6, floor: 'floorBath', wall: 'wallTile', trim: 'none' },
   { id: 'chapel', name: 'CHAPEL', L: 3, x0: 11, x1: 19, z0: 0, z1: 5.6, floor: 'floorWood', wall: 'wallPanel', trim: 'none' },
   { id: 'studio', name: 'PAINTING STUDIO', L: 3, x0: 19, x1: 27, z0: 0, z1: 5.6, floor: 'floorWoodDark', wall: 'wallPlain', trim: 'none' },
-  { id: 'sewing', name: 'SEWING ROOM', L: 3, x0: 27, x1: 31.5, z0: 0, z1: 5.6, floor: 'carpet', wall: 'wallRose', trim: 'none' },
+  { id: 'sewing', name: 'BUTCHER ROOM', L: 3, x0: 27, x1: 31.5, z0: 0, z1: 5.6, floor: 'floorTile', wall: 'wallTile', trim: 'none' },
   { id: 'observ', name: 'OBSERVATORY', L: 3, x0: 31.5, x1: 40, z0: 0, z1: 5.6, floor: 'floorWood', wall: 'wallGreenStripe', trim: 'none',
     floors: [[31.5, 31.9, 0, 5.6], [31.9, 33.2, 0, 1.0], [33.2, 40, 0, 5.6]] },
   // balconies: over the garden (north) and on the east wing's roof
@@ -229,7 +229,6 @@ export const DOORS = [
   // basement
   { id: 'd_workshop', line: 'z', c: 30, a0: 22.0, w: 1.1, swing: 1, y: BY, name: 'Garage Door' },
   // east wing
-  { id: 'd_east_g', line: 'z', c: 40, a0: 1.7, w: 1.1, swing: 1, y: GY, name: 'East Wing Door' }, // from the office (behind the office key)
   { id: 'd_gallery', line: 'x', c: 5, a0: 43.5, w: 1.1, swing: -1, y: GY, name: 'Gallery Door' },
   { id: 'd_smoking', line: 'x', c: 5, a0: 51.5, w: 1.1, swing: -1, y: GY, name: 'Smoking Room Door' },
   { id: 'd_pantry2', line: 'x', c: 7, a0: 42.5, w: 1.1, swing: 1, y: GY, name: 'Pantry Door' },

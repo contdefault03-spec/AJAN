@@ -792,7 +792,7 @@ export class House {
     add('thall', 6, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.5 }); add('thall', 20, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.3 }); add('thall', 34, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.6 });
     add('dollroom', 3.5, T, 2.8, 0xffd0e0, 4, 8, { flicker: 0.4 }); add('oldbath', 9, T, 2.8, 0xe8f0ff, 3, 6, { flicker: 0.8 });
     add('chapel', 15, T, 2.8, 0xff9a50, 4, 9, { flicker: 0.2 }); add('studio', 23, T, 2.8, 0xfff4e0, 5, 9);
-    add('sewing', 29.2, T, 2.8, 0xffd8b0, 3, 7, { flicker: 0.4 }); add('observ', 36.5, T, 2.8, 0xc0d0ff, 4, 9, { flicker: 0.2 });
+    add('sewing', 29.2, T, 2.8, 0xd4dec2, 5, 7, { always: true, flicker: 0.35 }); add('observ', 36.5, T, 2.8, 0xc0d0ff, 4, 9, { flicker: 0.2 });
     add('base', 6, B, 22, 0xffb070, 6, 10, { flicker: 0.4 }); add('base', 13, B, 24, 0xffb070, 6, 10);
     add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('garage', 33, B, 18, 0xfff0d0, 6, 10); add('garage', 35, B, 24.5, 0xfff0d0, 5, 9, { flicker: 0.3 });
     // Always-on: candles in the back room, emergency light, Ajan's red lamp, attic lamps.

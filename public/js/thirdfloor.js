@@ -1,8 +1,9 @@
 // The third floor's furnishings: a doll room, an old bathroom, a chapel, a painting
-// studio, a sewing room and an observatory along a long hall, plus the two balconies.
+// studio, a butcher room and an observatory along a long hall, plus the two balconies.
 // Walls, floors, doors and the stairs come from layout.js like every other floor.
 import * as THREE from 'three';
 import { LEVELS } from './layout.js';
+import { buildButcherRoom } from './butcher.js';
 
 export function buildThirdFloor(h) {
   const G = h.geo;
@@ -57,14 +58,8 @@ export function buildThirdFloor(h) {
   h.table(19.4, 0.3, 21.2, 1.2, 0.8, 'woodPale', Y);
   h.hideSpot('h_studio', 26.2, 0.62, 1.2, 0.8, 2.1, '+z', 'woodDark', Y);
 
-  // ---- sewing room: dress forms and a sewing table
-  for (const [x, z] of [[28.0, 1.2], [30.6, 1.3]]) {
-    mesh(new THREE.CylinderGeometry(0.16, 0.2, 0.7, 10), dress, x, Y + 1.15, z);
-    mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.8, 6), h.M.metal, x, Y + 0.4, z);
-    h.collider(x - 0.25, z - 0.25, x + 0.25, z + 0.25, Y, Y + 1.6, { furniture: true });
-  }
-  h.table(27.4, 2.4, 29.0, 3.4, 0.75, 'wood', Y);
-  h.chair(28.2, 3.8, Y);
+  // Former sewing room: decorative only, now the butcher room (same room/door IDs).
+  buildButcherRoom(h);
 
   // ---- observatory: a brass telescope at the east window, a desk with charts
   const brass = h.M.brass || h.M.metal;

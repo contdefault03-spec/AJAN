@@ -29,7 +29,7 @@ export async function world(extras = false, seed = 12345) {
   const game = Object.assign(Object.create(Game.prototype), {
     house: new House(mulberry32(seed)), scene: new THREE.Scene(), items: new Map(),
     rnd: mulberry32(seed), glints: [], players: new Map(), localId: 'host',
-    difficulty: 'medium', pickSeq: 0, time: 0, events: [],
+    difficulty: 'medium', pickSeq: 0, time: 0, events: [], net: { isHost: true, online: false }, chase: false,
     updateHUD() {}, message() {}, toast() {}, markAct() {}, hostNoise() {}, emitNoise() {},
     club: { balance: () => 500 },
     hostSetDoor(id, open) { this.house.setDoor(id, open); },

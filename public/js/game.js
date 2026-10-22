@@ -15,6 +15,7 @@ import { settings } from './settings.js';
 import { VOICE_GAIN, INV_SLOTS, itemSlots, CHARACTERS, charById, ITEM_INFO, AJAN, PLAYER, DEATH_GAIN, DIFFICULTY, difficultyOf, MONSTERS, monstersFor } from './config.js';
 import { Extras, CAPTURE_SPOTS } from './extras.js';
 import { buildForest } from './forest.js';
+import { SkyLightning } from './weather.js';
 
 const GUN_CAPACITY = 2; // the revolver holds two rounds; more lie around the house
 import { Props, DEATH_KEYS, MIRROR_TEXTS } from './props.js';
@@ -82,7 +83,7 @@ export class Game {
     this.brains = this.monsterDefs.map((def, i) => {
       const b = new AjanBrain(this, mulberry32(seed + i * 7919), def);
       const s = snaps?.[def.id];
-      if (s && s.st !== 'dormant') { b.pos.set(s.x, s.y, s.z); b.ry = s.ry; b.state = 'patrol'; b.pickPatrol(); } else if (snaps) b.dormantLeft = 10 + i * 10;
+      if (s && s.st !== 'dormant') { b.pos.set(s.x, s.y, s.z); b.ry = s.ry; b.state = 'patrol'; if (!b.restoreButcher(s)) b.pickPatrol(); } else if (snaps) b.dormantLeft = 10 + i * 10;
       if (this.freePlay) { b.dormantLeft = Infinity; b.hear = () => {}; } // they stay out of the house
       return b;
     });
@@ -118,6 +119,7 @@ export class Game {
     this.house.createLightPool(settings.quality === 'low' ? 4 : settings.quality === 'high' ? 7 : 6);
     scene.add(this.house.group);
     buildForest(scene, mulberry32(this.seed ^ 0xf0e57));
+    this.storm = new SkyLightning(scene);
 
     progress(0.3, 'Loading models...');
     const [pg, ag] = await Promise.all([loadGLTF('playerModel'), loadGLTF('ajanModel')]);
@@ -143,7 +145,8 @@ export class Game {
     await this.fitRevolver();
 
     progress(0.7, 'Waking him up...');
-    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 70);
+    // Distant storm bolts must remain inside the view volume; fog still limits house visibility.
+    this.camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, 0.05, 180);
     this.camera.layers.enable(2);
     scene.add(this.camera);
     const meProfile = this.roster.find(p => p.id === this.localId) || this.roster[0];
@@ -286,7 +289,7 @@ export class Game {
   lockExtraDoors(count) {
     if (!count) return;
     const H = this.house;
-    const pool = [...H.doors.values()].filter(d => !d.lock && !d.locked && !d.secret && !d.ajanOnly && !d.exit && !d.chained && !d.navDoor && (Math.abs(d.y - 0) < 0.1 || Math.abs(d.y - 3.4) < 0.1) && !['d_bed1', 'd_shed', 'd_garden'].includes(d.id) && !/stair|elev|exit|front|base/.test(d.id) && d.line);
+    const pool = [...H.doors.values()].filter(d => !d.lock && !d.locked && !d.secret && !d.ajanOnly && !d.exit && !d.chained && !d.navDoor && (Math.abs(d.y - 0) < 0.1 || Math.abs(d.y - 3.4) < 0.1) && !['d_bed1', 'd_shed', 'd_garden', 'd_sewing'].includes(d.id) && !/stair|elev|exit|front|base/.test(d.id) && d.line);
     // never lock anyone in: no door of a room people start in or wake up in
     const keep = new Set([...SPAWN_POINTS.map(p => V(p[0], 0, p[1])), ...CAPTURE_SPOTS.map(c => c.pos)].map(p => roomAt(p.x, p.z, p.y + 0.5)?.id));
     const side = (d, s) => { const cx = d.line === 'x' ? d.a0 + d.w / 2 : d.c + s * 0.6, cz = d.line === 'x' ? d.c + s * 0.6 : d.a0 + d.w / 2; return roomAt(cx, cz, d.y + 0.5)?.id; };
@@ -1428,7 +1431,7 @@ export class Game {
         if (b && e.pid !== this.localId) audio.play('boardCreak', { pos: V(b.x, b.y + 0.1, b.z), vol: 1.0, ref: 2.5, rate: 0.9 + (e.i % 3) * 0.06, muffle: this.muffleFor(V(b.x, b.y, b.z)) });
         break;
       }
-      case 'flash': this.lightning(); break;
+      case 'flash': this.lightning(e.seed); break;
       case 'blackout':
         H.blackout = e.dur;
         audio.play('clunk', { vol: 0.5 });
@@ -2097,9 +2100,10 @@ export class Game {
   }
 
   // ============================================================ lightning
-  lightning() {
+  lightning(seed = 1) {
     this.lightningK = 1;
-    const d = 0.4 + Math.random() * 1.4;
+    this.storm?.strike(seed);
+    const d = 0.4 + mulberry32(seed)() * 1.4;
     setTimeout(() => !this.disposed && audio.play('thunder', { vol: 0.65 }), d * 1000);
   }
 
@@ -2140,7 +2144,7 @@ export class Game {
     if (!inBath && this.bathOccupied) this.bathLeftT = this.time;
     this.bathOccupied = inBath;
     D.flash -= dt;
-    if (D.flash <= 0) { D.flash = 25 + this.rnd() * 40; this.broadcast({ k: 'flash' }); }
+    if (D.flash <= 0) { D.flash = 25 + this.rnd() * 40; this.broadcast({ k: 'flash', seed: Math.floor(this.rnd() * 2 ** 31) }); }
     const tvMode = this.screens.tv.mode;
     if (D.tvChannel !== undefined) {
       D.tvChannel -= dt;
@@ -2295,6 +2299,7 @@ export class Game {
     this.extras.update(dt);
     H.update(dt, this.time, this.camera.position);
 
+    this.storm.update(dt);
     // Lightning flash
     if (this.lightningK > 0) this.lightningK = Math.max(0, this.lightningK - dt * 2.2);
     const lk = this.lightningK > 0 ? this.lightningK * (0.6 + 0.4 * Math.sin(this.time * 60)) : 0;
@@ -2452,7 +2457,7 @@ export class Game {
     // sprayed in the eyes: rubs his face (roar pose) at first, then stumbles about blind
     let m = v.m === 'sprayed' ? (v.mt < 3 ? 'roar' : 'search') : v.m;
     if (v.st === 'kill' && m === 'grab') m = 'grab';
-    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun', 'dance', 'floorsleep', 'roar', 'grab'].includes(m) ? m : 'move';
+    const ajMode = ['search', 'sleep', 'sit', 'inspect', 'stun', 'dance', 'floorsleep', 'roar', 'grab', 'butcher'].includes(m) ? m : 'move';
     aj.state = { speed: v.sp, mode: ajMode, modeT: v.mt, headYaw: m === 'search' ? undefined : v.hy };
     aj.update(dt);
     // Heavy footsteps
