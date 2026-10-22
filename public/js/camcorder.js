@@ -30,10 +30,13 @@ export class Camcorder {
   async init() {
     const G = this.game;
     const gl = await loadGLTF('cameraModel');
+    // the model's lens points down its −x axis: turn it so the lens faces −z (forward),
+    // and tone its very light texture down to a dark, worn plastic
     this.model = fit(gl?.scene, 0.24) || fallbackModel();
+    this.model.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color?.multiplyScalar(0.24); o.material.roughness = 0.6; } });
     G.placeItem('camcorder', 'camcorder', { pos: CAMCORDER_SPOT });
     const it = G.items.get('camcorder');
-    it.mesh.add(this.model.clone());
+    const fm = this.model.clone(); fm.rotation.y = -Math.PI / 2; it.mesh.add(fm); // lens along the item's facing
     // the camcorder's own camera, its render target and the light on it
     this.cam = new THREE.PerspectiveCamera(60, W / H, 0.05, 60);
     this.cam.layers.enable(0);
@@ -64,25 +67,32 @@ export class Camcorder {
   }
 
   /** The model held in someone else's hand (no screen). */
-  remoteModel() { return this.model.clone(); }
+  remoteModel() {
+    // in someone's (avatar) hand: lens toward where they face (+z for avatars)
+    const g = new THREE.Group(), m = this.model.clone();
+    m.rotation.y = Math.PI / 2;
+    g.add(m);
+    return g;
+  }
 
   /** The first-person model: the camcorder with its flip-out screen showing the live picture. */
   localModel() {
     const g = new THREE.Group();
     const m = this.model.clone();
-    m.scale.multiplyScalar(0.62);
-    m.rotation.y = Math.PI;
-    m.position.set(0.02, -0.03, -0.04);
+    m.scale.multiplyScalar(0.7);
+    m.rotation.y = -Math.PI / 2; // lens forward, the bulky back toward you
+    m.position.set(0, -0.05, -0.05);
     g.add(m);
-    // the flip-out screen, swung open on the left and turned toward you
-    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.056), new THREE.MeshBasicMaterial({ map: this.rt.texture, toneMapped: false }));
-    screen.position.set(-0.1, 0.045, 0.04);
-    screen.rotation.y = 0.35;
-    const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.11, 0.064, 0.006), new THREE.MeshStandardMaterial({ color: 0x111111 }));
-    bezel.position.set(-0.1, 0.045, 0.036);
-    bezel.rotation.y = 0.35;
-    g.add(bezel, screen);
-    g.position.x = -0.04;
+    // the flip-out screen: swung open on the left side, facing you, showing the live picture
+    const screen = new THREE.Mesh(new THREE.PlaneGeometry(0.1, 0.058), new THREE.MeshBasicMaterial({ map: this.rt.texture, toneMapped: false }));
+    screen.position.set(-0.115, 0.03, 0.02);
+    screen.rotation.y = 0.25;
+    const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.112, 0.068, 0.008), new THREE.MeshStandardMaterial({ color: 0x0c0c0c, roughness: 0.5 }));
+    bezel.position.set(-0.116, 0.03, 0.015);
+    bezel.rotation.y = 0.25;
+    const hinge = new THREE.Mesh(new THREE.BoxGeometry(0.03, 0.06, 0.012), bezel.material);
+    hinge.position.set(-0.06, 0.03, 0.0);
+    g.add(bezel, screen, hinge);
     return g;
   }
 
@@ -177,15 +187,39 @@ export class Camcorder {
   update(dt) {
     const G = this.game;
     const held = this.holding();
-    // recording only runs while you actually hold it
-    if (this.rec && !held && this.rec.state === 'rec') { this.rec.recorder.pause(); this.rec.state = 'paused'; }
+    const it = G.items.get('camcorder');
+    // somebody else picked it up while you were recording: your tape ends there
+    if (this.rec && it?.holder && it.holder !== G.localId) { this.finish(); }
+    // dropped (you put it down, died or were knocked out) while recording: it keeps
+    // filming from where it lies, and if you're down you watch through it
+    const onFloor = !!this.rec && it && !it.holder && !it.used;
+    this.povActive = onFloor && (G.localDead || !!G.me?.knocked || !!G.me?.dying);
     this.light.intensity = held && this.lightOn ? 16 : 0;
-    this.hud.classList.toggle('show', held);
+    this.hud.classList.toggle('show', held || this.povActive);
+    if (onFloor) {
+      it.mesh.updateMatrixWorld(true);
+      const ry = it.mesh.rotation.y, p = it.mesh.getWorldPosition(V()).add(V(-Math.sin(ry) * 0.17, 0.1, -Math.cos(ry) * 0.17)); // just past its own lens
+      this.cam.position.copy(p);
+      this.cam.rotation.set(0.05, it.mesh.rotation.y, 0, 'YXZ');
+      this.cam.layers.enable(1);
+      this.cam.fov = 62; this.cam.updateProjectionMatrix();
+      this.renderLens(dt);
+      if (this.povActive) this.hud.innerHTML = `<b class="recDot">●</b> REC ${this.clock()} · YOUR CAMERA IS STILL RUNNING<span>it's lying where you dropped it</span>`;
+      return;
+    }
     if (!held) return;
     // the lens: a little in front of and below your eyes, lagging behind your view
     const eye = G.camera.getWorldPosition(V()), q = G.camera.getWorldQuaternion(new THREE.Quaternion());
     const fwd = V(0, 0, -1).applyQuaternion(q), right = V(1, 0, 0).applyQuaternion(q), up = V(0, 1, 0).applyQuaternion(q);
     const cam = this.cam;
+    const peeping = G.extras?.passages?.peep;
+    if (peeping) {
+      // held up to the peephole with you: it films exactly what you see through the lens
+      cam.position.copy(eye); cam.quaternion.copy(q); cam.layers.disable(1);
+      cam.fov = G.camera.fov; cam.updateProjectionMatrix();
+      this.renderLens(dt);
+      return;
+    }
     if (this.selfie) {
       cam.position.copy(eye).addScaledVector(fwd, 0.55).addScaledVector(right, 0.12).addScaledVector(up, -0.05);
       cam.lookAt(eye.x, eye.y - 0.05, eye.z);
@@ -202,20 +236,36 @@ export class Camcorder {
     const dir = V(0, 0, -1).applyQuaternion(cam.quaternion);
     this.light.position.copy(cam.position).addScaledVector(dir, 0.3); // ahead of the lens, so it doesn't light the camera itself
     this.light.target.position.copy(cam.position).addScaledVector(dir, 5);
-    // render the lens view (live screen; ~24 fps)
+    this.renderLens(dt);
+    const clock = this.clock();
+    this.hud.innerHTML = `${this.rec?.state === 'rec' ? '<b class="recDot">●</b> REC' : this.rec ? '❚❚ PAUSED' : 'STANDBY'} ${clock} · ×${this.zoom.toFixed(1)}${this.selfie ? ' · SELFIE' : ''}${this.lightOn ? ' · LIGHT' : ''}<span>R record/pause · Z/X zoom · V selfie · T light · G drop</span>`;
+  }
+
+  /** Render the lens view (live screen; ~24 fps) and, while recording, grab the frame. */
+  renderLens(dt) {
+    const G = this.game;
     this.frameT = (this.frameT || 0) - dt;
     if (this.frameT <= 0) {
       this.frameT = 1 / FPS;
       const r = G.renderer, prev = r.getRenderTarget();
       r.setRenderTarget(this.rt);
-      r.render(G.scene, cam);
+      r.render(G.scene, this.cam);
       r.setRenderTarget(prev);
       if (this.rec?.state === 'rec') this.captureFrame();
     }
     if (this.rec?.state === 'rec') this.rec.t += dt;
+  }
+
+  clock() {
     const t = this.rec ? this.rec.t : 0;
-    const clock = `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t) % 60).padStart(2, '0')}`;
-    this.hud.innerHTML = `${this.rec?.state === 'rec' ? '<b class="recDot">●</b> REC' : this.rec ? '❚❚ PAUSED' : 'STANDBY'} ${clock} · ×${this.zoom.toFixed(1)}${this.selfie ? ' · SELFIE' : ''}${this.lightOn ? ' · LIGHT' : ''}<span>R record/pause · Z/X zoom · V selfie · T light · G drop</span>`;
+    return `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t) % 60).padStart(2, '0')}`;
+  }
+
+  /** While you're down and your camera is still filming on the floor, you see what it sees. */
+  applyPOV(camera) {
+    if (!this.povActive) return;
+    camera.position.copy(this.cam.position);
+    camera.quaternion.copy(this.cam.quaternion);
   }
 
   /** Copy the lens picture into the recording canvas (flipped: GL rows run bottom-up). */

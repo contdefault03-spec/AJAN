@@ -69,6 +69,12 @@ export class Passages {
     this.overlay = document.createElement('div');
     this.overlay.className = 'peepView';
     document.getElementById('hud')?.appendChild(this.overlay);
+    this.warnEl = document.createElement('div');
+    this.warnEl.className = 'doorWarn vt';
+    document.getElementById('hud')?.appendChild(this.warnEl);
+    // a hard light on the hall side while you look: the lens view is bright and clear
+    this.peepLight = new THREE.PointLight(0xfff2dc, 0, 14, 1.1);
+    G.scene.add(this.peepLight);
     this.onKey = e => {
       if (!this.peep) return;
       if (['KeyE', 'Escape', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'Space'].includes(e.code)) { e.preventDefault(); e.stopImmediatePropagation(); this.leavePeep(); }
@@ -101,12 +107,9 @@ export class Passages {
 
   enterPeep(hole) {
     const G = this.game;
-    this.peep = { hole, t: 0, fov: G.camera.fov };
+    // your head goes slowly to the lens first, then the fish-eye
+    this.peep = { hole, t: 0, fov: G.camera.fov, from: G.camera.position.clone(), fromQ: G.camera.quaternion.clone() };
     G.local.frozen = true;
-    G.camera.fov = 118;
-    G.camera.updateProjectionMatrix();
-    this.overlay.classList.add('show');
-    document.getElementById('hud')?.classList.add('peeping');
     audio.play('creak', { vol: 0.25, rate: 1.6 });
     G.request({ k: 'peep', id: hole.door, on: true });
   }
@@ -118,6 +121,8 @@ export class Passages {
     G.camera.updateProjectionMatrix();
     this.peep = null;
     G.local.frozen = false;
+    this.peepLight.intensity = 0;
+    G.canvas.style.filter = G.canvas.style.filter.replace(/brightness\([^)]*\)/, '').trim();
     this.overlay.classList.remove('show', 'scare');
     document.getElementById('hud')?.classList.remove('peeping');
     G.request({ k: 'peep', on: false });
@@ -158,6 +163,15 @@ export class Passages {
       if (e.by === G.localId) G.message('Something clicks. The bookcase swings away from the wall — a hidden passage.', 4);
       return true;
     }
+    if (e.k === 'doorwarn') {
+      if (e.pid === G.localId) {
+        if (this.peep) this.leavePeep();
+        let n = e.sec;
+        const tick = () => { if (n <= 0 || G.localDead) { this.warnEl.classList.remove('show'); return; } this.warnEl.innerHTML = `HE KNOWS YOU'RE IN THERE<b>${n}</b><span>he's opening the door — run or hide</span>`; this.warnEl.classList.add('show'); audio.play('knock', { vol: 0.9 }); n--; setTimeout(tick, 1000); };
+        tick();
+      }
+      return true;
+    }
     if (e.k === 'peepscare') {
       if (e.pid === G.localId && this.peep) {
         audio.play('sting', { vol: 1.3, limit: true });
@@ -178,11 +192,12 @@ export class Passages {
     for (const [pid, pe] of this.peepers) {
       const p = G.players.get(pid);
       if (!p || !p.alive || p.dying) { this.peepers.delete(pid); continue; }
-      if (G.time - pe.since < PEEP_SCARE_AFTER || (this.scareCooldown.get(pid) || -1e9) > G.time - 60) continue;
-      const b = G.brains.find(m => ['patrol', 'search', 'investigate'].includes(m.state) && levelIndex(m.pos.y) === levelIndex(pe.hole.y + 0.5) && m.pos.distanceTo(pe.hole.hall) < 10);
-      if (!b) continue;
-      this.scareCooldown.set(pid, G.time);
-      b.startPeepScare(pe.hole, pid);
+      pe.next ??= pe.since + 5 + G.rnd() * 7; // something happens within ~5–12 s of looking
+      if (G.time < pe.next || G.brains.some(m => m.state === 'peepscare')) continue;
+      pe.next = G.time + 20 + G.rnd() * 10;
+      const free = ['patrol', 'search', 'investigate', 'sit', 'gotochair', 'gotobed', 'gotofridge', 'gotoeat', 'gotodance', 'eatsit', 'dance'];
+      const b = G.brains.find(m => m.id === 'ajan' && free.includes(m.state)) || G.brains.find(m => free.includes(m.state));
+      if (b) b.startPeepScare(pe.hole, pid, G.rnd() < 0.4 ? 'walkby' : 'scare');
     }
     // now and then a patrolling monster passing a peephole stops and stares into it
     this.stareT -= dt;
@@ -201,9 +216,21 @@ export class Passages {
     if (G.isHost) this.hostUpdate(dt);
     if (!this.peep) return;
     this.peep.t += dt;
-    const h = this.peep.hole, cam = G.camera;
-    cam.position.copy(h.eye);
-    cam.lookAt(h.look.x + Math.sin(G.time * 0.4) * 0.3, h.look.y, h.look.z);
+    const h = this.peep.hole, cam = G.camera, pp = this.peep;
+    const LEAN = 1.4, k = Math.min(1, pp.t / LEAN), e = k * k * (3 - 2 * k);
+    const look = V(h.look.x + Math.sin(G.time * 0.4) * 0.3 * e, h.look.y, h.look.z);
+    cam.position.copy(pp.from).lerp(h.eye, e);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().lookAt(h.eye, look, V(0, 1, 0)));
+    cam.quaternion.copy(pp.fromQ).slerp(q, e);
+    if (k >= 1 && !pp.in) {
+      pp.in = true;
+      cam.fov = 118; cam.updateProjectionMatrix();
+      this.overlay.classList.add('show');
+      document.getElementById('hud')?.classList.add('peeping');
+      if (!/brightness/.test(G.canvas.style.filter)) G.canvas.style.filter = (G.canvas.style.filter + ' brightness(1.9) contrast(1.1)').trim();
+    }
+    this.peepLight.position.set(h.look.x, h.y + 2.2, h.hall.z + h.side * 1.4);
+    this.peepLight.intensity = pp.in ? 22 : 0;
     G.local.hands.visible = false;
     G.local.light.intensity = 0;
     if (G.me?.dying || G.localDead || G.house.doors.get(h.door)?.open) this.leavePeep();
@@ -212,6 +239,8 @@ export class Passages {
   dispose() {
     removeEventListener('keydown', this.onKey, true);
     this.overlay?.remove();
+    this.warnEl?.remove();
+    this.peepLight?.parent?.remove(this.peepLight);
     document.getElementById('hud')?.classList.remove('peeping');
   }
 }

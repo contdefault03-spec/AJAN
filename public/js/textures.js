@@ -354,7 +354,7 @@ export function buildMaterials() {
   M.brass = new THREE.MeshStandardMaterial({ color: 0xb08a3a, metalness: 0.8, roughness: 0.35 });
   M.red = new THREE.MeshStandardMaterial({ color: 0x8a1010, roughness: 0.5, emissive: 0x200000 });
   M.frame = std(woodFurniture(131, [70, 46, 22]), { roughness: 0.6 });
-  M.glassWin = new THREE.MeshStandardMaterial({ color: 0x0a0f16, roughness: 0.15, metalness: 0.2, emissive: 0x0b1420, emissiveIntensity: 1 });
+  M.glassWin = new THREE.MeshStandardMaterial({ color: 0x6a7a8a, roughness: 0.08, metalness: 0.3, emissive: 0x0b1420, emissiveIntensity: 1, transparent: true, opacity: 0.22, depthWrite: false, side: THREE.DoubleSide });
   M.bulb = new THREE.MeshBasicMaterial({ color: 0xffd9a0 });
   M.blood = new THREE.MeshStandardMaterial({ color: 0x3a0505, roughness: 0.3, transparent: true, opacity: 0.85 });
   return M;

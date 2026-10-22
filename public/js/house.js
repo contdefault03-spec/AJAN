@@ -8,8 +8,8 @@ import { segmentBlockers } from './physics.js';
 import { shuffle } from './util.js';
 import {
   LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
-  roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway } from './layout.js';
-import { buildWing } from './wing.js';
+  roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway, WINDOWS, WINDOW_CUTS } from './layout.js';
+import { buildWing, furnishWing, furnishSparse } from './wing.js';
 import { buildThirdFloor } from './thirdfloor.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
@@ -259,6 +259,7 @@ export class House {
     G.plane('ceiling', 36, 11, 40, 21, 6.4, false);
     this.buildStairs();
     buildWing(this);
+    furnishWing(this);
     buildThirdFloor(this);
     this.buildAtticRoof();
     this.buildFloorboards();
@@ -269,6 +270,7 @@ export class House {
 
     buildFurniture(this);
     buildDecor(this);
+    furnishSparse(this);
     this.buildDoors();
     this.buildLights();
     this.buildWindows();
@@ -867,22 +869,7 @@ export class House {
   // --------------------------------------------------------------- windows
   buildWindows() {
     // line, wall coordinate (inner face), along, sill y, width, height, normal sign
-    const W = [
-      ['x', 0.11, 4.4, 1.0, 1.4, 1.2, 1], ['x', 0.11, 16.0, 1.0, 1.4, 1.2, 1], ['x', 0.11, 22.3, 1.0, 1.4, 1.2, 1],
-      ['x', 0.11, 36.5, 1.0, 1.4, 1.2, 1],
-      ['z', 0.11, 18.2, 1.0, 1.4, 1.2, 1], ['x', 20.89, 8.2, 1.0, 1.4, 1.2, -1], ['x', 20.89, 19.5, 1.0, 1.4, 1.2, -1],
-      ['x', 20.89, 32.5, 1.0, 1.4, 1.2, -1],
-      ['z', 0.11, 9.5, 1.0, 1.0, 1.3, 1],
-      ['x', 0.11, 5.0, 4.4, 1.4, 1.2, 1], ['x', 0.11, 19.5, 4.4, 1.4, 1.2, 1], ['x', 0.11, 37.0, 4.4, 1.4, 1.2, 1],
-      ['z', 0.11, 16.0, 4.4, 1.4, 1.2, 1], ['x', 20.89, 15.0, 4.4, 1.4, 1.2, -1], ['x', 20.89, 29.0, 4.4, 1.4, 1.2, -1],
-      ['z', 39.89, 9.5, 4.4, 1.0, 1.3, -1],
-      // east wing
-      ['x', 0.11, 44, 1.0, 1.4, 1.2, 1], ['x', 0.11, 52, 1.0, 1.4, 1.2, 1], ['z', 55.89, 10.5, 1.0, 1.4, 1.2, -1], ['x', 13.89, 43, 1.0, 1.4, 1.2, -1],
-      ['x', 0.11, 43, 4.4, 1.0, 1.0, 1], ['z', 55.89, 2.5, 4.4, 1.0, 1.0, -1],
-      // third floor
-      ['x', 0.11, 3.5, 7.8, 1.0, 1.0, 1], ['x', 0.11, 9.0, 7.8, 0.8, 0.8, 1], ['x', 0.11, 13.0, 7.8, 1.0, 1.2, 1], ['x', 0.11, 23.0, 7.8, 1.4, 1.2, 1],
-      ['x', 0.11, 29.2, 7.8, 1.0, 1.0, 1], ['x', 0.11, 37.0, 7.8, 1.4, 1.2, 1], ['z', 0.11, 3.0, 7.8, 1.0, 1.0, 1], ['x', 13.89, 52.5, 4.4, 1.4, 1.2, -1], ['z', 55.89, 10.5, 7.8, 1.0, 1.0, -1],
-    ];
+    const W = WINDOWS;
     for (const [line, c, a, y, w, h, n] of W) {
       const g = new THREE.Group();
       const glass = new THREE.Mesh(new THREE.PlaneGeometry(w, h), this.M.glassWin);
@@ -895,6 +882,12 @@ export class House {
       board.position.set(0, h * 0.18, 0.05);
       board.rotation.z = 0.25;
       g.add(board);
+      // real openings in the outside walls: glass you can see through both ways (and can't walk through)
+      if (WINDOW_CUTS.has(`${line}:${c}:${a}:${y}`)) {
+        const wc = Math.round(c);
+        if (line === 'x') this.collider(a - w / 2, wc - 0.12, a + w / 2, wc + 0.12, y, y + h, { occlude: true });
+        else this.collider(wc - 0.12, a - w / 2, wc + 0.12, a + w / 2, y, y + h, { occlude: true });
+      }
       if (line === 'x') { g.position.set(a, y + h / 2, c); g.rotation.y = n > 0 ? 0 : Math.PI; }
       else { g.position.set(c, y + h / 2, a); g.rotation.y = n > 0 ? Math.PI / 2 : -Math.PI / 2; }
       this.group.add(g);
@@ -927,6 +920,8 @@ export class House {
           for (const [ox, oz] of [[0, 0], [0.5, 0], [-0.5, 0], [0, 0.5], [0, -0.5], [0.6, 0.6], [-0.6, -0.6], [0.6, -0.6], [-0.6, 0.6]]) {
             const px = x + ox, pz = z + oz;
             if (px < x0 + 0.45 || px > x1 - 0.45 || pz < z0 + 0.45 || pz > z1 - 0.45) continue;
+            const at = roomAt(px, pz, y + 0.5);
+            if (at && at !== r && ROOMS.includes(at)) continue; // another room sits inside this one's rectangle (the shed in the garden)
             if (clear(px, pz, y)) { list.push(node(px, pz, y, r.id)); break; }
           }
         }
@@ -945,7 +940,7 @@ export class House {
     for (const o of OPENINGS) if (!o.noNav) addPortal(o, o.y0, o.navDoor || null);
     const s1 = [node(16.5, 19.15, 0, 'stairB'), node(13.75, 19.0, -1.6, 'stairB:ramp'), node(11.25, 19.0, -3.2, 'stairB:low'), node(9.8, 19.0, -3.2, 'base')];
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
-    const s3 = [node(47.5, 8.2, 0, 'estair'), node(47.5, 10.3, 1.7, 'estair:ramp'), node(47.5, 13.4, 3.4, 'estair')];
+    const s3 = [node(48.3, 7.75, 0, 'estair'), node(48.3, 13.55, 0, 'estair'), node(46.95, 13.6, 0, 'estair'), node(46.95, 10.3, 1.7, 'estair:ramp'), node(46.95, 6.25, 3.4, 'uehall')];
     const s5 = [node(32.55, 7.25, 3.4, 'ajanroom'), node(32.55, 3.7, 5.1, 'tstair:ramp'), node(32.55, 0.6, 6.8, 'tstair:top'), node(33.8, 0.62, 6.8, 'observ')];
     // The upstairs hall narrows to 1.3 m past the attic-stair footprint (z 9.4–10.9 is
     // off limits to him): a lane of nodes along its north side keeps the west half of
@@ -1046,6 +1041,34 @@ export class House {
 /** Item meshes (keys, fuse, bolt cutters). */
 export function makeItemMesh(type, M) {
   const g = new THREE.Group();
+  if (type === 'camcorder') return g; // camera.glb is added once loaded (camcorder.js)
+  if (type.startsWith('bag_')) {
+    // a little zip bag (or a cigarette-pack for the joints)
+    const col = { bag_mushrooms: 0xc8b8a0, bag_flour: 0xf0f0f0, bag_weed: 0x305a28 }[type];
+    const bag = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.02, 0.1), new THREE.MeshStandardMaterial({ color: col, transparent: type !== 'bag_weed', opacity: 0.85, roughness: 0.3 }));
+    bag.position.y = 0.012;
+    const seal = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.022, 0.012), new THREE.MeshStandardMaterial({ color: 0x2050c0 }));
+    seal.position.set(0, 0.013, -0.045);
+    g.add(bag, seal);
+    return g;
+  }
+  if (type === 'joint') {
+    const j = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.009, 0.09, 8), new THREE.MeshStandardMaterial({ color: 0xf0ece0, roughness: 0.9 }));
+    j.rotation.z = Math.PI / 2; j.position.y = 0.01;
+    const tip = new THREE.Mesh(new THREE.CylinderGeometry(0.006, 0.006, 0.01, 8), new THREE.MeshStandardMaterial({ color: 0x3a2a1a }));
+    tip.rotation.z = Math.PI / 2; tip.position.set(0.05, 0.01, 0);
+    g.add(j, tip);
+    return g;
+  }
+  if (type === 'mushroom') {
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.016, 0.05, 8), new THREE.MeshStandardMaterial({ color: 0xf4f0e0 }));
+    stem.position.y = 0.025;
+    const cap = new THREE.Mesh(new THREE.SphereGeometry(0.035, 12, 8, 0, Math.PI * 2, 0, Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0xc01010, roughness: 0.5 }));
+    cap.position.y = 0.045;
+    g.add(stem, cap);
+    for (let i = 0; i < 6; i++) { const d = new THREE.Mesh(new THREE.SphereGeometry(0.006, 6, 4), new THREE.MeshStandardMaterial({ color: 0xffffff })); const a = i * 1.05; d.position.set(Math.cos(a) * 0.022, 0.07, Math.sin(a) * 0.022); g.add(d); }
+    return g;
+  }
   if (type === 'well_lever') {
     // an iron crank handle off the well's axle
     const iron = new THREE.MeshStandardMaterial({ color: 0x3a3632, metalness: 0.7, roughness: 0.5 });

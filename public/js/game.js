@@ -122,11 +122,13 @@ export class Game {
     progress(0.3, 'Loading models...');
     const [pg, ag] = await Promise.all([loadGLTF('playerModel'), loadGLTF('ajanModel')]);
     this.playerGLTF = pg;
+    this.ajanGLTF = ag;
     progress(0.55, 'Hanging the paintings...');
     const tex = await Promise.all([1, 2, 3, 4, 5].map(i => loadTexture('image' + i)));
     this.paintingTextures = tex;
     this.house.assignPaintings(tex, this.rnd);
     this.placeItems();
+    this.lockExtraDoors((DIFFICULTY[this.difficulty] || DIFFICULTY.medium).locks);
     this.screens = new Screens(this.house, tex);
     this.props = new Props(this);
     await this.props.init();
@@ -270,13 +272,32 @@ export class Game {
       this.placeItem(type, type, c);
     }
     const gun = this.items.get('revolver');
-    if (gun) gun.ammo = 1; // found with one round in it
-    // three loose bullets on every floor
+    const dif = DIFFICULTY[this.difficulty] || DIFFICULTY.medium;
+    if (gun) gun.ammo = dif.ammo ?? 1;
+    // loose bullets on every floor (fewer the harder it gets)
     let n = 0;
     for (const spots of BULLET_SPOTS) {
       const pool = spots.slice();
-      for (let k = 0; k < 3 && pool.length; k++) this.placeItem('bullet_' + n++, 'bullet', { pos: pool.splice(Math.floor(this.rnd() * pool.length), 1)[0] });
+      for (let k = 0; k < (dif.bullets ?? 3) && pool.length; k++) this.placeItem('bullet_' + n++, 'bullet', { pos: pool.splice(Math.floor(this.rnd() * pool.length), 1)[0] });
     }
+  }
+
+  /** Medium/Hard: a few more room doors are locked; one master key (somewhere in a hall) opens them all. */
+  lockExtraDoors(count) {
+    if (!count) return;
+    const H = this.house;
+    const pool = [...H.doors.values()].filter(d => !d.lock && !d.locked && !d.secret && !d.ajanOnly && !d.exit && !d.chained && !d.navDoor && (Math.abs(d.y - 0) < 0.1 || Math.abs(d.y - 3.4) < 0.1) && !['d_bed1', 'd_shed', 'd_garden'].includes(d.id) && !/stair|elev|exit|front|base/.test(d.id) && d.line);
+    // never lock anyone in: no door of a room people start in or wake up in
+    const keep = new Set([...SPAWN_POINTS.map(p => V(p[0], 0, p[1])), ...CAPTURE_SPOTS.map(c => c.pos)].map(p => roomAt(p.x, p.z, p.y + 0.5)?.id));
+    const side = (d, s) => { const cx = d.line === 'x' ? d.a0 + d.w / 2 : d.c + s * 0.6, cz = d.line === 'x' ? d.c + s * 0.6 : d.a0 + d.w / 2; return roomAt(cx, cz, d.y + 0.5)?.id; };
+    for (let i = pool.length - 1; i >= 0; i--) if (keep.has(side(pool[i], 1)) || keep.has(side(pool[i], -1))) pool.splice(i, 1);
+    for (let i = 0; i < count && pool.length; i++) {
+      const d = pool.splice(Math.floor(this.rnd() * pool.length), 1)[0];
+      d.lock = 'master_key'; d.locked = true;
+    }
+    const halls = H.roomNodes.hall || []; // the ground-floor hall, always reachable
+    const at = halls[Math.floor(this.rnd() * halls.length)];
+    if (at) this.placeItem('master_key', 'master_key', { pos: [at.x, at.y + 0.02, at.z] });
   }
 
   placeItem(id, type, c) {
@@ -339,7 +360,7 @@ export class Game {
       if (e.code === 'Escape' && $('noteView').classList.contains('show')) { this.closeNote(); return; }
       if (e.code === 'KeyE' && !e.repeat) this.interact();
       if (e.code === 'KeyM' && !e.repeat) { mic.setMuted(!settings.micMuted); this.updateHUD(); }
-      if (this.drinkMenuOpen) {
+      if (this.drinkMenuOpen && !this.extras?.shed?.menuOpen) {
         const pick = { Digit1: 'vodka', Digit2: 'beer', Digit3: 'wine' }[e.code];
         if (pick) { this.chooseDrink(pick); return; }
         if (e.code === 'Escape') { this.closeDrinkMenu(true); return; }
@@ -744,6 +765,8 @@ export class Game {
     if (!p || !p.alive || p.dying || this.kills.has(pid)) return;
     if (isSafeZone(p.pos)) return; // the attic is sacred
     if (this.freePlay) return;
+    if (p.highUntil > this.time) return; // too high to die
+    if (b.state === 'gotoshed' || b.state === 'shedsit') return; // he's off for a smoke
     if (this.car?.state !== 'parked' && this.car?.riders.includes(pid)) return; // already driving away
     if (b.state === 'carry') return; // busy dragging someone: can't attack
     // the skinwalker is right in front of them, staring: even Ajan backs off
@@ -1000,6 +1023,7 @@ export class Game {
   tryShoot() {
     const L = this.local;
     const held = this.selectedItem();
+    if ((held?.type === 'joint' || held?.type === 'mushroom') && !this.localDead && !L.frozen && !this.me?.dying) { this.extras.shed.use(held); return true; }
     if (held?.type === 'spray' && !this.localDead && !L.frozen && !L.hidden && !this.me?.dying) { this.extras.useSpray(held); return true; }
     // a drink in hand: left click drinks it
     if (held && DRINKS[held.type] && !this.localDead && !L.frozen && !this.me?.dying) { this.request({ k: 'drink', id: held.id }); return true; }
@@ -1078,7 +1102,7 @@ export class Game {
   /** The nursery spider caught someone: a fast, brutal death (no eating sequence). */
   hostSpiderKill(pid) {
     const p = this.players.get(pid);
-    if (!p || !p.alive || p.dying || this.kills.has(pid) || this.freePlay) return;
+    if (!p || !p.alive || p.dying || this.kills.has(pid) || this.freePlay || p.highUntil > this.time) return;
     p.dying = true;
     const sp = this.spider.pos;
     this.broadcast({ k: 'spiderkill', pid, x: sp.x, z: sp.z });
@@ -1195,7 +1219,7 @@ export class Game {
         d.locked = false;
         audio.play('clunk', { pos: d.center, vol: 0.7 });
         const it = this.items.get(e.item);
-        if (it && e.item !== 'basement_key') it.used = true;
+        if (it && e.item !== 'basement_key' && e.item !== 'master_key') it.used = true;
         if (e.by === this.localId) this.message(`Unlocked: ${d.name}`);
         this.updateHUD();
         break;
@@ -1555,7 +1579,7 @@ export class Game {
         if (k >= 1 && s.stage === 1) {
           s.stage = 2;
           av.group.visible = false;
-          if (s.mon.def.id === 'ajan') audio.play('ajan', { pos: aj.mouth(), vol: 1, ref: 3 });
+          if (s.mon.def.id === 'ajan') audio.play('ajancatch', { pos: aj.mouth(), vol: 1.2 * VOICE_GAIN, ref: 3.5, limit: true });
         }
       }
       if (s.local) this.updateDeathCam(s, dt);
@@ -1863,7 +1887,7 @@ export class Game {
     const me = this.localId;
     switch (it.kind) {
       case 'slotbtn': it.machine.pressButton(it.btn); return;
-      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': this.extras.interact(it); return;
+      case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': this.extras.interact(it); return;
       case 'door': {
         const d = it.door;
         if (d.secret && d.locked) return;
@@ -1968,7 +1992,7 @@ export class Game {
       case 'cinema': return this.props.cinema.state.playing ? 'E — PAUSE FILM' : 'E — PLAY FILM';
       case 'vcr': return 'E — RESTART FILM';
       case 'jelly': return 'E — POKE';
-      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': return this.extras.prompt(it) || '';
+      case 'slotbtn': case 'well': case 'climbwin': case 'secbtn': case 'seclight': case 'cctv': case 'secret': case 'peephole': case 'dealer': case 'shedtable': case 'flour': case 'boxing': return this.extras.prompt(it) || '';
     }
     return '';
   }
@@ -2313,6 +2337,7 @@ export class Game {
 
     // Camera / spectator
     if (this.isSpectating()) this.updateSpectateCam(dt);
+    this.extras?.cam?.applyPOV(this.camera); // your dropped camcorder, still filming
 
     // Interaction focus
     this.pickT -= dt;

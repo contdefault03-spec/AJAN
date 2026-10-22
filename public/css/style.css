@@ -293,3 +293,26 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 .clipReview .crTitle { font-size: 30px; color: #e03030; letter-spacing: 0.15em; }
 .clipReview .crRow { display: flex; gap: 12px; }
 .clipReview .crNote { font-size: 16px; color: #aaa; }
+/* the alley dealer, the shed's boxing machine */
+.dealerLabel .nm { color: #9fe870; }
+.dealerMenu { position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); display: none; flex-direction: column; gap: 8px; min-width: 340px; padding: 18px 20px; background: rgba(8, 10, 6, 0.92); border: 1px solid #6a8a40; pointer-events: auto; text-align: center; }
+.dealerMenu.show { display: flex; }
+.dealerMenu .dmTitle { font-size: 28px; color: #d8f0b8; margin-bottom: 6px; }
+.dealerMenu button { font-family: var(--ui); font-size: 22px; padding: 8px 14px; background: #10180a; color: #d8f0b8; border: 1px solid #4a6a2a; cursor: pointer; }
+.dealerMenu button:hover { background: #24361a; }
+.dealerMenu .dmBal { font-size: 18px; color: #8a9a7a; }
+.boxUI { position: absolute; left: 50%; bottom: 22%; transform: translateX(-50%); display: none; flex-direction: column; align-items: center; gap: 8px; pointer-events: none; text-shadow: 0 0 6px #000; }
+.boxUI.show { display: flex; }
+.boxUI .bxTitle { font-size: 22px; color: #f0e8d8; }
+.boxUI .bxBar { position: relative; width: 420px; height: 26px; background: #b01818; border: 2px solid #111; }
+.boxUI .bxBar i { position: absolute; top: 0; bottom: 0; }
+.boxUI .bxBar .y1 { left: 30%; width: 15%; background: #e8c818; }
+.boxUI .bxBar .y2 { left: 55%; width: 15%; background: #e8c818; }
+.boxUI .bxBar .g { left: 45%; width: 10%; background: #28c838; z-index: 1; }
+.boxUI .bxBar b { position: absolute; top: -6px; bottom: -6px; width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 6px #fff; z-index: 2; }
+.doorWarn { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); display: none; flex-direction: column; align-items: center; color: #ff3020; font-size: 40px; letter-spacing: 0.12em; text-shadow: 0 0 12px #000, 0 0 3px #000; pointer-events: none; }
+.doorWarn.show { display: flex; }
+.doorWarn b { font-size: 96px; line-height: 1; }
+.doorWarn span { font-size: 18px; color: #e8e0d0; letter-spacing: 0.05em; }
+.rainbowFX { position: absolute; inset: -20%; pointer-events: none; opacity: 0.32; mix-blend-mode: screen; background: conic-gradient(from 0deg, #ff0040, #ff9a00, #fff200, #28e040, #00c8ff, #6a40ff, #ff40c8, #ff0040); animation: rainbowSpin 6s linear infinite; filter: blur(30px); }
+@keyframes rainbowSpin { to { transform: rotate(360deg) scale(1.15); } }

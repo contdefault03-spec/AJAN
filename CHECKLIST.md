@@ -66,3 +66,18 @@ game's own clock, not by playing at full speed.
 - While you sit at the CCTV console, your own body isn't drawn in the feeds (other players and the monsters are).
 - The garden is dark except near its lamps; the feeds light it with a night-vision lamp.
 - The camcorder costs an extra render of the scene each frame while you hold it (about 24 fps at 480×270), and recording reads that picture back from the GPU.
+
+## v1.4 update (tested headless + 2-client MP)
+- [x] Alley + DEALER (buy 4 mushrooms $20 / 4 flour $30 / 4 joints $25), locked SHED (shed key), hotboxed interior, music5 only inside, NPC smokers, posters, 2nd slot machine, boxing machine ($1, up to 1000) — synced in MP
+- [x] Free table: put bag on table, items laid out singly, anyone takes one; joint/mushroom left-click, flour E (snort.mp3, face to table); weed/flour/shroom effects 2 min; rainbow wash + unicorns/santa/reindeer + extra local Ajans; can't die while high
+- [x] Ajan 50 % shed visit: walks in (has his own key), sits for a smoke, can't kill, then goes to bed
+- [x] Spiral stair: top step lands on a landing, guard rail round the opening; roof-terrace missing rail added
+- [x] TV on the north balcony playing tv.mp4, audible only on the balcony
+- [x] Windows: real see-through openings to the garden; windows never overlap doors (fixed a garden-door blockage)
+- [x] Camcorder darker; drops on death/KO and keeps recording (video + audio) with your POV from the floor; records the peephole view
+- [x] Peepholes: within ~5–12 s Ajan walks past or comes to the door and grins in (jumpscare); half the time a 5 s "HE KNOWS YOU'RE IN THERE" warning, then he opens the door and chases; slow lean-in; bright view
+- [x] Game-over eat sound is ajancatch.mp3
+- [x] guitar1–3.glb hung on random walls each round + three in the shed
+- [x] Sparse rooms furnished (laundry, linen, playroom, mudroom, wardrobe, operating, chair room, nurse, old bath, observatory, security office)
+- [x] Difficulty: Medium/Hard lock 3/6 extra room doors (one Master Key in the ground hall), fewer bullets and less revolver ammo on Hard
+- [ ] Not done: full redesign of the house floor plan; mirrors; camera damage/repair

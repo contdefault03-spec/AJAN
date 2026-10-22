@@ -24,6 +24,9 @@ export const ASSETS = {
   slotModel: { names: ['slot.glb'] },
   dollmaModel: { names: ['dollma.glb'] },
   cameraModel: { names: ['camera.glb'] },
+  guitar1: { names: ['guitar1.glb'] },
+  guitar2: { names: ['guitar2.glb'] },
+  guitar3: { names: ['guitar3.glb'] },
   menuVideo: { names: ['mainnew.mp4', 'menu.mp4'], webm: 'mainnew.webm' },
   escapeCarVideo: { names: ['escapecar.mp4'], webm: 'escapecar.webm' },
   tvVideo: { names: ['tv.mp4'], webm: 'tv.webm' },
@@ -72,10 +75,12 @@ export const ASSETS = {
   guyleaves: { names: ['guyleaves.mp3'] },
   guy: { names: ['guy.mp3'] },
   eat: { names: ['eat.mp3'] },
+  snort: { names: ['snort.mp3'] },
+  music5: { names: ['music5.mp3'] },
 };
 export const SOUND_KEYS = ['ajan', 'ajandie', 'ajanescape', 'max', 'masked', 'rize', 'lucky', 'mido', 'rot', 'banana', 'vanex', 'ajannew',
   'music1', 'music2', 'musicchase', 'sleep', 'noise', 'song1', 'fai', 'yasmin', 'ajansleep', 'ajancatch', 'ajansee', 'ajanleaves',
-  'ajanitasleep', 'ajanitasee', 'ajanitaleave', 'ajanita', 'guyseesyou', 'guyleaves', 'guy', 'eat'];
+  'ajanitasleep', 'ajanitasee', 'ajanitaleave', 'ajanita', 'guyseesyou', 'guyleaves', 'guy', 'eat', 'snort', 'music5'];
 
 // The monsters. Ajan is always in the house; Guy joins on Medium and Hard, Ajanita on Hard.
 // kill: 'eat' (grab and eat, like Ajan) or 'punch' (knock down and drag the body away).
@@ -96,6 +101,7 @@ export const itemSlots = type => (type === 'stair_lower' || type === 'stair_uppe
 
 export const ITEM_INFO = {
   office_key: { name: 'Office Key' },
+  master_key: { name: 'Master Key' },
   basement_key: { name: 'Basement Key' },
   storage_key: { name: 'Storage Room Key' },
   fuse: { name: 'Fuse' },
@@ -118,6 +124,12 @@ export const ITEM_INFO = {
   spray: { name: 'Poison Spray' },
   well_lever: { name: 'Well Crank Lever' },
   camcorder: { name: 'Camcorder' },
+  shed_key: { name: 'Shed Key' },
+  bag_mushrooms: { name: 'Bag of Mushrooms (4)' },
+  bag_flour: { name: 'Bags of Flour (4)' },
+  bag_weed: { name: 'Pack of Joints (4)' },
+  mushroom: { name: 'Mushroom' },
+  joint: { name: 'Joint' },
 };
 
 // Per-character death-sound gain (1 = unchanged). Boosted sounds go through a
@@ -126,9 +138,10 @@ export const ITEM_INFO = {
 // How well the monsters hear (every noise radius is multiplied by `hear`), how fast
 // they move (`speed`) and how many times a player comes back after being caught.
 export const DIFFICULTY = {
-  easy: { label: 'EASY', hear: 0.6, speed: 0.92, respawns: 3 },
-  medium: { label: 'MEDIUM', hear: 1.0, speed: 1.1, respawns: 2 },
-  hard: { label: 'HARD', hear: 1.45, speed: 1.25, respawns: 1 },
+  // locks: extra room doors locked with the master key · bullets: loose rounds per floor · ammo: in the revolver
+  easy: { label: 'EASY', hear: 0.6, speed: 0.92, respawns: 3, locks: 0, bullets: 4, ammo: 2 },
+  medium: { label: 'MEDIUM', hear: 1.0, speed: 1.1, respawns: 2, locks: 3, bullets: 3, ammo: 1 },
+  hard: { label: 'HARD', hear: 1.45, speed: 1.25, respawns: 1, locks: 6, bullets: 2, ammo: 0 },
 };
 export const difficultyOf = d => (DIFFICULTY[d] ? d : 'medium');
 

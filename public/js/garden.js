@@ -48,7 +48,7 @@ export class Garden {
     };
     fence(2, -14, 38, -14); fence(2, -14, 2, 0); fence(38, -14, 38, 0);
     // hedges and flower beds
-    for (const [x, z, w, d] of [[5, -12.6, 5, 1.2], [14, -12.6, 6, 1.2], [27, -12.6, 6, 1.2], [35, -12.6, 4, 1.2], [3.2, -6, 1.2, 7], [36.8, -6, 1.2, 7]]) {
+    for (const [x, z, w, d] of [[5, -12.6, 5, 1.2], [14, -12.6, 6, 1.2], [22, -12.6, 4, 1.2], [3.2, -6.8, 1.2, 5.4], [36.8, -3.2, 1.2, 5]]) {
       // a hedge: a leafy core with clumps bulging out of it, so the top isn't a flat box
       const core = box(w, 1.0, d, leaf, x, 0.5, z);
       core.material = leaf;
@@ -60,7 +60,7 @@ export class Garden {
       H.collider(x - w / 2, z - d / 2, x + w / 2, z + d / 2, 0, 1.1, { furniture: true });
     }
     const flowerCols = [0x7a1020, 0xc0a020, 0x8a3a8a, 0xd0d0c0];
-    for (const [x, z] of [[9, -4], [30, -4], [9, -10], [30, -10]]) {
+    for (const [x, z] of [[9, -4], [30, -4], [9, -10], [20, -10.6]]) {
       box(3, 0.25, 1.2, new THREE.MeshStandardMaterial({ map: T.soil, roughness: 1 }), x, 0.12, z);
       H.collider(x - 1.5, z - 0.6, x + 1.5, z + 0.6, 0, 0.3, { furniture: true });
       for (let i = 0; i < 14; i++) { const f = new THREE.Mesh(new THREE.SphereGeometry(0.06, 6, 4), mat(flowerCols[i % 4])); f.position.set(x - 1.3 + (i % 7) * 0.43, 0.38, z - 0.3 + Math.floor(i / 7) * 0.6); g.add(f); }
@@ -87,9 +87,9 @@ export class Garden {
     let n = 0;
     for (let i = 0; i < N * 2 && n < N; i++) {
       const x = 2.3 + Math.random() * 35.4, z = -13.7 + Math.random() * 13.4;
-      if (Math.hypot(x - WELL.x, z - WELL.z) < 1.2) continue;
+      if (Math.hypot(x - WELL.x, z - WELL.z) < 1.2 || (x > 25.8 && z < -6.8)) continue; // the well, the shed
       if (Math.abs((z + 3.6) - (x - 18) * -0.37) < 0.8 && z > -6.8) continue; // the gravel path
-      if ([[9, -4], [30, -4], [9, -10], [30, -10]].some(([bx, bz]) => Math.abs(x - bx) < 1.6 && Math.abs(z - bz) < 0.7)) continue;
+      if ([[9, -4], [30, -4], [9, -10], [20, -10.6]].some(([bx, bz]) => Math.abs(x - bx) < 1.6 && Math.abs(z - bz) < 0.7)) continue;
       const k = 0.6 + Math.random() * 0.9;
       m4.compose(V(x, 0, z), q.setFromAxisAngle(up, Math.random() * Math.PI), V(k, k * (0.7 + Math.random() * 0.6), k));
       im.setMatrixAt(n++, m4);
