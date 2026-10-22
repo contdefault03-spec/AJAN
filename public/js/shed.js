@@ -298,7 +298,13 @@ export class Shed {
     const G = this.game;
     if (it.kind === 'dealer') { this.openMenu(); return true; }
     if (it.kind === 'boxing') { G.request({ k: 'box' }); return true; }
-    if (it.kind === 'shedtable') { const bag = this.heldBag(); if (bag) G.request({ k: 'puttable', id: bag.id }); return true; }
+    if (it.kind === 'shedtable') {
+      const bag = this.heldBag();
+      // Empty hands: ask the host to claim a bag already on the table.
+      // A held bag still follows the existing put-on-table path.
+      G.request(bag ? { k: 'puttable', id: bag.id } : { k: 'taketable' });
+      return true;
+    }
     if (it.kind === 'flour') { G.request({ k: 'snort', id: it.flour.id }); return true; }
     return false;
   }
@@ -327,6 +333,29 @@ export class Shed {
         const kind = { bag_mushrooms: 'mushroom', bag_flour: 'flour', bag_weed: 'joint' }[it.type];
         const put = free.slice(0, 4).map(i => ({ slot: i, id: `${kind}_${++this.seq}` }));
         G.broadcast({ k: 'shedput', pid, bag: r.id, kind, put });
+        return true;
+      }
+      case 'taketable': {
+        // Resolve the pickup from shared host state, not a client-supplied item ID.
+        if (!inShed(p.pos) || p.pos.distanceTo(V(TABLE.x, 0, TABLE.z)) > 2.6) return true;
+        const candidates = [...this.table.entries()]
+          .filter(([, item]) => item.kind !== 'flour')
+          .map(([slot, item]) => ({ slot, item, distance: SLOTS[slot].distanceTo(p.pos) }))
+          .sort((a, b) => a.distance - b.distance);
+        const entry = candidates[0];
+        if (!entry) return true;
+        const { slot, item } = entry;
+        const it = G.items.get(item.id);
+        if (!it || it.holder || it.used || !['joint', 'mushroom'].includes(it.type) || it.type !== item.kind) return true;
+        const used = G.slotsUsed(pid);
+        const needed = itemSlots(it.type);
+        if (used + needed > INV_SLOTS) {
+          G.broadcast({ k: 'msg', text: `Your hands are full (${used}/${INV_SLOTS}; ${ITEM_INFO[it.type].name} takes ${needed}). Drop something with G.` }, pid);
+          return true;
+        }
+        // Claim synchronously on the host before emitting the replicated event.
+        it.holder = pid;
+        G.broadcast({ k: 'shedtake', pid, id: it.id, slot });
         return true;
       }
       case 'snort': {
@@ -394,6 +423,14 @@ export class Shed {
         }
         audio.play('drawer', { pos: V(TABLE.x, 0.6, TABLE.z), vol: 0.5, rate: 1.4 });
         G.updateHUD();
+        return true;
+      }
+      case 'shedtake': {
+        this.table.delete(e.slot);
+        // Use the existing item replication path for model removal, held state,
+        // selection and HUD updates on every client.
+        G.applyEvent({ k: 'item', id: e.id, holder: e.pid });
+        audio.play('pickup', { vol: 0.7 });
         return true;
       }
       case 'snorted': {
