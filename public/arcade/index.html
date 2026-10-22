@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><meta charset="utf-8"><title>Freedoom Arcade</title>
+<style>
+html,body{margin:0;background:#050505;color:#eee;font:16px monospace;height:100%;overflow:hidden}body{display:flex;align-items:center;justify-content:center;flex-direction:column}canvas{width:min(95vw,110vh);height:auto;aspect-ratio:4/3;image-rendering:pixelated;max-height:82vh;object-fit:contain}button,a{color:#fff;background:#282020;padding:8px;border:1px solid #999}#status{text-align:center}footer{padding:8px;text-align:center}
+</style>
+<canvas id="screen" width="320" height="200" tabindex="0" aria-label="Playable Freedoom"></canvas>
+<div id="status">Loading Freedoom…</div>
+<footer>Arrows: move/turn · Ctrl: fire · Space: open · Shift: run · E: leave<br><button id="exit">E — LEAVE ARCADE</button> <a href="./NOTICE.md" target="_blank" rel="noopener">Licenses & source</a></footer>
+<script type="module" src="./player.js"></script>
+</html>

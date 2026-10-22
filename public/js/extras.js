@@ -15,6 +15,7 @@ import { Passages } from './passages.js';
 import { Skinwalker } from './skinwalker.js';
 import { Camcorder } from './camcorder.js';
 import { Shed } from './shed.js';
+import { Arcade } from './arcade.js';
 import { hangGuitars } from './guitars.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
@@ -208,6 +209,7 @@ export class Extras {
     this.shed = new Shed(G);
     await this.shed.init();
     await hangGuitars(G);
+    this.arcade = new Arcade(G);
     // Include every late obstacle (garden, capture rooms, security office and shed).
     H.buildNav(H.colliders.slice(colliderStart));
     this.buildUI();
@@ -236,7 +238,7 @@ export class Extras {
   /** Host: requests this module owns. Returns true if handled. */
   request(pid, r, p) {
     const G = this.game;
-    if (this.garden.request(pid, r, p) || this.security.request(pid, r, p) || this.passages.request(pid, r, p) || this.shed.request(pid, r, p)) return true;
+    if (this.arcade.request(pid, r, p) || this.garden.request(pid, r, p) || this.security.request(pid, r, p) || this.passages.request(pid, r, p) || this.shed.request(pid, r, p)) return true;
     switch (r.k) {
       case 'free': {
         if (!p.restrained) return true;
@@ -275,7 +277,7 @@ export class Extras {
   // ======================================================================= events
   event(e) {
     const G = this.game;
-    if (this.garden.event(e) || this.security.event(e) || this.passages.event(e) || this.skin.event(e) || this.shed.event(e)) return true;
+    if (this.arcade.event(e) || this.garden.event(e) || this.security.event(e) || this.passages.event(e) || this.skin.event(e) || this.shed.event(e)) return true;
     switch (e.k) {
       case 'freed': {
         const fp = G.players.get(e.pid);
@@ -426,6 +428,7 @@ export class Extras {
     this.skin.update(dt);
     this.cam.update(dt);
     this.shed.update(dt);
+    this.arcade.update(dt);
     if (G.isHost) this.shed.hostUpdate();
     // --- HUD: lives, coming back
     const me = G.me;
@@ -446,12 +449,12 @@ export class Extras {
 
   prompt(it) {
     if (it.kind === 'slotbtn') return it.machine.prompt(it.btn);
-    return this.garden.prompt(it) ?? this.security.prompt(it) ?? this.passages.prompt(it) ?? this.shed.prompt(it);
+    return this.arcade.prompt(it) ?? this.garden.prompt(it) ?? this.security.prompt(it) ?? this.passages.prompt(it) ?? this.shed.prompt(it);
   }
 
   /** E on one of this module's interactables. */
   interact(it) {
-    return this.garden.interact(it) || this.security.interact(it) || this.passages.interact(it) || this.shed.interact(it);
+    return this.arcade.interact(it) || this.garden.interact(it) || this.security.interact(it) || this.passages.interact(it) || this.shed.interact(it);
   }
 
   // Replicated monster state drives the same positional loop on host and guests.
@@ -465,6 +468,7 @@ export class Extras {
   }
 
   dispose() {
+    this.arcade?.dispose();
     this.security?.dispose();
     this.passages?.dispose();
     this.skin?.dispose();

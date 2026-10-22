@@ -1,0 +1,7 @@
+# Preserve upstream notices and compiler output byte-for-byte (including CRLF).
+public/arcade/licenses/** -text -whitespace linguist-vendored=true
+public/arcade/doom.js -text -whitespace linguist-generated=true
+public/arcade/doom.wasm binary linguist-generated=true
+public/arcade/freedoom1.wad binary linguist-vendored=true
+public/arcade/source/*.zip binary linguist-vendored=true
+public/arcade/source/*.tar.gz binary linguist-vendored=true

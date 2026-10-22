@@ -317,3 +317,27 @@ Peeling wallpaper, damp plaster, cracked stained tiles, worn wood/enamel, floor 
 - Every entry into the upstairs bathroom lets the host randomly select **“PUS, GET UP BRO WE NEED TO WORK”** or **“5 MORE MINUTES DADDY”** for the blood-written mirror. All players see the same choice; a random choice can repeat.
 - Rooms have additional faded blue floral, ochre diamond, linen stripe, lime plaster and blue tile finishes. The exterior follows room sections with weathered plaster, mossy/ochre render, exposed brick and shed boarding. Collision and navigation geometry are preserved.
 - Ajan's butcher-room activity uses the same positional **eat.mp3** loop as his kitchen meal, stopping when the activity ends.
+
+### Playable Freedoom arcade
+
+There is one cabinet in the nightclub (north wall, between the bar and DJ desk)
+and one on the shed's back wall. The shed still requires its existing key.
+Approach the screen and press **E**. Arrows move/turn, **Ctrl** or left click fires,
+**Space** opens doors, **Shift** runs, **Alt+arrows** strafes, and **1–7** select
+weapons. Press **E**, **Escape**, or the leave button to return to AJAN.
+
+These run a real, locally hosted WebAssembly DOOM-compatible engine with
+**Freedoom: Phase 1** data. No user uploads or external game services are needed.
+The first entry downloads about 30 MB of runtime/game data. Only an active
+cabinet starts an engine. The local cabinet screen displays its live framebuffer;
+remote players see an occupied screen, not a streamed copy of the session.
+
+The room host controls cabinet occupancy. AJAN's world, enemies and multiplayer
+continue while playing; the arcade grants no additional immunity. Leaving,
+death or disconnect stops the engine and its audio. Each entry starts a fresh
+run; persistent saves and MIDI background music are not included in this version.
+WAD sound effects work. Original commercial DOOM assets are not bundled.
+
+Licenses, corresponding source archives, build instructions and checksums are in
+[`public/arcade/NOTICE.md`](public/arcade/NOTICE.md). Normal startup remains
+`npm start`; compiling the engine is only needed when changing its C source.
