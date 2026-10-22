@@ -49,12 +49,16 @@ test('empty-handed table interaction does not consume flour; snorting still work
   const shed = game.extras.shed;
   const guest = game.players.get('guest');
   guest.pos.set(28.7, 0, -10.7);
-  shed.table.set(1, { id: 'flour_line', kind: 'flour' });
+  game.placeItem('flour_bag', 'bag_flour', { pos: [28.7, 0.5, -10.7] });
+  game.items.get('flour_bag').holder = 'guest';
+  game.handleRequest('guest', { k: 'puttable', id: 'flour_bag' });
+  const flour = [...shed.table.entries()].find(([, item]) => item.kind === 'flour');
+  assert.ok(flour, 'putting a flour bag on the table creates flour lines');
 
   game.handleRequest('guest', { k: 'taketable' });
-  assert.equal(shed.table.has(1), true);
+  assert.equal(shed.table.has(flour[0]), true);
 
-  game.handleRequest('guest', { k: 'snort', id: 'flour_line' });
+  game.handleRequest('guest', { k: 'snort', id: flour[1].id });
   assert.equal(guest.highUntil, game.time + 120);
-  assert.ok(game.events.some(e => e.k === 'snorted' && e.id === 'flour_line'));
+  assert.ok(game.events.some(e => e.k === 'snorted' && e.id === flour[1].id));
 });
