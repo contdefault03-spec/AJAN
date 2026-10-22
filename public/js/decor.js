@@ -280,8 +280,7 @@ export function buildDecor(h) {
   // Bedroom: armchair by the window, vanity mirror, portrait
   wingChair(4.6, 0, 2.2, '-x', 'fabricRed');
   G.box(0.14, 1.2, 4.55, 0.18, 2.0, 5.85, 'frame');
-  const vm = new THREE.Mesh(new THREE.PlaneGeometry(1.15, 0.7), new THREE.MeshStandardMaterial({ color: 0x5a6466, metalness: 0.85, roughness: 0.3 }));
-  vm.position.set(0.185, 1.6, 5.2); vm.rotation.y = Math.PI / 2; add(vm);
+  h.addMirror(1.15, 0.7, [0.185, 1.6, 5.2], Math.PI / 2, 'bedroom_mirror');
   candle(0.4, 0.95, 4.6); candle(0.45, 0.95, 5.9, 0.1);
   portrait(1.6, 1.75, 7.88, '-z', 0.5, 0.62, 0.06);
   // Bathroom: stained shower curtain over the tub, bloody handprint

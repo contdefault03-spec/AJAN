@@ -158,7 +158,10 @@ export class Car {
     }
     // sun visors and the rear-view mirror
     box(0.4, 0.03, 0.18, 0.45, roof - 0.04, 0.55); box(0.4, 0.03, 0.18, -0.45, roof - 0.04, 0.55);
-    box(0.22, 0.06, 0.03, 0, roof - 0.12, 0.62, new THREE.MeshStandardMaterial({ color: 0x8090a0, metalness: 0.9, roughness: 0.1 }));
+    // Tilt toward seated eye height so the rear view clears the cabin roof.
+    box(0.24, 0.08, 0.03, 0, roof - 0.12, 0.62).rotation.x = -0.22;
+    const rearMirror = this.house.addMirror(0.22, 0.06, [0, roof - 0.12, 0.603], Math.PI, 'car_rearview_mirror', I);
+    rearMirror.rotation.x = -0.22;
     // windscreen and rear window
     const ws = new THREE.Mesh(new THREE.PlaneGeometry(hw * 2, (roof - belt) * 1.2), glass);
     ws.position.set(0, (roof + belt) / 2, 0.88); ws.rotation.x = -0.55; I.add(ws);
