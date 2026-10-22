@@ -206,7 +206,17 @@ export class AjanBrain {
   advance(dt, speed, nx, nz) {
     this.pos.x += nx * speed * dt;
     this.pos.z += nz * speed * dt;
-    collideCircle(this.pos, AJAN.radius, AJAN.height, this.house.colliders, 'ajan');
+    // The spiral staircase has narrow rail/post colliders that can trap the AI
+    // between turns. Its dedicated nav chain already constrains movement, so ignore
+    // overlapping stairwell colliders while on the spiral itself; keep normal
+    // collision everywhere else.
+    const spiral = RAMPS.find(r => r.spiral && this.pos.x >= r.x0 - 0.15 && this.pos.x <= r.x1 + 0.15 &&
+      this.pos.z >= r.z0 - 0.15 && this.pos.z <= r.z1 + 0.15);
+    const cols = spiral
+      ? this.house.colliders.filter(c => !(c.maxX > spiral.x0 && c.minX < spiral.x1 &&
+          c.maxZ > spiral.z0 && c.minZ < spiral.z1 && c.maxY > spiral.ya && c.minY < spiral.yb + 1.2))
+      : this.house.colliders;
+    collideCircle(this.pos, AJAN.radius, AJAN.height, cols, 'ajan');
     const gy = groundAt(this.pos.x, this.pos.z, this.pos.y);
     this.pos.y += (gy - this.pos.y) * Math.min(1, dt * 12);
     this.speed = speed;
