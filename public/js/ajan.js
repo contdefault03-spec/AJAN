@@ -20,7 +20,7 @@ const tmp = new THREE.Vector3();
 // Fixed first appearances: Ajan in his own bedroom, Ajanita in the third-floor
 // butcher room, and Guy in the 15-TV tower room. Once awake, all use normal AI patrols.
 const WAKE_AT = {
-  ajan: [35.0, 3.4, 6.4, Math.PI],
+  ajan: [36.8, 3.4, 4.0, Math.PI],
   ajanita: [28.0, 6.8, 4.4, Math.PI],
   guy: [52.6, 6.8, 12.0, Math.PI],
 };
