@@ -85,6 +85,7 @@ export class GeoBuilder {
       g.setAttribute('uv', new THREE.Float32BufferAttribute(b.uv, 2));
       g.setIndex(b.idx);
       g.computeBoundingSphere();
+      M[key].side = THREE.DoubleSide; // no seeing through a wall or floor from behind
       const m = new THREE.Mesh(g, M[key]);
       m.receiveShadow = true;
       m.castShadow = !key.startsWith('floor') && !key.startsWith('carpet') && key !== 'ceiling';
