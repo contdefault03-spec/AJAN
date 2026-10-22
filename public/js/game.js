@@ -226,7 +226,7 @@ export class Game {
 
   /** Floating dust motes around the viewer (wrapped into a box that follows the camera). */
   buildDust() {
-    const n = settings.quality === 'low' ? 150 : 400;
+    const n = ['performance', 'low'].includes(settings.quality) ? 100 : settings.quality === 'medium' ? 220 : 320;
     const g = new THREE.BufferGeometry();
     const pos = new Float32Array(n * 3);
     for (let i = 0; i < n * 3; i++) pos[i] = (Math.random() - 0.5) * 10;
@@ -2635,7 +2635,7 @@ export class Game {
     overlay.style.setProperty('--trip-y', (8 + Math.random() * 62) + '%');
     if (r < 0.38) {
       overlay.classList.remove('flashfigure'); overlay.classList.add('figure');
-      audio.play(Math.random() < 0.5 ? 'noise' : 'ajan', { vol: 0.3 + Math.random() * 0.25, rate: 0.55 + Math.random() * 1.2 });
+      audio.play(Math.random() < 0.5 ? 'noise' : 'growl', { vol: 0.3 + Math.random() * 0.25, rate: 0.55 + Math.random() * 1.2 });
       setTimeout(() => overlay.classList.remove('figure'), 1900);
     } else if (r < 0.66) {
       overlay.classList.remove('figure'); overlay.classList.add('flashfigure');
