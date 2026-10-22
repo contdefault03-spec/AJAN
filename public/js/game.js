@@ -130,7 +130,6 @@ export class Game {
     this.paintingTextures = tex;
     this.house.assignPaintings(tex, this.rnd);
     this.placeItems();
-    this.lockExtraDoors((DIFFICULTY[this.difficulty] || DIFFICULTY.medium).locks);
     this.screens = new Screens(this.house, tex);
     this.props = new Props(this);
     await this.props.init();
@@ -283,24 +282,6 @@ export class Game {
       const pool = spots.slice();
       for (let k = 0; k < (dif.bullets ?? 3) && pool.length; k++) this.placeItem('bullet_' + n++, 'bullet', { pos: pool.splice(Math.floor(this.rnd() * pool.length), 1)[0] });
     }
-  }
-
-  /** Medium/Hard: a few more room doors are locked; one master key (somewhere in a hall) opens them all. */
-  lockExtraDoors(count) {
-    if (!count) return;
-    const H = this.house;
-    const pool = [...H.doors.values()].filter(d => !d.lock && !d.locked && !d.secret && !d.ajanOnly && !d.exit && !d.chained && !d.navDoor && (Math.abs(d.y - 0) < 0.1 || Math.abs(d.y - 3.4) < 0.1) && !['d_bed1', 'd_shed', 'd_garden', 'd_sewing'].includes(d.id) && !/stair|elev|exit|front|base/.test(d.id) && d.line);
-    // never lock anyone in: no door of a room people start in or wake up in
-    const keep = new Set([...SPAWN_POINTS.map(p => V(p[0], 0, p[1])), ...CAPTURE_SPOTS.map(c => c.pos)].map(p => roomAt(p.x, p.z, p.y + 0.5)?.id));
-    const side = (d, s) => { const cx = d.line === 'x' ? d.a0 + d.w / 2 : d.c + s * 0.6, cz = d.line === 'x' ? d.c + s * 0.6 : d.a0 + d.w / 2; return roomAt(cx, cz, d.y + 0.5)?.id; };
-    for (let i = pool.length - 1; i >= 0; i--) if (keep.has(side(pool[i], 1)) || keep.has(side(pool[i], -1))) pool.splice(i, 1);
-    for (let i = 0; i < count && pool.length; i++) {
-      const d = pool.splice(Math.floor(this.rnd() * pool.length), 1)[0];
-      d.lock = 'master_key'; d.locked = true;
-    }
-    const halls = H.roomNodes.hall || []; // the ground-floor hall, always reachable
-    const at = halls[Math.floor(this.rnd() * halls.length)];
-    if (at) this.placeItem('master_key', 'master_key', { pos: [at.x, at.y + 0.02, at.z] });
   }
 
   placeItem(id, type, c) {
@@ -1226,7 +1207,7 @@ export class Game {
         d.locked = false;
         audio.play('clunk', { pos: d.center, vol: 0.7 });
         const it = this.items.get(e.item);
-        if (it && e.item !== 'basement_key' && e.item !== 'master_key') it.used = true;
+        if (it && e.item !== 'basement_key') it.used = true;
         if (e.by === this.localId) this.message(`Unlocked: ${d.name}`);
         this.updateHUD();
         break;
