@@ -992,6 +992,22 @@ export class House {
     const s2 = [node(38, 20.25, 0, 'stairU'), node(38, 16.25, 1.7, 'stairU:ramp'), node(38, 12.0, 3.4, 'stairU:top'), node(38, 9.6, 3.4, 'uhall')];
     const s3 = [node(48.3, 7.75, 0, 'estair'), node(48.3, 13.15, 0, 'estair'), node(46.95, 13.15, 0, 'estair'), node(46.95, 9.9, 1.7, 'estair:ramp'), node(46.95, 6.25, 3.4, 'uehall')];
     const s5 = [node(32.55, 7.25, 3.4, 'ajanroom'), node(32.55, 3.7, 5.1, 'tstair:ramp'), node(32.55, 0.6, 6.8, 'tstair:top'), node(33.8, 0.62, 6.8, 'observ')];
+    // Sample the spiral staircase so the AI can walk from the east-wing tower
+    // into the TV room instead of treating that floor as an isolated island.
+    const spiralRamp = RAMPS.find(r => r.id === 'R6');
+    const s6 = [];
+    const spiralSteps = 10;
+    for (let i = 0; i <= spiralSteps; i++) {
+      const t = i / spiralSteps;
+      const angle = spiralRamp.a0 + spiralRamp.turns * Math.PI * 2 * t;
+      const radius = 0.95;
+      s6.push(node(
+        spiralRamp.cx + Math.cos(angle) * radius,
+        spiralRamp.cz + Math.sin(angle) * radius,
+        spiralRamp.ya + (spiralRamp.yb - spiralRamp.ya) * t,
+        'spiral'
+      ));
+    }
     // The upstairs hall narrows to 1.3 m past the attic-stair footprint (z 9.4–10.9 is
     // off limits to him): a lane of nodes along its north side keeps the west half of
     // the upstairs (master, guest, nursery, library…) connected to the rest.
@@ -1018,7 +1034,7 @@ export class House {
       if (!blocked) link(a, b);
     }
     for (const [a, b, d] of portals) link(a, b, d);
-    for (const chain of [s1, s2, s3, s5]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
+    for (const chain of [s1, s2, s3, s5, s6]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
     // Keep only the main connected graph (all links, locked doors included): a node
     // boxed in by furniture would otherwise be a patrol target he can never reach.
     const comp = new Map();
