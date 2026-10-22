@@ -75,6 +75,8 @@ export class Game {
     this.ajanStepDist = 0;
     this.lastAjanState = 'dormant';
     this.heartT = 0;
+    this.tripEventT = 5 + Math.random() * 7;
+    this.tripJumpTimer = null;
   }
 
   get me() { return this.players.get(this.localId); }
@@ -2267,6 +2269,7 @@ export class Game {
     this.club.update(dt, this.net.serverNow());
     if (this.club.music ? !this.clubDuckOn : this.clubDuckOn) { this.clubDuckOn = !!this.club.music; this.updateMusic(); }
     this.updateHeld();
+    this.updateTripMode(dt);
     if (this.dizzy > 0) {
       // wobbling view and a soft blur that fade out over ~20 s
       this.dizzy = Math.max(0, this.dizzy - dt / 20);
@@ -2611,6 +2614,48 @@ export class Game {
     return short ? `OCT 13 1996  ${p(hh)}:${p(mm)}:${p(ss)}` : `${p(hh)}:${p(mm)}:${p(ss)}`;
   }
 
+  // Hallucinations are client-local so each multiplayer player gets their own trips.
+  updateTripMode(dt) {
+    const overlay = document.getElementById('tripOverlay');
+    if (this.difficulty !== 'trip' || this.phase !== 'play' || this.localDead || this.localEscaped || this.me?.dying) {
+      overlay?.classList.remove('active', 'figure', 'flashfigure');
+      if (this.difficulty !== 'trip' && this.canvas?.style.filter?.includes('hue-rotate')) this.canvas.style.filter = '';
+      return;
+    }
+    if (!overlay) return;
+    overlay.classList.add('active');
+    const t = this.time;
+    this.canvas.style.filter = `saturate(1.5) hue-rotate(${Math.sin(t * 0.23) * 24 + Math.sin(t * 0.07) * 16}deg) contrast(${1.08 + Math.sin(t * 0.8) * 0.08})`;
+    this.camera.rotation.z += Math.sin(t * 0.7) * 0.0008;
+    this.tripEventT -= dt;
+    if (this.tripEventT > 0) return;
+    this.tripEventT = 7 + Math.random() * 13;
+    const r = Math.random();
+    overlay.style.setProperty('--trip-x', (12 + Math.random() * 76) + '%');
+    overlay.style.setProperty('--trip-y', (8 + Math.random() * 62) + '%');
+    if (r < 0.38) {
+      overlay.classList.remove('flashfigure'); overlay.classList.add('figure');
+      audio.play(Math.random() < 0.5 ? 'noise' : 'ajan', { vol: 0.3 + Math.random() * 0.25, rate: 0.55 + Math.random() * 1.2 });
+      setTimeout(() => overlay.classList.remove('figure'), 1900);
+    } else if (r < 0.66) {
+      overlay.classList.remove('figure'); overlay.classList.add('flashfigure');
+      audio.play(Math.random() < 0.5 ? 'growl' : 'ajandie', { vol: 0.35, rate: 0.6 + Math.random() * 1.4 });
+      setTimeout(() => overlay.classList.remove('flashfigure'), 800);
+    } else if (r < 0.84) {
+      this.post?.glitch(1.5 + Math.random() * 1.5);
+      audio.play('noise', { vol: 0.5, rate: 0.45 + Math.random() * 1.7 });
+    } else {
+      const scare = document.getElementById('tripJumpscare');
+      if (scare) {
+        scare.classList.remove('show'); void scare.offsetWidth; scare.classList.add('show');
+        clearTimeout(this.tripJumpTimer);
+        this.tripJumpTimer = setTimeout(() => scare.classList.remove('show'), 700);
+      }
+      audio.play('roar', { vol: 0.75, rate: 0.7 + Math.random() * 0.7 });
+      this.post?.glitch(2.5);
+    }
+  }
+
   updateHudLive(dt) {
     this.hudT = (this.hudT || 0) - dt;
     if (this.hudT > 0) return;
@@ -2641,6 +2686,9 @@ export class Game {
     removeEventListener('resize', this.onResize);
     this.canvas.removeEventListener('mousedown', this.onMouseDown);
     document.removeEventListener('pointerlockchange', this.onLockChange);
+    clearTimeout(this.tripJumpTimer);
+    document.getElementById('tripOverlay')?.classList.remove('active', 'figure', 'flashfigure');
+    document.getElementById('tripJumpscare')?.classList.remove('show');
     this.local?.dispose();
     this.voice?.stop();
     this.tvSound?.stop();
