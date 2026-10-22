@@ -453,13 +453,17 @@ export class Shed {
     const G = this.game;
     this.hallu = [];
     const emojis = ['🦄', '🦌', '🎅', '🦄', '🌈', '🍄', '👁️', '🦌'];
-    for (let i = 0; i < 10; i++) {
+    for (let i = 0; i < 18; i++) {
       const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: emojiTexture(emojis[i % emojis.length]), transparent: true, depthWrite: false }));
-      s.scale.setScalar(0.8 + Math.random() * 0.9);
+      s.scale.setScalar(1.2 + Math.random() * 1.2);
       s.userData = { a: Math.random() * 6.28, r: 3 + Math.random() * 4, h: 0.6 + Math.random() * 1.8, sp: 0.3 + Math.random() * 0.6 };
       G.scene.add(s); this.hallu.push(s);
     }
     // extra Ajans, only on your screen, dancing out there
+    // a rainbow wash over everything
+    this.rainbow = document.createElement('div');
+    this.rainbow.className = 'rainbowFX';
+    document.getElementById('hud')?.appendChild(this.rainbow);
     const aj = G.monsters.get('ajan');
     this.ghostAjans = [];
     for (let i = 0; i < 2; i++) {
@@ -474,6 +478,7 @@ export class Shed {
   endHallucinations() {
     for (const s of this.hallu || []) s.parent?.remove(s);
     for (const a of this.ghostAjans || []) a.group.parent?.remove(a.group);
+    this.rainbow?.remove(); this.rainbow = null;
     this.hallu = null; this.ghostAjans = null;
   }
 
@@ -546,7 +551,7 @@ export class Shed {
     if (G.scene.fog) { this.baseFog ??= G.scene.fog.density; G.scene.fog.density += ((inside ? 0.16 : this.baseFog) - G.scene.fog.density) * Math.min(1, dt * 2); }
     // dealer label
     const head = this.dealer.av.headTop(V()).add(V(0, 0.25, 0)), pr = head.clone().project(G.camera);
-    const vis = pr.z < 1 && head.distanceTo(cam) < 9;
+    const vis = pr.z < 1 && head.distanceTo(cam) < 9 && cam.x < 2.3;
     this.label.style.opacity = vis ? 1 : 0;
     if (vis) this.label.style.transform = `translate(-50%, -100%) translate(${(pr.x * 0.5 + 0.5) * innerWidth}px, ${(-pr.y * 0.5 + 0.5) * innerHeight}px)`;
     // boxing: the marker sweeps fast; the pad swings after a hit

@@ -33,7 +33,7 @@ export class Camcorder {
     // the model's lens points down its −x axis: turn it so the lens faces −z (forward),
     // and tone its very light texture down to a dark, worn plastic
     this.model = fit(gl?.scene, 0.24) || fallbackModel();
-    this.model.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color?.multiplyScalar(0.42); o.material.roughness = 0.6; } });
+    this.model.traverse(o => { if (o.isMesh) { o.material = o.material.clone(); o.material.color?.multiplyScalar(0.24); o.material.roughness = 0.6; } });
     G.placeItem('camcorder', 'camcorder', { pos: CAMCORDER_SPOT });
     const it = G.items.get('camcorder');
     const fm = this.model.clone(); fm.rotation.y = -Math.PI / 2; it.mesh.add(fm); // lens along the item's facing
@@ -212,6 +212,14 @@ export class Camcorder {
     const eye = G.camera.getWorldPosition(V()), q = G.camera.getWorldQuaternion(new THREE.Quaternion());
     const fwd = V(0, 0, -1).applyQuaternion(q), right = V(1, 0, 0).applyQuaternion(q), up = V(0, 1, 0).applyQuaternion(q);
     const cam = this.cam;
+    const peeping = G.extras?.passages?.peep;
+    if (peeping) {
+      // held up to the peephole with you: it films exactly what you see through the lens
+      cam.position.copy(eye); cam.quaternion.copy(q); cam.layers.disable(1);
+      cam.fov = G.camera.fov; cam.updateProjectionMatrix();
+      this.renderLens(dt);
+      return;
+    }
     if (this.selfie) {
       cam.position.copy(eye).addScaledVector(fwd, 0.55).addScaledVector(right, 0.12).addScaledVector(up, -0.05);
       cam.lookAt(eye.x, eye.y - 0.05, eye.z);

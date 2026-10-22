@@ -15,6 +15,7 @@ import { Passages } from './passages.js';
 import { Skinwalker } from './skinwalker.js';
 import { Camcorder } from './camcorder.js';
 import { Shed } from './shed.js';
+import { hangGuitars } from './guitars.js';
 
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
 const BY = -3.2, U = 3.4, AY = 6.8;
@@ -91,6 +92,9 @@ export class Extras {
       this.tvScreens.push(scr);
       return y + h2 + 0.08;
     };
+    // one more on the north balcony, on a cabinet against the house wall (heard only out there)
+    box(1.2, 0.6, 0.45, casing, 20.9, AY + 0.3, -0.3);
+    tv(20.9, AY + 0.6, -0.52, 1.0, Math.PI);
     // south wall (z 14) — the chair faces it — in stacks on low cabinets
     const sz = 13.65;
     for (const [x, sizes] of [[50.0, [0.7, 0.5, 0.4]], [51.1, [0.9, 0.6]], [52.5, [1.1, 0.7]], [53.9, [0.8, 0.55, 0.4]], [55.2, [0.6, 0.7]]]) {
@@ -202,6 +206,7 @@ export class Extras {
     await this.cam.init();
     this.shed = new Shed(G);
     await this.shed.init();
+    await hangGuitars(G);
     this.buildUI();
   }
 
@@ -357,7 +362,8 @@ export class Extras {
     // its sound is only heard inside the TV room
     const inTV = inTVRoom(cp);
     const inChair = cp.x > 51 && cp.x < 56 && cp.z > 0 && cp.z < 5 && Math.abs(cp.y - U - 1.4) < 1.6;
-    const wantTV = (inTV || inChair) && !!this.tvVideo.src && !this.tvError;
+    const inBalc = cp.x > 12 && cp.x < 26 && cp.z > -2.4 && cp.z < 0.2 && cp.y > AY - 0.4;
+    const wantTV = (inTV || inChair || inBalc) && !!this.tvVideo.src && !this.tvError;
     if (wantTV) {
       const v = this.tvVideo;
       if (v.paused) { v.play().catch(() => { v.muted = true; v.play().catch(() => {}); }); }
@@ -366,7 +372,7 @@ export class Extras {
         const want = ((G.net.serverNow() - (G.startAt || 0)) / 1000) % v.duration;
         if (Math.abs(v.currentTime - want) > 0.6) { try { v.currentTime = want; } catch { /* not seekable yet */ } }
       }
-      v.volume = inTV ? Math.min(1, settings.master * settings.sfx) : 0;
+      v.volume = inTV || inBalc ? Math.min(1, settings.master * settings.sfx) : 0;
       if (this.tvScreens[0].material !== this.tvScreenMat) this.tvScreens.forEach(s => { s.material = this.tvScreenMat; });
       this.tvLight.intensity = inTV ? 2.5 + Math.random() * 1.2 : 0;
     } else if (!this.tvVideo.paused) {

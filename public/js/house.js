@@ -9,7 +9,7 @@ import { shuffle } from './util.js';
 import {
   LEVELS, ROOMS, DOORS, OPENINGS, ELEV_DOORS, WALLS, RAMPS, DOOR_H, FLOORBOARDS, ELEVATOR,
   roomAt, rampHeight, levelIndex, SPAWN_POINTS, onDoorway, WINDOWS, WINDOW_CUTS } from './layout.js';
-import { buildWing, furnishWing } from './wing.js';
+import { buildWing, furnishWing, furnishSparse } from './wing.js';
 import { buildThirdFloor } from './thirdfloor.js';
 import { buildFurniture } from './furniture.js';
 import { buildDecor } from './decor.js';
@@ -270,6 +270,7 @@ export class House {
 
     buildFurniture(this);
     buildDecor(this);
+    furnishSparse(this);
     this.buildDoors();
     this.buildLights();
     this.buildWindows();

@@ -333,7 +333,7 @@ export const WALLS = [
   // rails round the stairwell opening, and the balcony rails
   ['z', 31.9, 1.0, 6.4, AY, AY + 1.05], ['z', 33.2, 1.0, 6.4, AY, AY + 1.05], ['x', 6.4, 31.9, 33.2, AY, AY + 1.05], ['x', 8, 0, 2, AY, 9.4],
   ['x', -2.2, 12, 26, AY, AY + 1.05], ['z', 12, -2.2, 0, AY, AY + 1.05], ['z', 26, -2.2, 0, AY, AY + 1.05],
-  ['x', 5, 40, 48, AY, AY + 1.05], ['z', 48, 0, 5, AY, AY + 1.05],
+  ['x', 5, 40, 48, AY, AY + 1.05], ['z', 48, 0, 5, AY, AY + 1.05], ['x', 0, 40, 48, AY, AY + 1.05],
 ];
 
 // Creaky floorboards (~1 x 1 m), 2-3 per dangerous level

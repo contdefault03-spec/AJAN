@@ -2,7 +2,7 @@
 // landings and ceilings of the back stairs, the roof, the spiral stair up to the
 // TV room (steps, centre post, rail) and the TV room's ceiling.
 import * as THREE from 'three';
-import { RAMPS, spiralHeight, LEVELS } from './layout.js';
+import { RAMPS, spiralHeight, LEVELS, ROOMS, DOORS, OPENINGS } from './layout.js';
 
 export function buildWing(h) {
   const G = h.geo;
@@ -121,4 +121,61 @@ export function furnishWing(h) {
   h.chair(50.8, 13.2, UY, 'fabricGreen'); h.chair(54.2, 13.0, UY, 'fabricGreen');
   G.box(50.2, UY + 0.002, 11.9, 55.0, UY + 0.008, 13.8, 'carpetB');
   h.hideSpot('h_tower', 55.35, 8.4, 0.8, 1.1, 2.1, '-x', 'woodDark', UY);
+}
+
+// Rooms that were nearly bare get furniture that fits them, set against the walls and
+// kept well clear of every doorway and of what's already there.
+const SPARSE = {
+  wardrobe: [[0.6, 1.9, 1.2, 'woodDark'], [0.6, 1.9, 1.0, 'woodDark'], [0.45, 0.5, 0.9, 'fabricRed']],
+  laundry: [[0.62, 0.88, 0.62, 'porcelain'], [0.62, 0.88, 0.62, 'porcelain'], [0.45, 1.8, 1.4, 'woodPale'], [0.5, 0.4, 0.6, 'fabricBed']],
+  playroom: [[0.5, 0.5, 0.8, 'fabricRed'], [0.5, 0.5, 0.8, 'fabricGreen'], [0.4, 1.2, 1.2, 'woodPale'], [0.35, 0.35, 0.35, 'fabricBed']],
+  mudroom: [[0.45, 0.45, 1.6, 'woodDark'], [0.4, 1.9, 1.2, 'wood'], [0.35, 0.3, 0.9, 'woodDark'], [0.5, 0.7, 0.5, 'metal']],
+  linen: [[0.45, 2.0, 1.4, 'woodPale'], [0.45, 2.0, 1.2, 'woodPale'], [0.5, 0.45, 0.6, 'fabricBed']],
+  secoffice: [[0.7, 0.76, 1.4, 'woodDark'], [0.45, 1.3, 0.9, 'metal'], [0.4, 1.9, 1.1, 'woodDark']],
+  oldbath: [[0.75, 0.6, 1.6, 'porcelain'], [0.45, 0.85, 0.55, 'porcelain'], [0.3, 1.6, 0.6, 'woodPale']],
+  observ: [[0.4, 2.0, 1.4, 'woodDark'], [0.6, 0.45, 0.6, 'fabricGreen']],
+  operating: [[0.5, 0.9, 0.8, 'metal'], [0.45, 1.8, 1.0, 'porcelain'], [0.4, 0.9, 0.4, 'metal']],
+  chairroom: [[0.5, 1.6, 0.9, 'metal'], [0.35, 0.4, 0.35, 'metal'], [0.6, 0.8, 0.6, 'wood']],
+  nurse: [[0.45, 1.8, 0.9, 'porcelain'], [0.6, 0.75, 0.9, 'woodPale']],
+};
+
+export function furnishSparse(h) {
+  let seed = 7;
+  const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+  const ways = [...DOORS, ...OPENINGS];
+  for (const [id, items] of Object.entries(SPARSE)) {
+    const r = ROOMS.find(q => q.id === id);
+    if (!r) continue;
+    const y = LEVELS[r.L].y;
+    const clearOf = (x0, z0, x1, z1) => {
+      if (x0 < r.x0 + 0.06 || x1 > r.x1 - 0.06 || z0 < r.z0 + 0.06 || z1 > r.z1 - 0.06) return false;
+      for (const d of ways) {
+        const dy = d.y ?? d.y0 ?? 0;
+        if (Math.abs(dy - y) > 1) continue;
+        const cx = d.line === 'x' ? d.a0 + d.w / 2 : d.c, cz = d.line === 'x' ? d.c : d.a0 + d.w / 2;
+        const dx = Math.max(x0 - cx, 0, cx - x1), dz = Math.max(z0 - cz, 0, cz - z1);
+        if (Math.hypot(dx, dz) < 1.25 + d.w / 2) return false;
+      }
+      return !h.colliders.some(c => { const p = c.furniture ? 0.35 : 0.02; return c.minY < y + 1.8 && c.maxY > y + 0.05 && c.maxX > x0 - p && c.minX < x1 + p && c.maxZ > z0 - p && c.minZ < z1 + p && !c.door; });
+    };
+    for (const [d, ht, w, mat] of items) {
+      for (let tries = 0; tries < 40; tries++) {
+        const side = Math.floor(rnd() * 4), t = rnd();
+        let x0, z0, x1, z1;
+        if (side < 2) { // against a z wall (runs along x)
+          const x = r.x0 + 0.17 + w / 2 + t * (r.x1 - r.x0 - w - 0.34);
+          x0 = x - w / 2; x1 = x + w / 2;
+          if (side === 0) { z0 = r.z0 + 0.17; z1 = z0 + d; } else { z1 = r.z1 - 0.17; z0 = z1 - d; }
+        } else {
+          const z = r.z0 + 0.17 + w / 2 + t * (r.z1 - r.z0 - w - 0.34);
+          z0 = z - w / 2; z1 = z + w / 2;
+          if (side === 2) { x0 = r.x0 + 0.17; x1 = x0 + d; } else { x1 = r.x1 - 0.17; x0 = x1 - d; }
+        }
+        if (!clearOf(x0, z0, x1, z1)) continue;
+        h.furnitureBox(x0, y, z0, x1, y + ht, z1, mat);
+        h.sparsePlaced = (h.sparsePlaced || 0) + 1;
+        break;
+      }
+    }
+  }
 }

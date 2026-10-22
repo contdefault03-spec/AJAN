@@ -310,3 +310,9 @@ select:focus, #nameInput:focus, #mpCode:focus { outline: 1px solid var(--red2); 
 .boxUI .bxBar .y2 { left: 55%; width: 15%; background: #e8c818; }
 .boxUI .bxBar .g { left: 45%; width: 10%; background: #28c838; z-index: 1; }
 .boxUI .bxBar b { position: absolute; top: -6px; bottom: -6px; width: 4px; margin-left: -2px; background: #fff; box-shadow: 0 0 6px #fff; z-index: 2; }
+.doorWarn { position: absolute; left: 50%; top: 30%; transform: translate(-50%, -50%); display: none; flex-direction: column; align-items: center; color: #ff3020; font-size: 40px; letter-spacing: 0.12em; text-shadow: 0 0 12px #000, 0 0 3px #000; pointer-events: none; }
+.doorWarn.show { display: flex; }
+.doorWarn b { font-size: 96px; line-height: 1; }
+.doorWarn span { font-size: 18px; color: #e8e0d0; letter-spacing: 0.05em; }
+.rainbowFX { position: absolute; inset: -20%; pointer-events: none; opacity: 0.32; mix-blend-mode: screen; background: conic-gradient(from 0deg, #ff0040, #ff9a00, #fff200, #28e040, #00c8ff, #6a40ff, #ff40c8, #ff0040); animation: rainbowSpin 6s linear infinite; filter: blur(30px); }
+@keyframes rainbowSpin { to { transform: rotate(360deg) scale(1.15); } }

@@ -24,6 +24,9 @@ export const ASSETS = {
   slotModel: { names: ['slot.glb'] },
   dollmaModel: { names: ['dollma.glb'] },
   cameraModel: { names: ['camera.glb'] },
+  guitar1: { names: ['guitar1.glb'] },
+  guitar2: { names: ['guitar2.glb'] },
+  guitar3: { names: ['guitar3.glb'] },
   menuVideo: { names: ['mainnew.mp4', 'menu.mp4'], webm: 'mainnew.webm' },
   escapeCarVideo: { names: ['escapecar.mp4'], webm: 'escapecar.webm' },
   tvVideo: { names: ['tv.mp4'], webm: 'tv.webm' },
@@ -98,6 +101,7 @@ export const itemSlots = type => (type === 'stair_lower' || type === 'stair_uppe
 
 export const ITEM_INFO = {
   office_key: { name: 'Office Key' },
+  master_key: { name: 'Master Key' },
   basement_key: { name: 'Basement Key' },
   storage_key: { name: 'Storage Room Key' },
   fuse: { name: 'Fuse' },
@@ -134,9 +138,10 @@ export const ITEM_INFO = {
 // How well the monsters hear (every noise radius is multiplied by `hear`), how fast
 // they move (`speed`) and how many times a player comes back after being caught.
 export const DIFFICULTY = {
-  easy: { label: 'EASY', hear: 0.6, speed: 0.92, respawns: 3 },
-  medium: { label: 'MEDIUM', hear: 1.0, speed: 1.1, respawns: 2 },
-  hard: { label: 'HARD', hear: 1.45, speed: 1.25, respawns: 1 },
+  // locks: extra room doors locked with the master key · bullets: loose rounds per floor · ammo: in the revolver
+  easy: { label: 'EASY', hear: 0.6, speed: 0.92, respawns: 3, locks: 0, bullets: 4, ammo: 2 },
+  medium: { label: 'MEDIUM', hear: 1.0, speed: 1.1, respawns: 2, locks: 3, bullets: 3, ammo: 1 },
+  hard: { label: 'HARD', hear: 1.45, speed: 1.25, respawns: 1, locks: 6, bullets: 2, ammo: 0 },
 };
 export const difficultyOf = d => (DIFFICULTY[d] ? d : 'medium');
 

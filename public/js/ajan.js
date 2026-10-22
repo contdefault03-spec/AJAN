@@ -23,6 +23,7 @@ export const FRIDGE = { stand: new THREE.Vector3(18.6, 0, 11.6), ry: -Math.PI / 
 export const SNACK_CHAIR = { front: new THREE.Vector3(25.3, 0, 15.8), seat: new THREE.Vector3(24.45, 0, 15.8), ry: -Math.PI / 2 };
 export const MUSIC_SPOT = new THREE.Vector3(27, 3.4, 16);
 
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
 export class AjanBrain {
   constructor(game, rnd, def = MONSTERS.ajan) {
     this.game = game;
@@ -452,36 +453,55 @@ export class AjanBrain {
     }
   }
 
-  /** Someone has been watching him through a peephole: he comes right up to it and grins in. */
-  startPeepScare(hole, pid) {
+  /** Someone is watching through a peephole. kind 'walkby': he strolls past the lens and on
+   *  down the hall. kind 'scare': he walks up, grins into it (jumpscare), and half the time
+   *  waits at the door for 5 s ("he knows you're in there") and then opens it. */
+  startPeepScare(hole, pid, kind = 'scare') {
     this.standUp();
-    this.peepScare = { hole, pid, t: 0, at: false };
     this.target = null;
+    // come from a little way down the hall, out of sight, so it happens now and not in a minute
+    const nodes = this.house.nav.nodes.filter(n => Math.abs(n.y - hole.y) < 0.5);
+    const dist = n => Math.hypot(n.x - hole.hall.x, n.z - hole.hall.z);
+    const from = nodes.filter(n => dist(n) > 5 && dist(n) < 11 && Math.abs(n.z - hole.hall.z) < 2.5).sort((p, q) => Math.abs(dist(p) - 7) - Math.abs(dist(q) - 7))[0];
+    if (from && this.pos.distanceTo(hole.hall) > 9) { this.pos.set(from.x, from.y, from.z); this.lastPos.copy(this.pos); }
+    // where a walk-by ends up: the other way down the hall
+    const away = nodes.filter(n => dist(n) > 5 && dist(n) < 14 && Math.sign(n.x - hole.hall.x) !== Math.sign(this.pos.x - hole.hall.x)).sort((p, q) => dist(p) - dist(q))[0];
+    this.peepScare = { hole, pid, kind, t: 0, at: false, away };
     this.setState('peepscare');
     if (!this.moveTo(hole.hall)) this.path = null;
+    return true;
   }
 
   updatePeepScare(dt) {
-    const s = this.peepScare;
+    const s = this.peepScare, G = this.game;
     s.t += dt;
+    const done = () => { this.peepScare = null; this.anim = 'move'; this.setState('patrol'); this.pickPatrol(); };
     if (!s.at) {
       this.anim = 'move';
-      const arrived = !this.path || this.step(dt, this.v.chase * 1.1) || this.pos.distanceTo(s.hole.hall) < 0.6;
-      if (arrived || s.t > 10) {
+      const arrived = !this.path || this.step(dt, s.kind === 'walkby' ? this.v.patrol : this.v.chase * 0.8) || this.pos.distanceTo(s.hole.hall) < 0.6;
+      if (arrived || s.t > 25) {
+        if (s.kind === 'walkby') {
+          // past the lens and on down the hall
+          if (s.away && this.moveTo(V3(s.away.x, s.away.y, s.away.z))) { this.peepScare = null; this.setState('patrol'); } else done();
+          return;
+        }
         s.at = true; s.t = 0; this.animT = 0;
-        this.game.broadcast({ k: 'peepscare', pid: s.pid, m: this.id });
+        s.open = this.rnd() < 0.5;
+        G.broadcast({ k: 'peepscare', pid: s.pid, m: this.id });
       }
       return;
     }
     this.speed = 0;
-    this.anim = 'inspect';
+    this.anim = s.t > 2.6 && s.open ? 'search' : 'inspect';
     this.faceTo(s.hole.side > 0 ? Math.PI : 0, dt, 12);
-    if (s.t > 2.6) {
-      this.game.ajanSound(this, 'laugh'); // the same sound he makes after failing to find someone
+    if (s.t > 2.6 && !s.open) { G.ajanSound(this, 'laugh'); done(); return; }
+    if (s.open && !s.warned && s.t > 2.6) { s.warned = true; G.broadcast({ k: 'doorwarn', pid: s.pid, sec: 5 }); G.ajanSound(this, 'laugh'); }
+    if (s.open && s.t > 7.6) {
+      // the door swings open: he's coming in for whoever is behind it
+      G.hostSetDoor(s.hole.door, true, 'ajan');
+      const p = G.players.get(s.pid);
       this.peepScare = null;
-      this.anim = 'move';
-      this.setState('patrol');
-      this.pickPatrol();
+      if (p && p.alive && !p.dying && !p.hidden && !isSafeZone(p.pos)) { this.target = p.id; this.lastSeen = p.pos.clone(); this.lastSeenT = 0; this.spotLeft = 0.8; this.setState('spot'); G.ajanSound(this, 'see'); } else done();
     }
   }
 
