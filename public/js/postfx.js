@@ -79,5 +79,5 @@ export class PostFX {
     u.tracking.value += (target * u.amount.value - u.tracking.value) * Math.min(1, dt * 5);
   }
   glitch(sec = 0.8) { this.trackingT = Math.max(this.trackingT, sec); }
-  render() { this.composer.render(); }
+  render() { if (this.renderer.shadowMap.enabled === false && this.vhs.enabled === false) this.renderer.render(this.renderPass.scene, this.renderPass.camera); else this.composer.render(); }
 }
