@@ -92,8 +92,8 @@ export const MONSTERS = {
   ajanita: { id: 'ajanita', name: 'Ajanita', model: 'ajanitaModel', spec: 'ajanita', height: 2.1, speed: 0.97, kill: 'eat', bed: 'ajanitaBed', from: 'hard',
     sounds: { see: 'ajanitasee', catch: 'ajanita', leave: 'ajanitaleave', sleep: 'ajanitasleep' } },
 };
-const DIFF_ORDER = ['easy', 'medium', 'hard'];
-export const monstersFor = d => Object.values(MONSTERS).filter(m => DIFF_ORDER.indexOf(m.from) <= DIFF_ORDER.indexOf(d));
+const DIFF_ORDER = ['trip', 'easy', 'medium', 'hard'];
+export const monstersFor = d => d === 'trip' ? [MONSTERS.ajan] : Object.values(MONSTERS).filter(m => DIFF_ORDER.indexOf(m.from) <= DIFF_ORDER.indexOf(d));
 
 // Inventory: everyone carries at most INV_SLOTS slots; bulky things take more than one.
 export const INV_SLOTS = 3;
@@ -137,6 +137,8 @@ export const ITEM_INFO = {
 // How well the monsters hear (every noise radius is multiplied by `hear`), how fast
 // they move (`speed`) and how many times a player comes back after being caught.
 export const DIFFICULTY = {
+  // Trip mode: permanent mushroom-high visuals and a deliberately slow Ajan.
+  trip: { label: 'TRIP MODE', hear: 0.45, speed: 0.48, respawns: 3, bullets: 4, ammo: 2 },
   // bullets: loose rounds per floor · ammo: in the revolver
   easy: { label: 'EASY', hear: 0.6, speed: 0.92, respawns: 3, bullets: 4, ammo: 2 },
   medium: { label: 'MEDIUM', hear: 1.0, speed: 1.1, respawns: 2, bullets: 3, ammo: 1 },
