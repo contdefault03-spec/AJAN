@@ -71,6 +71,8 @@ export class AjanBrain {
     this.danceTimer = 160 + rnd() * 120;
     this.sitTimer = 100 + rnd() * 80;
     this.whisperT = 25 + rnd() * 35;
+    this.fartNext = 45 + rnd() * 70;
+    this.fartPauseLeft = 0;
     this.restLeft = 0;
     this.butcherNext = BUTCHER.interval;
     this.butcherRetryAt = 0;
@@ -226,6 +228,19 @@ export class AjanBrain {
   update(dt) {
     this.stateClock = (this.stateClock || 0) + dt;
     this.stateT += dt;
+    if (this.id === 'ajan' && !this.game.freePlay && !['dormant','kill','drag','stun','carry'].includes(this.state)) {
+      if (this.fartPauseLeft > 0) {
+        this.fartPauseLeft -= dt; this.speed = 0; this.anim = 'move';
+        if (this.fartPauseLeft <= 0) this.fartNext = 55 + this.rnd() * 85;
+        return;
+      }
+      this.fartNext -= dt;
+      if (this.fartNext <= 0) {
+        this.fartPauseLeft = 5; this.speed = 0; this.anim = 'move';
+        this.game.broadcast({ k: 'ajanFart', x: this.pos.x, y: this.pos.y, z: this.pos.z, ry: this.ry });
+        return;
+      }
+    }
     this.animT += dt;
     if (this.cooldown > 0) this.cooldown -= dt;
     this.speed = 0;
