@@ -1718,8 +1718,7 @@ export class Game {
     setTimeout(() => {
       if (this.disposed) return;
       $('deathOverlay').classList.remove('show');
-      const others = [...this.players.values()].some(p => !p.isLocal && p.alive && !p.escaped);
-      if (this.ended || this.single || !others) {
+      if (this.ended || this.single || !this.spectateCandidates().length) {
         this.ended = true;
         if (!this.results) this.results = this.resultList();
         this.showEndScreen();
@@ -1750,7 +1749,7 @@ export class Game {
   }
 
   spectateCandidates() {
-    return [...this.players.values()].filter(p => p.alive && !p.escaped && !p.isLocal);
+    return [...this.players.values()].filter(p => p.alive && !p.escaped && !p.isLocal && !p.dying && !this.kills.has(p.id));
   }
 
   cycleSpectate(dir) {
@@ -1766,7 +1765,7 @@ export class Game {
 
   updateSpectateCam(dt) {
     let p = this.players.get(this.spectate.target);
-    if (!p || !p.alive || p.escaped) { this.cycleSpectate(1); p = this.players.get(this.spectate.target); }
+    if (!p || !p.alive || p.escaped || p.dying || this.kills.has(p.id)) { this.cycleSpectate(1); p = this.players.get(this.spectate.target); }
     if (!p) {
       const local = this.players.get(this.localId);
       if (local?.knocked) { this.camera.position.copy(local.avatar.group.position).add(V(0, 1.8, 2.5)); this.camera.lookAt(local.avatar.group.position); }
