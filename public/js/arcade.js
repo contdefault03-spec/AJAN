@@ -61,6 +61,13 @@ export class Arcade {
   }
   clearInput(){const L=this.game.local;L.keys.clear();L.vel.set(0,0,0);L.lookDX=L.lookDY=0;L.speed=0;}
   request(pid,r,p){
+    if (r.k === 'arcadeFrame') {
+      const lease = this.leases.get(r.id);
+      if (!lease || lease.pid !== pid || lease.token !== r.token ||
+          typeof r.frame !== 'string' || !r.frame.startsWith('data:image/jpeg;base64,') || r.frame.length > 30000) return true;
+      this.game.broadcast({ k: 'arcadeFrame', id: r.id, pid, token: r.token, frame: r.frame });
+      return true;
+    }
     if(r.k!=='arcade')return false;
     const result=cabinetDecision(this.leases,pid,r,p);
     if(result)this.game.broadcast({k:'arcadeLease',...result});
@@ -68,6 +75,25 @@ export class Arcade {
     return true;
   }
   event(e){
+    if (e.k === 'arcadeFrame') {
+      const lease = this.leases.get(e.id);
+      if (!lease || lease.pid !== e.pid || lease.token !== e.token || typeof e.frame !== 'string') return true;
+      if (this.session?.id !== e.id || this.session?.token !== e.token) {
+        const m = this.machines.get(e.id);
+        if (m && (!m.frameSeq || e.seq > m.frameSeq)) {
+          m.frameSeq = e.seq;
+          const img = new Image();
+          img.onload = () => {
+            if (this.machines.get(e.id) === m && m.frameSeq === e.seq) {
+              m.cv.getContext('2d').drawImage(img, 0, 0, 320, 200);
+              m.tex.needsUpdate = true;
+            }
+          };
+          img.src = e.frame;
+        }
+      }
+      return true;
+    }
     if(e.k==='arcadeDenied'){if(this.session?.token===e.token){this.game.toast('Cabinet unavailable.');this.leave(false);}return true;}
     if(e.k!=='arcadeLease')return false;
     if(!this.machines.has(e.id))return true;
@@ -82,7 +108,7 @@ export class Arcade {
   open(){
     if(this.frame||!this.session)return;
     const overlay=this.overlay=document.createElement('div');
-    Object.assign(overlay.style,{position:'fixed',inset:'3vh 5vw',zIndex:'1000',background:'#050505',border:'2px solid #744',boxShadow:'0 0 0 100vmax #0009'});
+    Object.assign(overlay.style,{position:'fixed',inset:'0',zIndex:'1000',background:'#000',border:'0',boxShadow:'none'});
     const frame=this.frame=document.createElement('iframe');frame.title='Playable Freedoom arcade';frame.src='/arcade/';frame.allow='autoplay';
     Object.assign(frame.style,{width:'100%',height:'100%',border:'0'});overlay.append(frame);document.body.append(overlay);
   }
@@ -111,8 +137,15 @@ export class Arcade {
     if(!this.session.ready&&performance.now()-this.session.started>60000){G.toast('Arcade loading timed out. Try again.');this.leave(false);return;}
     this.copyT=(this.copyT||0)-dt;
     if(this.session.ready&&this.copyT<=0){
-      this.copyT=1/15;const source=this.frame?.contentDocument?.querySelector('canvas'),m=this.machines.get(this.session.id);
-      if(source){m.cv.getContext('2d').drawImage(source,0,0,320,200);m.tex.needsUpdate=true;}
+      this.copyT=0.3;
+      const source=this.frame?.contentDocument?.querySelector('canvas'),m=this.machines.get(this.session.id);
+      if(source){
+        m.cv.getContext('2d').drawImage(source,0,0,320,200);m.tex.needsUpdate=true;
+        const mirror=document.createElement('canvas');mirror.width=160;mirror.height=100;
+        mirror.getContext('2d').drawImage(source,0,0,160,100);
+        const frame=mirror.toDataURL('image/jpeg',0.38);
+        G.request({k:'arcadeFrame',id:this.session.id,token:this.session.token,frame});
+      }
     }
   }
   dispose(){
