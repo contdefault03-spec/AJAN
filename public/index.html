@@ -111,7 +111,7 @@
     <div id="mpLobby" class="hidden">
       <p class="hint">Room code: <b id="mpRoomCode" class="code"></b> <button id="mpCopy" class="btn tiny ghost">COPY</button></p>
       <ul id="mpPlayers" class="playerList"></ul>
-      <p class="hint">Difficulty: <select id="mpDiff"><option value="easy">Easy — he hears less</option><option value="medium">Medium</option><option value="hard">Hard — he hears much better</option></select><b id="mpDiffText"></b></p>
+      <p class="hint">Difficulty: <select id="mpDiff"><option value="trip">TRIP MODE — slow Ajan, permanent mushroom high</option><option value="easy">Easy — he hears less</option><option value="medium">Medium</option><option value="hard">Hard — he hears much better</option></select><b id="mpDiffText"></b></p>
       <p id="mpWaiting" class="hint"></p>
       <div class="row">
         <button id="mpLeave" class="btn ghost">LEAVE</button>
@@ -148,7 +148,7 @@
       </div>
       <div class="col">
         <h3>GAMEPLAY</h3>
-        <label>Difficulty <span class="dim">(solo games, and rooms you host)</span><select data-set="difficulty"><option value="easy">Easy — he hears less</option><option value="medium">Medium</option><option value="hard">Hard — he hears much better</option></select></label>
+        <label>Difficulty <span class="dim">(solo games, and rooms you host)</span><select data-set="difficulty"><option value="trip">TRIP MODE — slow Ajan, permanent mushroom high</option><option value="easy">Easy — he hears less</option><option value="medium">Medium</option><option value="hard">Hard — he hears much better</option></select></label>
         <h3>CONTROLS</h3>
         <label>Mouse sensitivity <input type="range" data-set="mouse" min="0.2" max="3" step="0.05"></label>
         <label class="check"><input type="checkbox" data-set="invertY"> Invert mouse Y</label>
@@ -199,6 +199,8 @@
 <div id="hud">
   <div id="labels"></div>
   <div id="crosshair"></div>
+  <div id="tripOverlay" aria-hidden="true"><div class="tripVignette"></div><div class="tripFigure">◉</div><div class="tripFlashFigure">◢</div><div class="tripWords"></div></div>
+  <div id="tripJumpscare" aria-hidden="true"><div class="tripFace">◉‿◉</div></div>
   <div id="objective" class="vt"></div>
   <div class="osd vt game">PLAY ▶ <span id="osdTime"></span><br><span id="osdRoom"></span></div>
   <div id="inventory"></div>
