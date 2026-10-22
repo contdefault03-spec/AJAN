@@ -17,7 +17,13 @@ import { angleDiff, clamp } from './util.js';
 const tmp = new THREE.Vector3();
 
 // Where each monster first appears when its dormant timer runs out.
-const WAKE_AT = { guy: [8, -3.2, 22, 0], ajanita: [1.75, 3.4, 3.6, Math.PI] };
+// Fixed first appearances: Ajan in his own bedroom, Ajanita in the third-floor
+// butcher room, and Guy in the 15-TV tower room. Once awake, all use normal AI patrols.
+const WAKE_AT = {
+  ajan: [35.0, 3.4, 6.4, Math.PI],
+  ajanita: [28.0, 6.8, 4.4, Math.PI],
+  guy: [52.6, 6.8, 12.0, Math.PI],
+};
 const DORMANT = { ajan: AJAN.dormant, guy: 50, ajanita: 70 };
 // Ajan's snack: the fridge, then a kitchen chair facing the table.
 export const FRIDGE = { stand: new THREE.Vector3(18.6, 0, 11.6), ry: -Math.PI / 2 };
@@ -221,7 +227,8 @@ export class AjanBrain {
       if (this.dormantLeft <= 0) {
         // Ajan wakes up in his own room upstairs; the others in their own corners.
         const w = WAKE_AT[this.id];
-        if (w) { this.pos.set(w[0], w[1], w[2]); this.ry = w[3]; } else { this.pos.copy(this.house.ajanBed.stand); this.ry = Math.PI; }
+        if (w) { this.pos.set(w[0], w[1], w[2]); this.ry = w[3]; }
+        else { this.pos.copy(this.house.ajanBed.stand); this.ry = Math.PI; }
         this.setState('patrol');
         this.game.ajanSound(this, 'roar');
         this.pickPatrol();
