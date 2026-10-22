@@ -397,6 +397,18 @@ class AudioEngine {
       const s1 = Math.floor(0.45 * sr);
       for (let j = 0; s1 + j < d.length; j++) { const t = j / sr; d[s1 + j] += (Math.sin(t * 2 * Math.PI * 320) + Math.sin(t * 2 * Math.PI * 517) * 0.6) * Math.exp(-t * 9) * 0.5 + rnd() * Math.exp(-t * 40) * 0.6; }
     });
+    // Short comic raspberry fart: low wobble with a noisy tail.
+    this.buffers.fart = mk(1.45, (d, sr) => {
+      let lp = 0, ph = 0;
+      for (let i = 0; i < d.length; i++) {
+        const t = i / sr;
+        lp += (rnd() - lp) * 0.12;
+        const f = 72 + 18 * Math.sin(t * 19) + 9 * Math.sin(t * 47);
+        ph += 2 * Math.PI * f / sr;
+        const env = Math.min(1, t * 25) * Math.exp(-t * 2.3);
+        d[i] = (Math.sin(ph) * 0.45 + lp * 0.7 + Math.sin(ph * 0.5) * 0.3) * env * 0.75;
+      }
+    });
     // Old clock tick-tock (2 s loop)
     this.buffers.tick = mk(2, (d, sr) => {
       for (const [at, f] of [[0.0, 2100], [1.0, 1500]]) {
