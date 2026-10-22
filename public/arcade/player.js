@@ -2,7 +2,7 @@
 import createDoom from './doom.js';
 const canvas = document.querySelector('canvas'), ctx = canvas.getContext('2d', { alpha: false });
 const status = document.querySelector('#status'), image = ctx.createImageData(320, 200);
-const keys = new Map([['ArrowUp',173],['ArrowDown',175],['ArrowLeft',172],['ArrowRight',174],['ControlLeft',163],['ControlRight',163],['ShiftLeft',182],['ShiftRight',182],['AltLeft',184],['AltRight',184],['Space',162],['Enter',13],['Escape',27],['Backspace',127],['Tab',9]]);
+const keys = new Map([['ArrowUp',173],['ArrowDown',175],['ArrowLeft',172],['ArrowRight',174],['KeyW',173],['KeyS',175],['KeyA',172],['KeyD',174],['ControlLeft',163],['ControlRight',163],['ShiftLeft',182],['ShiftRight',182],['AltLeft',184],['AltRight',184],['Space',162],['Enter',13],['Escape',27],['Backspace',127],['Tab',9]]);
 const held = new Set();
 // A click/key also resumes audio on browsers requiring a fresh gesture in the iframe.
 const resumeAudio=()=>engine?.audioContext?.resume().catch(()=>{});
@@ -27,8 +27,16 @@ addEventListener('keyup',e=>{ const k=keys.get(e.code) ?? (/^Digit[1-7]$/.test(e
 addEventListener('blur',release);
 document.addEventListener('visibilitychange',()=>{if(document.hidden)stop();});
 addEventListener('pagehide',shutdown);
-canvas.addEventListener('mousedown',e=>{if(e.button===0){e.preventDefault();engine?._arcade_key(163,1);held.add(163);}});
-addEventListener('mouseup',()=>{engine?._arcade_key(163,0);held.delete(163);});
+canvas.addEventListener('contextmenu',e=>e.preventDefault());
+canvas.addEventListener('mousedown',e=>{
+  e.preventDefault();
+  const k=e.button===0?163:e.button===2?162:null; // left click fires, right click uses doors
+  if(k!==null){engine?._arcade_key(k,1);held.add(k);}
+});
+addEventListener('mouseup',e=>{
+  const k=e.button===0?163:e.button===2?162:null;
+  if(k!==null){engine?._arcade_key(k,0);held.delete(k);}
+});
 async function start() {
   const response=await fetch('./freedoom1.wad'); if(!response.ok)throw Error('Freedoom data failed to load');
   const wad=new Uint8Array(await response.arrayBuffer());
