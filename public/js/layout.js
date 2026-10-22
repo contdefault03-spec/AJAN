@@ -133,7 +133,7 @@ export const ROOMS = [
   { id: 'nurse', name: "NURSE'S ROOM", L: 2, x0: 40, x1: 46, z0: 7, z1: 14, floor: 'floorBath', wall: 'wallLime', trim: 'base' },
   { id: 'spiralroom', name: 'TOWER ROOM', L: 2, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorWoodDark', wall: 'wallPanel', trim: 'rail',
     ceilings: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [53.5, 56, 8.5, 10], [55, 56, 10, 11.5], [49, 56, 11.5, 14]] },
-  { id: 'tvroom', name: 'THE TV ROOM', L: 3, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none', safe: true,
+  { id: 'tvroom', name: 'THE TV ROOM', L: 3, x0: 49, x1: 56, z0: 7, z1: 14, floor: 'floorConcrete', wall: 'wallFilth', trim: 'none',
     floors: [[49, 56, 7, 8.5], [49, 52, 8.5, 11.5], [53.5, 56, 8.5, 10], [55, 56, 10, 11.5], [49, 56, 11.5, 14]] }, // the top step lands on the 53.5–55 / 8.5–10 corner
   { id: 'club', name: 'THE CLUB', L: 3, x0: 2, x1: 18, z0: 8, z1: 21, floor: 'floorClub', wall: 'wallClub', trim: 'none', safe: true },
   { id: 'attic', name: 'ATTIC', L: 3, x0: 18, x1: 40, z0: 8, z1: 21, floor: 'floorWood', wall: 'wallBase', safe: true,
