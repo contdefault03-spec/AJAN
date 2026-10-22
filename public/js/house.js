@@ -1034,6 +1034,13 @@ export class House {
       if (!blocked) link(a, b);
     }
     for (const [a, b, d] of portals) link(a, b, d);
+    // Attach both ends of the spiral to their actual floor-room nav nodes.
+    const nearestRoomNode = (roomId, p) => (this.roomNodes[roomId] || []).reduce((best, n) =>
+      !best || Math.hypot(n.x - p.x, n.z - p.z) + Math.abs(n.y - p.y) < Math.hypot(best.x - p.x, best.z - p.z) + Math.abs(best.y - p.y) ? n : best, null);
+    const spiralBase = nearestRoomNode('spiralroom', s6[0]);
+    const tvBase = nearestRoomNode('tvroom', s6[s6.length - 1]);
+    if (spiralBase) link(s6[0], spiralBase);
+    if (tvBase) link(s6[s6.length - 1], tvBase);
     for (const chain of [s1, s2, s3, s5, s6]) for (let i = 0; i < chain.length - 1; i++) link(chain[i], chain[i + 1]);
     // Keep only the main connected graph (all links, locked doors included): a node
     // boxed in by furniture would otherwise be a patrol target he can never reach.
