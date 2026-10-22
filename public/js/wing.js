@@ -9,7 +9,7 @@ export function buildWing(h) {
   const GY = LEVELS[1].y, UY = LEVELS[2].y, AY = LEVELS[3].y;
   // back stairs: bottom and top landings, ceiling over the stairwell
   G.plane('floorWoodDark', 46, 7, 49, 14, GY, true);
-  for (const [x0, x1, z0, z1] of [[47.65, 49, 7, 14], [46, 47.65, 13.2, 14]]) { G.plane('floorWood', x0, z0, x1, z1, UY, true); G.plane('ceiling', x0, z0, x1, z1, UY - 0.01, false); }
+  for (const [x0, x1, z0, z1] of [[47.65, 49, 7, 14], [46, 47.65, 13.2, 14], [46, 47.65, 7, 7.4]]) { G.plane('floorWood', x0, z0, x1, z1, UY, true); G.plane('ceiling', x0, z0, x1, z1, UY - 0.01, false); }
   G.plane('ceiling', 46, 7, 49, 14, 6.4, false);
   // flat roof over the wing (seen from the TV room windows) and the TV room's ceiling
   G.plane('floorConcrete', 40, 0, 56, 7, 6.42, true);
@@ -149,6 +149,11 @@ export function furnishSparse(h) {
     const y = LEVELS[r.L].y;
     const clearOf = (x0, z0, x1, z1) => {
       if (x0 < r.x0 + 0.06 || x1 > r.x1 - 0.06 || z0 < r.z0 + 0.06 || z1 > r.z1 - 0.06) return false;
+      // never on or next to a staircase (top or bottom)
+      for (const q of RAMPS) {
+        if (y < Math.min(q.ya, q.yb) - 0.5 || y > Math.max(q.ya, q.yb) + 0.5) continue;
+        if (x1 > q.x0 - 1.1 && x0 < q.x1 + 1.1 && z1 > q.z0 - 1.1 && z0 < q.z1 + 1.1) return false;
+      }
       for (const d of ways) {
         const dy = d.y ?? d.y0 ?? 0;
         if (Math.abs(dy - y) > 1) continue;
