@@ -1,10 +1,10 @@
 // The alley and the shed.
 //  Alley: down the west side of the house behind a fence (in from the garden). Junk, a
-//  hose, bins, and the DEALER leaning on the wall smoking. E: buy 4 mushrooms ($20),
-//  4 bags of flour ($30) or 4 joints ($25).
+//  hose, bins, and the DEALER leaning on the wall smoking. E: buy 4 mushrooms (€20),
+//  4 bags of flour (€30) or 4 joints (€25).
 //  Shed: locked (the SHED KEY is somewhere in the house). Hotboxed, couches, posters,
 //  music5.mp3 on a low loop (only inside), two NPCs at their own table, a second slot
-//  machine and a boxing machine ($1 a punch, score up to 1000).
+//  machine and a boxing machine (€1 a punch, score up to 1000).
 //  The free table: put what you bought on it and everyone can take one at a time.
 //  Joints and mushrooms: pick up, then left click. Flour: E on a line on the table.
 //  A high lasts 2 minutes (or until the next one). Nobody can kill you while you're high.
@@ -189,7 +189,7 @@ export class Shed {
       m.className = 'dealerMenu vt';
       document.body.appendChild(m);
     }
-    m.innerHTML = `<div class="dmTitle">"What do you want?"</div>${Object.entries(MENU).map(([k, v]) => `<button data-buy="${k}">[${Object.keys(MENU).indexOf(k) + 1}] ${v.label} — $${v.price}</button>`).join('')}<button data-buy="">NOTHING [ESC]</button><div class="dmBal"></div>`;
+    m.innerHTML = `<div class="dmTitle">"What do you want?"</div>${Object.entries(MENU).map(([k, v]) => `<button data-buy="${k}">[${Object.keys(MENU).indexOf(k) + 1}] ${v.label} — €${v.price}</button>`).join('')}<button data-buy="">NOTHING [ESC]</button><div class="dmBal"></div>`;
     m.querySelectorAll('[data-buy]').forEach(b => { b.onclick = () => { const k = b.dataset.buy; this.closeMenu(); if (k) this.game.request({ k: 'buy', what: k }); }; });
     this.onMenuKey = e => {
       if (!this.menuOpen) return;
@@ -204,7 +204,7 @@ export class Shed {
     this.menuOpen = true;
     G.drinkMenuOpen = true; // the game treats it like the bar menu (no pause when the mouse is freed)
     const m = document.getElementById('dealerMenu');
-    m.querySelector('.dmBal').textContent = `You have $${G.club.balance(G.localId)}`;
+    m.querySelector('.dmBal').textContent = `You have €${G.club.balance(G.localId)}`;
     m.classList.add('show');
     try { document.exitPointerLock?.(); } catch { /* fine */ }
     audio.play('click', { vol: 0.3, rate: 0.7 });
@@ -246,7 +246,7 @@ export class Shed {
     const c = this.boxCanvas.getContext('2d');
     c.fillStyle = '#100'; c.fillRect(0, 0, 256, 96);
     c.font = 'bold 22px "VT323", monospace'; c.fillStyle = '#ff4040'; c.textAlign = 'center';
-    c.fillText('PUNCH METER  $1', 128, 22);
+    c.fillText('PUNCH METER  €1', 128, 22);
     c.font = 'bold 52px "VT323", monospace'; c.fillStyle = '#ffd040';
     c.fillText(String(Math.round(this.box.score)).padStart(4, '0'), 128, 72);
     c.font = '16px "VT323", monospace'; c.fillStyle = '#9f9'; c.fillText(`BEST ${this.box.best}`, 128, 92);
@@ -279,7 +279,7 @@ export class Shed {
   prompt(it) {
     const G = this.game;
     if (it.kind === 'dealer') return 'E — TALK TO THE DEALER';
-    if (it.kind === 'boxing') return this.box.by && this.box.by !== G.localId && G.time - (this.box.at || 0) < 4 ? '<span class="dim">SOMEONE\'S PUNCHING</span>' : `E — PUNCH ($1)  <span class="dim">$${G.club.balance(G.localId)}</span>`;
+    if (it.kind === 'boxing') return this.box.by && this.box.by !== G.localId && G.time - (this.box.at || 0) < 4 ? '<span class="dim">SOMEONE\'S PUNCHING</span>' : `E — PUNCH (€1)  <span class="dim">€${G.club.balance(G.localId)}</span>`;
     if (it.kind === 'shedtable') {
       const bag = this.heldBag();
       if (bag) return `E — PUT THE ${(ITEM_INFO[bag.type]?.name || bag.type).toUpperCase()} ON THE TABLE`;
@@ -314,7 +314,7 @@ export class Shed {
         const m = MENU[r.what];
         if (!m || p.pos.distanceTo(DEALER) > 3.5) return true;
         const bal = G.club.balance(pid);
-        if (bal < m.price) { G.broadcast({ k: 'msg', text: `"${m.price} bucks. Come back when you have it." ($${bal})` }, pid); return true; }
+        if (bal < m.price) { G.broadcast({ k: 'msg', text: `"${m.price} euros. Come back when you have it." (€${bal})` }, pid); return true; }
         if (G.slotsUsed(pid) + 1 > INV_SLOTS) { G.broadcast({ k: 'msg', text: 'Your hands are full. Drop something first (G).' }, pid); return true; }
         G.broadcast({ k: 'shedbuy', pid, type: r.what, id: `${r.what}_${++this.seq}_${pid.slice(0, 4)}`, money: bal - m.price });
         return true;
@@ -346,7 +346,7 @@ export class Shed {
       case 'box': {
         if (this.box.by && this.box.by !== pid && G.time - (this.box.at || 0) < 4) return true;
         const bal = G.club.balance(pid);
-        if (bal < 1) { G.broadcast({ k: 'msg', text: 'You need $1.' }, pid); return true; }
+        if (bal < 1) { G.broadcast({ k: 'msg', text: 'You need €1.' }, pid); return true; }
         this.box.by = pid; this.box.at = G.time;
         G.broadcast({ k: 'boxstart', pid, money: bal - 1 });
         return true;

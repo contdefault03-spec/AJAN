@@ -103,8 +103,8 @@ export class SlotMachine {
   // ------------------------------------------------------------ local
   prompt(btn) {
     const G = this.game, bal = G.club.balance(G.localId);
-    if (btn === 'spin') return this.anim ? '<span class="dim">SPINNING…</span>' : bal < this.bet ? `<span class="dim">SPIN $${this.bet} — NOT ENOUGH MONEY ($${bal})</span>` : `E — SPIN ($${this.bet})`;
-    return `E — BET ${btn === 'up' ? 'UP' : 'DOWN'}  <span class="dim">(now $${this.bet})</span>`;
+    if (btn === 'spin') return this.anim ? '<span class="dim">SPINNING…</span>' : bal < this.bet ? `<span class="dim">SPIN €${this.bet} — NOT ENOUGH MONEY (€${bal})</span>` : `E — SPIN (€${this.bet})`;
+    return `E — BET ${btn === 'up' ? 'UP' : 'DOWN'}  <span class="dim">(now €${this.bet})</span>`;
   }
 
   pressButton(btn) {
@@ -120,7 +120,7 @@ export class SlotMachine {
     }
     if (this.anim) return;
     const bal = G.club.balance(G.localId);
-    if (bal < this.bet) { G.message(`Not enough money for a $${this.bet} spin ($${bal}).`, 2.5); return; }
+    if (bal < this.bet) { G.message(`Not enough money for a €${this.bet} spin (€${bal}).`, 2.5); return; }
     G.request({ k: 'slot', m: this.id, bet: this.bet });
   }
 
@@ -132,7 +132,7 @@ export class SlotMachine {
     if (now < this.spinUntil) { G.broadcast({ k: 'msg', text: 'The machine is still spinning.' }, pid); return; }
     if (!BETS.includes(bet)) return;
     const bal = G.club.balance(pid);
-    if (bal < bet) { G.broadcast({ k: 'msg', text: `Not enough money for a $${bet} spin ($${bal}).` }, pid); return; }
+    if (bal < bet) { G.broadcast({ k: 'msg', text: `Not enough money for a €${bet} spin (€${bal}).` }, pid); return; }
     const reels = [spinReel(Math.random), spinReel(Math.random), spinReel(Math.random)];
     const win = bet * slotMultiplier(reels);
     this.spinUntil = now + SPIN_TIME + 0.3;
@@ -164,7 +164,7 @@ export class SlotMachine {
     if (a.t >= SPIN_TIME && !a.paid) {
       a.paid = true;
       if (near && a.win > 0) for (let i = 0; i < Math.min(12, 3 + a.win / a.bet); i++) audio.play('pickup', { pos: this.worldPos(), vol: 0.5, rate: 1.4 + Math.random() * 0.6, delay: i * 0.07 });
-      if (a.pid === G.localId) G.message(a.win > 0 ? `JACKPOT-ish! You win $${a.win}.` : 'No luck.', 2.5);
+      if (a.pid === G.localId) G.message(a.win > 0 ? `JACKPOT-ish! You win €${a.win}.` : 'No luck.', 2.5);
     }
     this.light.intensity = a.t >= SPIN_TIME && a.win > 0 ? 2 + Math.sin(a.t * 20) * 1.5 : 2;
     if (a.t > SPIN_TIME + 2.5) { this.last = a; this.anim = null; if (near) this.drawScreen(0); this.drawDeck(); }
@@ -198,13 +198,13 @@ export class SlotMachine {
     c.fillText('LUCKY HOUSE SLOTS', W / 2, 24);
     const res = anim && t >= SPIN_TIME ? anim : !anim ? this.last : null;
     c.font = 'bold 30px "VT323", monospace';
-    if (res && res.win > 0) { c.fillStyle = Math.floor(t * 6) % 2 ? '#40ff60' : '#ffff40'; c.fillText(`WIN $${res.win}!`, W / 2, Hh - 30); }
+    if (res && res.win > 0) { c.fillStyle = Math.floor(t * 6) % 2 ? '#40ff60' : '#ffff40'; c.fillText(`WIN €${res.win}!`, W / 2, Hh - 30); }
     else if (res) { c.fillStyle = '#ff6060'; c.fillText('NO WIN', W / 2, Hh - 30); }
-    else if (anim) { c.fillStyle = '#ffd040'; c.fillText(`BET $${anim.bet}`, W / 2, Hh - 30); }
+    else if (anim) { c.fillStyle = '#ffd040'; c.fillText(`BET €${anim.bet}`, W / 2, Hh - 30); }
     else { c.fillStyle = '#ffd040'; c.fillText('777 ×50 · ☘ ×20 · 🔔 ×15', W / 2, Hh - 30); }
     c.font = '20px "VT323", monospace'; c.fillStyle = '#9f9';
-    c.textAlign = 'left'; c.fillText(`BAL $${G.club.balance(G.localId)}`, 10, Hh - 8);
-    c.textAlign = 'right'; c.fillStyle = '#ffd040'; c.fillText(`BET $${this.bet}`, W - 10, Hh - 8);
+    c.textAlign = 'left'; c.fillText(`BAL €${G.club.balance(G.localId)}`, 10, Hh - 8);
+    c.textAlign = 'right'; c.fillStyle = '#ffd040'; c.fillText(`BET €${this.bet}`, W - 10, Hh - 8);
     this.screen.tex.needsUpdate = true;
   }
 
@@ -212,7 +212,7 @@ export class SlotMachine {
     const c = this.deck.cv.getContext('2d');
     const W = c.canvas.width, Hh = c.canvas.height, bw = W / 3;
     c.fillStyle = '#1b1b1f'; c.fillRect(0, 0, W, Hh);
-    const labels = [['BET', '−'], ['SPIN', `$${this.bet}`], ['BET', '+']];
+    const labels = [['BET', '−'], ['SPIN', `€${this.bet}`], ['BET', '+']];
     labels.forEach(([a, b], i) => {
       const pressed = this.press && this.press.btn === ['down', 'spin', 'up'][i];
       const x = i * bw + 8, y = 10 + (pressed ? 4 : 0), w = bw - 16, h = Hh - 24;

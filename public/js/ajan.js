@@ -4,6 +4,7 @@
 //   chase → (kill | drag a seen hider out | lose → search)
 //   inspect a hiding spot · nap in his bed · sit facing a wall
 // He never plans a path into the attic and ignores anyone inside it.
+import { BUTCHER } from './butcher.js';
 import * as THREE from 'three';
 import { AJAN, MONSTERS, DIFFICULTY } from './config.js';
 import { collideCircle, groundAt, lineOfSight, levelOf, segmentBlockers, soundTransmission } from './physics.js';
@@ -65,6 +66,8 @@ export class AjanBrain {
     this.sitTimer = 100 + rnd() * 80;
     this.whisperT = 25 + rnd() * 35;
     this.restLeft = 0;
+    this.butcherNext = BUTCHER.interval;
+    this.butcherRetryAt = 0;
   }
 
   setState(s) {
@@ -79,6 +82,7 @@ export class AjanBrain {
       x: +this.pos.x.toFixed(3), y: +this.pos.y.toFixed(3), z: +this.pos.z.toFixed(3), ry: +this.ry.toFixed(3),
       sp: +this.speed.toFixed(2), st: this.state, m: this.anim, mt: +this.animT.toFixed(2), hy: +this.headYaw.toFixed(2),
       cv: this.carry?.pid || null,
+      ...(this.id === 'ajan' ? { bt: Math.max(0, this.butcherNext - (this.stateClock || 0)), bl: this.butcherLeft || 0 } : {}),
     };
   }
 
@@ -89,7 +93,7 @@ export class AjanBrain {
 
   canSee(p) {
     if (p.hidden || isSafeZone(p.pos)) return false;
-    if (['sleep', 'dormant', 'stun', 'carry', 'dance', 'eatsit', 'gotoshed', 'shedsit'].includes(this.state)) return false;
+    if (['sleep', 'dormant', 'stun', 'carry', 'dance', 'eatsit', 'gotoshed', 'shedsit', 'gotobutcher', 'butcher'].includes(this.state)) return false;
     if (this.ignore.get(p.id) > 0) return false;
     const dx = p.pos.x - this.pos.x, dz = p.pos.z - this.pos.z;
     const d = Math.hypot(dx, dz) + Math.abs(p.pos.y - this.pos.y) * 0.5;
@@ -109,7 +113,7 @@ export class AjanBrain {
    * for "exact" sources like a creaking floorboard or a radio.
    */
   hear(n) {
-    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock', 'peepscare', 'gotoshed', 'shedsit'].includes(this.state)) return;
+    if (['dormant', 'kill', 'drag', 'stun', 'carry', 'spot', 'fridge', 'knock', 'peepscare', 'gotoshed', 'shedsit', 'gotobutcher', 'butcher'].includes(this.state)) return;
     if (isSafeZone(n.pos)) return;
     const d = Math.hypot(n.pos.x - this.pos.x, n.pos.z - this.pos.z) + Math.abs(n.pos.y - this.pos.y) * 0.5;
     // Low, booming sources (radio, elevator) carry through walls better than footsteps.
@@ -209,6 +213,7 @@ export class AjanBrain {
     this.animT += dt;
     if (this.cooldown > 0) this.cooldown -= dt;
     this.speed = 0;
+    if (this.id === 'ajan' && !this.game.freePlay && this.stateClock >= this.butcherNext && this.stateClock >= this.butcherRetryAt) this.startButcherVisit();
     if (this.state === 'club') { this.updateClub(dt); return; }
     if (this.state === 'dormant') {
       this.dormantLeft -= dt;
@@ -245,6 +250,12 @@ export class AjanBrain {
     if (this.state === 'spot') { this.updateSpot(dt); return; }
     if (this.state === 'fridge') { this.updateFridge(dt); return; }
     if (this.state === 'shedsit') { this.anim = 'sit'; this.restLeft -= dt; if (this.restLeft <= 0) { this.standUp(); for (const id of this.game.players.keys()) this.ignore.set(id, 60); this.sleepTimer = 0; this.setState('patrol'); this.goToBed(); } return; }
+
+    if (this.state === 'butcher') {
+      this.anim = 'butcher'; this.butcherLeft -= dt;
+      if (this.butcherLeft <= 0) { this.anim = 'move'; this.setState('patrol'); this.pickPatrol(); }
+      return;
+    }
 
     this.sleepTimer -= dt;
     this.sitTimer -= dt;
@@ -317,6 +328,9 @@ export class AjanBrain {
       case 'gotodance':
         if (this.step(dt, this.v.patrol)) this.startDance();
         break;
+      case 'gotobutcher':
+        if (this.step(dt, this.v.patrol)) this.arriveButcher();
+        break;
       case 'gotoshed':
         if (this.step(dt, this.v.patrol)) this.sitInShed();
         break;
@@ -338,6 +352,7 @@ export class AjanBrain {
         this.stuckCount = (this.stuckCount || 0) + 1;
         if (this.state === 'patrol' || this.stuckCount > 2) {
           this.stuckCount = 0;
+          if (this.state === 'gotobutcher') this.butcherRetryAt = this.stateClock + 15;
           if (this.state === 'gotobed') this.sleepTimer = 30;
           if (this.state === 'gotochair') this.sitTimer = 60;
           if (this.state === 'gotofridge' || this.state === 'gotoeat') this.eatTimer = 90;
@@ -629,6 +644,40 @@ export class AjanBrain {
       this.game.hostDragOut(pid, this);
       this.dragHide = null;
     }
+  }
+
+  // Host-only routine: due every eight minutes of active play; defer while busy.
+  startButcherVisit() {
+    if (this.id !== 'ajan' || !this.house.butcher || !['patrol', 'search', 'investigate', 'sit', 'gotochair', 'gotobed', 'sleep', 'eatsit'].includes(this.state)) return false;
+    this.standUp();
+    if (!this.moveTo(BUTCHER.stand)) { this.butcherRetryAt = this.stateClock + 15; return false; }
+    this.target = null; this.inspecting = null; this.pauseT = 0;
+    this.setState('gotobutcher');
+    return true;
+  }
+
+  arriveButcher() {
+    if (this.pos.distanceTo(BUTCHER.stand) > 0.65) {
+      this.butcherRetryAt = this.stateClock + 15; this.setState('patrol'); this.pickPatrol(); return;
+    }
+    this.pos.copy(BUTCHER.stand); this.ry = BUTCHER.ry;
+    this.butcherLeft = BUTCHER.duration; this.animT = 0; this.anim = 'butcher';
+    // Keep the schedule anchored to round time, including visits deferred by a chase.
+    this.butcherNext += (Math.floor(Math.max(0, this.stateClock - this.butcherNext) / BUTCHER.interval) + 1) * BUTCHER.interval;
+    this.setState('butcher');
+  }
+
+  // Host migration preserves the current visit and remaining wait from snapshots.
+  restoreButcher(s) {
+    if (this.id !== 'ajan') return false;
+    if (Number.isFinite(s.bt)) this.butcherNext = s.bt;
+    if (s.st === 'butcher' && this.pos.distanceTo(BUTCHER.stand) < 0.65) {
+      this.state = 'butcher'; this.anim = 'butcher'; this.animT = s.mt || 0;
+      this.butcherLeft = Math.min(BUTCHER.duration, Math.max(0, s.bl ?? BUTCHER.duration));
+      return true;
+    }
+    if (s.st === 'gotobutcher' && this.moveTo(BUTCHER.stand)) { this.state = 'gotobutcher'; return true; }
+    return false;
   }
 
   // ------------------------------------------------------ naps & chairs

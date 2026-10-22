@@ -47,6 +47,35 @@ function drips(ctx, size, rnd, count, color) {
   }
 }
 
+// Large torn patches, dark damp edges and branching cracks read at room scale.
+function decay(ctx, size, rnd, patches = 10, pale = '#9b9885', scale = 1) {
+  for (let i = 0; i < patches; i++) {
+    const cx = rnd() * size, cy = rnd() * size, rx = size * (0.04 + rnd() * 0.13) * scale, ry = rx * (0.7 + rnd());
+    ctx.save();
+    ctx.beginPath();
+    for (let j = 0; j < 14; j++) {
+      const a = j / 14 * Math.PI * 2, r = 0.65 + rnd() * 0.5;
+      ctx.lineTo(cx + Math.cos(a) * rx * r, cy + Math.sin(a) * ry * r);
+    }
+    ctx.closePath(); ctx.fillStyle = pale; ctx.fill();
+    ctx.strokeStyle = 'rgba(36,35,26,0.4)'; ctx.lineWidth = 1; ctx.stroke();
+    ctx.clip();
+    stains(ctx, size, rnd, 10, '45,42,31', rx * 0.9, 0.3);
+    for (let j = 0; j < 55; j++) {
+      ctx.fillStyle = j % 2 ? 'rgba(31,30,25,0.18)' : 'rgba(195,186,158,0.2)';
+      ctx.fillRect(cx + (rnd() - 0.5) * rx * 2, cy + (rnd() - 0.5) * ry * 2, 1 + rnd() * 3, 1 + rnd() * 4);
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.moveTo(cx, cy - ry); ctx.lineTo(cx + rx * 0.5, cy - ry * 0.65); ctx.lineTo(cx + rx * 0.3, cy - ry * 0.1);
+    ctx.fillStyle = 'rgba(162,155,132,0.3)'; ctx.fill();
+    ctx.strokeStyle = 'rgba(31,30,23,0.65)'; ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(cx, cy);
+    for (let j = 0; j < 6; j++) ctx.lineTo(cx + (rnd() - 0.5) * rx, cy + j * ry / 5);
+    ctx.stroke();
+  }
+  stains(ctx, size, rnd, 26, '18,30,19', size * 0.13, 0.4);
+}
+
 function toTexture(c, repeat = 1, srgb = true) {
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -133,15 +162,7 @@ function wallpaper(seed, base, ink, style = 'damask', dirt = 1) {
   g.addColorStop(1, 'rgba(30,20,10,0.45)');
   x.fillStyle = g;
   x.fillRect(0, 0, S, S);
-  // Peeling patches showing plaster
-  for (let i = 0; i < 4; i++) {
-    x.fillStyle = 'rgba(150,140,120,0.5)';
-    x.beginPath();
-    const px = rnd() * S, py = rnd() * S;
-    x.moveTo(px, py);
-    for (let k = 0; k < 7; k++) x.lineTo(px + (rnd() - 0.3) * 50, py + (rnd() - 0.3) * 50);
-    x.fill();
-  }
+  decay(x, S, rnd, style === 'panel' ? 3 : Math.round(10 * Math.max(0.5, dirt)), '#8d8978');
   noiseLayer(x, S, rnd, 26);
   return toTexture(c);
 }
@@ -206,7 +227,10 @@ function tiles(seed, a, b, grout, n = 8) {
     x.beginPath(); x.moveTo(i * t, 0); x.lineTo(i * t, S); x.stroke();
     x.beginPath(); x.moveTo(0, i * t); x.lineTo(S, i * t); x.stroke();
   }
-  stains(x, S, rnd, 12, '50,40,20', 70, 0.25);
+  stains(x, S, rnd, 30, '30,37,22', 85, 0.45);
+  stains(x, S, rnd, 14, '90,48,20', 45, 0.36);
+  drips(x, S, rnd, 10, '40,44,25');
+  decay(x, S, rnd, 10, '#4b4939', 0.65);
   noiseLayer(x, S, rnd, 18);
   return toTexture(c);
 }
@@ -227,6 +251,8 @@ function concrete(seed, base = [92, 90, 86]) {
     for (let k = 0; k < 8; k++) { px += (rnd() - 0.5) * 60; py += (rnd() - 0.5) * 60; x.lineTo(px, py); }
     x.stroke();
   }
+  decay(x, S, rnd, 7, '#656656');
+  drips(x, S, rnd, 14, '24,30,20');
   noiseLayer(x, S, rnd, 40);
   return toTexture(c);
 }
@@ -265,7 +291,11 @@ function woodFurniture(seed, base) {
     x.bezierCurveTo(S * 0.3, yy + (rnd() - 0.5) * 20, S * 0.6, yy + (rnd() - 0.5) * 20, S, yy + (rnd() - 0.5) * 10);
     x.stroke();
   }
-  stains(x, S, rnd, 6, '10,5,0', 40, 0.3);
+  stains(x, S, rnd, 14, '20,25,14', 60, 0.42);
+  for (let i = 0; i < 45; i++) {
+    x.fillStyle = i % 3 ? 'rgba(153,141,109,0.4)' : 'rgba(20,18,14,0.55)';
+    x.fillRect(rnd() * S, rnd() * S, 3 + rnd() * 40, 1 + rnd() * 3);
+  }
   noiseLayer(x, S, rnd, 20);
   return toTexture(c);
 }
@@ -302,8 +332,70 @@ function plaster(seed) {
   const [c, x] = canvas(S);
   x.fillStyle = '#8e877a';
   x.fillRect(0, 0, S, S);
-  stains(x, S, rnd, 10, '70,55,25', 70, 0.35);
+  stains(x, S, rnd, 20, '39,46,30', 80, 0.5);
+  decay(x, S, rnd, 15, '#66685a', 0.65);
   noiseLayer(x, S, rnd, 18);
+  return toTexture(c);
+}
+
+export function splatTexture(seed, kind = 'splat') {
+  const rnd = mulberry32(seed);
+  const S = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = S;
+  const x = c.getContext('2d');
+  const red = a => `rgba(${60 + rnd() * 25 | 0},${17 + rnd() * 10 | 0},${11 + rnd() * 7 | 0},${a})`;
+  if (kind === 'scratch') {
+    x.strokeStyle = 'rgba(15,8,6,0.85)';
+    for (let k = 0; k < 4; k++) {
+      x.lineWidth = 3 + rnd() * 2;
+      x.beginPath();
+      const x0 = 50 + k * 40 + rnd() * 10;
+      x.moveTo(x0, 30);
+      x.bezierCurveTo(x0 + 10, 90, x0 - 6, 160, x0 + 14, 230);
+      x.stroke();
+    }
+  } else {
+    const blobs = kind === 'pool' ? 6 : 14;
+    for (let i = 0; i < blobs; i++) {
+      const r = (kind === 'pool' ? 50 : 12) + rnd() * (kind === 'pool' ? 40 : 30);
+      const px = S / 2 + (rnd() - 0.5) * (kind === 'pool' ? 80 : 160), py = S / 2 + (rnd() - 0.5) * (kind === 'pool' ? 80 : 160);
+      x.fillStyle = red(0.75 + rnd() * 0.2);
+      x.beginPath();
+      for (let a = 0; a < Math.PI * 2; a += 0.14) {
+        const rr = r * (0.85 + rnd() * 0.2);
+        x.lineTo(px + Math.cos(a) * rr, py + Math.sin(a) * rr);
+      }
+      x.fill();
+    }
+    for (let i = 0; i < 40; i++) {
+      x.fillStyle = red(0.8);
+      x.beginPath();
+      x.arc(S / 2 + (rnd() - 0.5) * 220, S / 2 + (rnd() - 0.5) * 220, 1 + rnd() * 5, 0, Math.PI * 2);
+      x.fill();
+    }
+    if (kind === 'wall') {
+      for (let i = 0; i < 8; i++) {
+        const dx = 40 + rnd() * 180;
+        x.fillStyle = red(0.7);
+        x.fillRect(dx, S / 2, 3 + rnd() * 4, 40 + rnd() * 100);
+      }
+    }
+  }
+  noiseLayer(x, S, rnd, 16);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+function enamel(seed) {
+  const S = 256, rnd = mulberry32(seed), [c, x] = canvas(S);
+  x.fillStyle = '#b4b5a1'; x.fillRect(0, 0, S, S);
+  stains(x, S, rnd, 22, '91,49,23', 45, 0.4);
+  stains(x, S, rnd, 16, '20,32,19', 55, 0.36);
+  drips(x, S, rnd, 20, '75,44,22');
+  decay(x, S, rnd, 8, '#4e4d41', 0.3);
+  noiseLayer(x, S, rnd, 20);
   return toTexture(c);
 }
 
@@ -311,25 +403,35 @@ function plaster(seed) {
 export function buildMaterials() {
   const std = (map, opts = {}) => new THREE.MeshStandardMaterial({ map, roughness: 0.92, metalness: 0, ...opts });
   const M = {};
-  M.wallA = std(wallpaper(11, '#6f6a4e', '#2f2a18'));
-  M.wallB = std(wallpaper(23, '#5d4a4a', '#2a1515'));
-  M.wallC = std(wallpaper(37, '#4f5a54', '#18241e'));
-  M.wallRose = std(wallpaper(201, '#7a5552', '#3a1818', 'floral'));
+  M.wallA = std(wallpaper(11, '#85816c', '#2f2a18'));
+  M.wallB = std(wallpaper(23, '#756660', '#2a1515'));
+  M.wallC = std(wallpaper(37, '#717c6e', '#18241e'));
+  M.wallRose = std(wallpaper(201, '#8c7970', '#3a1818', 'floral'));
   M.wallKids = std(wallpaper(203, '#7d8a90', '#2c3a44', 'kids', 1.6));
   M.wallStripe = std(wallpaper(205, '#4a2a2c', '#1a0808', 'stripe'));
-  M.wallGreenStripe = std(wallpaper(207, '#3e4a3c', '#121a10', 'stripe'));
+  M.wallGreenStripe = std(wallpaper(207, '#78806b', '#121a10', 'stripe'));
   M.wallDiamond = std(wallpaper(209, '#857a56', '#3a301a', 'diamond'));
-  M.wallPlain = std(wallpaper(211, '#6e6a60', '#000000', 'plain', 1.4));
+  M.wallPlain = std(wallpaper(211, '#a3a08f', '#000000', 'plain', 1.4));
   M.wallPanel = std(wallpaper(213, '#3b2717', '#120a04', 'panel', 0.6));
-  M.wallFilth = std(wallpaper(215, '#4a3a30', '#1a0e08', 'plain', 3.0));
-  M.wallTile = std(tiles(41, [150, 156, 146], [128, 136, 126], 'rgba(40,40,30,0.8)', 10), { roughness: 0.55 });
+  M.wallFilth = std(wallpaper(215, '#858572', '#1a0e08', 'plain', 3.0));
+  M.wallFadedBlue = std(wallpaper(301, '#777f86', '#293941', 'floral', 1.6));
+  M.wallOchre = std(wallpaper(303, '#928365', '#4b3925', 'diamond', 1.4));
+  M.wallLinen = std(wallpaper(305, '#88877b', '#43483e', 'stripe', 1.3));
+  M.wallLime = std(wallpaper(307, '#929482', '#364334', 'plain', 1.8));
+  M.wallTileBlue = std(tiles(309, [140, 151, 151], [104, 122, 127], 'rgba(37,42,39,0.9)', 10));
+  M.facadePlaster = std(concrete(311, [155, 151, 130]));
+  M.facadeOchre = std(concrete(313, [132, 118, 88]));
+  M.facadeMoss = std(concrete(315, [106, 120, 106]));
+  M.facadeBrick = std(brick(317));
+  M.facadeBoards = std(planks(319, [78, 78, 65]));
+  M.wallTile = std(tiles(41, [175, 174, 153], [151, 159, 142], 'rgba(40,40,30,0.8)', 10), { roughness: 0.55 });
   M.wallBase = std(concrete(51, [80, 78, 72]));
-  M.floorWood = std(planks(61, [92, 62, 38]));
-  M.floorWoodDark = std(planks(67, [62, 42, 28]));
+  M.floorWood = std(planks(61, [91, 79, 58]));
+  M.floorWoodDark = std(planks(67, [68, 58, 43]));
   // Creaky boards: a little darker and more worn than the floor around them.
   M.boardCreak = std(planks(69, [50, 33, 22]), { roughness: 0.98, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
   M.floorTile = std(tiles(71, [150, 146, 130], [40, 40, 38], 'rgba(20,20,15,0.9)', 8), { roughness: 0.6 });
-  M.floorBath = std(tiles(73, [110, 130, 128], [90, 110, 108], 'rgba(30,30,25,0.9)', 12), { roughness: 0.5 });
+  M.floorBath = std(tiles(73, [154, 161, 143], [137, 147, 131], 'rgba(30,30,25,0.9)', 12), { roughness: 0.5 });
   M.floorConcrete = std(concrete(79));
   M.carpet = std(fabric(83, [74, 36, 34]));
   M.carpetB = std(fabric(85, [44, 52, 64]));
@@ -341,7 +443,7 @@ export function buildMaterials() {
   M.fabricGreen = std(fabric(109, [52, 62, 44]));
   M.fabricBed = std(fabric(113, [150, 140, 118], 'rgba(90,70,40,0.25)'));
   M.metal = std(rust(127), { metalness: 0.5, roughness: 0.6 });
-  M.porcelain = new THREE.MeshStandardMaterial({ color: 0xb8b5a8, roughness: 0.35 });
+  M.porcelain = std(enamel(151), { roughness: 0.72 });
   M.dark = new THREE.MeshStandardMaterial({ color: 0x141210, roughness: 0.9 });
   M.black = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.6 });
   M.paper = new THREE.MeshStandardMaterial({ color: 0xcfc6a8, roughness: 1 });

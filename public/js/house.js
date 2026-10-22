@@ -26,6 +26,8 @@ const TEX_SCALE = {
   fabricRed: 1, fabricGreen: 1, fabricBed: 1.2, metal: 1, frame: 0.6, boardCreak: 1,
   wallRose: 2.4, wallKids: 2.4, wallStripe: 2.4, wallGreenStripe: 2.4, wallDiamond: 2.4, wallPlain: 2.4, wallPanel: 2.4, wallFilth: 2.4,
   safeSteel: 1, sheet: 1.5, brick: 1.2, floorClub: 2, wallClub: 2.4,
+  wallFadedBlue: 2.4, wallOchre: 2.4, wallLinen: 2.4, wallLime: 2.4, wallTileBlue: 1.6,
+  facadePlaster: 3, facadeOchre: 3, facadeMoss: 3, facadeBrick: 1.2, facadeBoards: 2.4,
 };
 
 // ---------------------------------------------------------------------------
@@ -188,8 +190,24 @@ export class House {
     const x = c.x + (axis === 'x' ? sign * off : 0);
     const z = c.z + (axis === 'z' ? sign * off : 0);
     const r = roomAt(x, z, c.y);
+    if (!r || r.outdoor) {
+      const inside = roomAt(c.x - (axis === 'x' ? sign * off : 0), c.z - (axis === 'z' ? sign * off : 0), c.y);
+      if (inside?.L > 0 && !inside.outdoor) return inside.exterior || 'facadePlaster';
+    }
     if (!r) return 'wallBase';
     return r.wall || 'wallBase';
+  }
+
+  wallSpans(line, c, p, q, y) {
+    // Split rendered faces at room boundaries, keeping collision/nav geometry intact.
+    const bounds = new Set([p, q]);
+    for (const r of ROOMS) {
+      const lo = line === 'x' ? r.z0 : r.x0, hi = line === 'x' ? r.z1 : r.x1;
+      if (r.L !== levelIndex(y) || c < lo - 0.35 || c > hi + 0.35) continue;
+      for (const edge of line === 'x' ? [r.x0, r.x1] : [r.z0, r.z1]) if (edge > p && edge < q) bounds.add(edge);
+    }
+    const edges = [...bounds].sort((a, b) => a - b);
+    return edges.slice(1).map((b, i) => [edges[i], b]);
   }
 
   build() {
@@ -224,11 +242,13 @@ export class House {
         for (const [p, q, yA, yB] of segs) {
           if (q - p < 0.01 || yB - yA < 0.01) continue;
           if (Math.abs(yA - ba) < 1e-6 && LEVELS.some(L => Math.abs(L.y - ba) < 1e-6)) this.addTrim(line, c, p, q, ba);
+          for (const [a, b] of this.wallSpans(line, c, p, q, (yA + yB) / 2)) {
+            if (line === 'x') G.box(a, yA, c - T / 2, b, yB, c + T / 2, (ax, sg, ce) => this.wallMat(ax, sg, ce));
+            else G.box(c - T / 2, yA, a, c + T / 2, yB, b, (ax, sg, ce) => this.wallMat(ax, sg, ce));
+          }
           if (line === 'x') {
-            G.box(p, yA, c - T / 2, q, yB, c + T / 2, (ax, sg, ce) => this.wallMat(ax, sg, ce));
             this.collider(p, c - T / 2, q, c + T / 2, yA, yB, { occlude: true, wall: true });
           } else {
-            G.box(c - T / 2, yA, p, c + T / 2, yB, q, (ax, sg, ce) => this.wallMat(ax, sg, ce));
             this.collider(c - T / 2, p, c + T / 2, q, yA, yB, { occlude: true, wall: true });
           }
         }
@@ -792,7 +812,7 @@ export class House {
     add('thall', 6, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.5 }); add('thall', 20, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.3 }); add('thall', 34, T, 6.8, 0xffc98a, 4, 9, { flicker: 0.6 });
     add('dollroom', 3.5, T, 2.8, 0xffd0e0, 4, 8, { flicker: 0.4 }); add('oldbath', 9, T, 2.8, 0xe8f0ff, 3, 6, { flicker: 0.8 });
     add('chapel', 15, T, 2.8, 0xff9a50, 4, 9, { flicker: 0.2 }); add('studio', 23, T, 2.8, 0xfff4e0, 5, 9);
-    add('sewing', 29.2, T, 2.8, 0xffd8b0, 3, 7, { flicker: 0.4 }); add('observ', 36.5, T, 2.8, 0xc0d0ff, 4, 9, { flicker: 0.2 });
+    add('sewing', 29.2, T, 2.8, 0xd4dec2, 5, 7, { always: true, flicker: 0.35 }); add('observ', 36.5, T, 2.8, 0xc0d0ff, 4, 9, { flicker: 0.2 });
     add('base', 6, B, 22, 0xffb070, 6, 10, { flicker: 0.4 }); add('base', 13, B, 24, 0xffb070, 6, 10);
     add('boiler', 23, B, 22, 0xffa060, 6, 11, { flicker: 0.5 }); add('garage', 33, B, 18, 0xfff0d0, 6, 10); add('garage', 35, B, 24.5, 0xfff0d0, 5, 9, { flicker: 0.3 });
     // Always-on: candles in the back room, emergency light, Ajan's red lamp, attic lamps.

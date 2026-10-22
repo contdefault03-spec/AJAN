@@ -7,64 +7,16 @@ import { audio } from './audio.js';
 import { assetUrl, loadGLTF } from './assets.js';
 import { screenMaterial } from './screens.js';
 import { elevatorState } from './physics.js';
-import { ELEVATOR, ELEV_DOORS, LEVELS } from './layout.js';
+import { ELEVATOR, ELEV_DOORS, LEVELS, ROOMS, roomAt } from './layout.js';
 import { bx } from './house.js';
 import { mulberry32, clamp } from './util.js';
 import { CHARACTERS, DEATH_GAIN } from './config.js';
+import { splatTexture } from './textures.js';
 
 export const DEATH_KEYS = ['max', 'masked', 'rize', 'lucky', 'mido', 'ajandie'];
-export const MIRROR_TEXTS = ['I HAVE NO\nLOVE LIFE BRO', 'WHO WANTS\nMY CUCK', 'IM AN\nUNLOVEABLE\nFRACK BRO'];
+export const MIRROR_TEXTS = ['PUS, GET UP BRO\nWE NEED TO WORK', '5 MORE MINUTES\nDADDY'];
 const LEVEL_LABEL = ['B', '1', '2', 'A'];
 const V = (x = 0, y = 0, z = 0) => new THREE.Vector3(x, y, z);
-
-function splatTexture(seed, kind = 'splat') {
-  const rnd = mulberry32(seed);
-  const S = 256;
-  const c = document.createElement('canvas');
-  c.width = c.height = S;
-  const x = c.getContext('2d');
-  const red = a => `rgba(${70 + rnd() * 40 | 0},${4 + rnd() * 8 | 0},${4 + rnd() * 6 | 0},${a})`;
-  if (kind === 'scratch') {
-    x.strokeStyle = 'rgba(15,8,6,0.85)';
-    for (let k = 0; k < 4; k++) {
-      x.lineWidth = 3 + rnd() * 2;
-      x.beginPath();
-      const x0 = 50 + k * 40 + rnd() * 10;
-      x.moveTo(x0, 30);
-      x.bezierCurveTo(x0 + 10, 90, x0 - 6, 160, x0 + 14, 230);
-      x.stroke();
-    }
-  } else {
-    const blobs = kind === 'pool' ? 6 : 14;
-    for (let i = 0; i < blobs; i++) {
-      const r = (kind === 'pool' ? 50 : 12) + rnd() * (kind === 'pool' ? 40 : 30);
-      const px = S / 2 + (rnd() - 0.5) * (kind === 'pool' ? 80 : 160), py = S / 2 + (rnd() - 0.5) * (kind === 'pool' ? 80 : 160);
-      x.fillStyle = red(0.75 + rnd() * 0.2);
-      x.beginPath();
-      for (let a = 0; a < Math.PI * 2; a += 0.3) {
-        const rr = r * (0.7 + rnd() * 0.5);
-        x.lineTo(px + Math.cos(a) * rr, py + Math.sin(a) * rr);
-      }
-      x.fill();
-    }
-    for (let i = 0; i < 40; i++) {
-      x.fillStyle = red(0.8);
-      x.beginPath();
-      x.arc(S / 2 + (rnd() - 0.5) * 220, S / 2 + (rnd() - 0.5) * 220, 1 + rnd() * 5, 0, Math.PI * 2);
-      x.fill();
-    }
-    if (kind === 'wall') {
-      for (let i = 0; i < 8; i++) {
-        const dx = 40 + rnd() * 180;
-        x.fillStyle = red(0.7);
-        x.fillRect(dx, S / 2, 3 + rnd() * 4, 40 + rnd() * 100);
-      }
-    }
-  }
-  const t = new THREE.CanvasTexture(c);
-  t.colorSpace = THREE.SRGBColorSpace;
-  return t;
-}
 
 export class Props {
   constructor(game) {
@@ -79,6 +31,7 @@ export class Props {
     this.buildCinema();
     this.buildMirror();
     this.buildBlood();
+    this.buildDecay();
     this.buildAjanRoom();
     this.group.updateMatrixWorld(true); // interaction raycasts can run before the first frame
   }
@@ -493,7 +446,7 @@ export class Props {
   buildBlood() {
     const U = 3.4, B = -3.2;
     const tex = [splatTexture(11, 'splat'), splatTexture(23, 'pool'), splatTexture(37, 'wall'), splatTexture(41, 'scratch')];
-    const mats = tex.map(t => new THREE.MeshStandardMaterial({ map: t, transparent: true, depthWrite: false, roughness: 0.25, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
+    const mats = tex.map(t => new THREE.MeshStandardMaterial({ map: t, color: 0x907a68, transparent: true, depthWrite: false, roughness: 0.85, metalness: 0, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }));
     const floor = (x, y, z, s, m = 0, rot = 0) => {
       const p = new THREE.Mesh(new THREE.PlaneGeometry(s, s), mats[m]);
       p.rotation.set(-Math.PI / 2, 0, rot);
@@ -515,10 +468,46 @@ export class Props {
     floor(36.8, U + 0.56, 1.9, 1.3, 1, 0.5);
     wall(33.0, U + 1.4, 0.11, 1.0, 0, 3); wall(38.2, U + 1.6, 0.11, 0.9, 0, 3);
     wall(39.89, U + 1.2, 3.0, 1.2, -Math.PI / 2, 2);
+    // Dried splashes and dragged streaks in the kitchen and neglected bathrooms.
+    for (const [x, y, z, size] of [[23.7, 0, 13.8, 1.6], [24.5, 0, 14.4, 1.1], [25.4, 0, 15.1, 1.6], [26.2, 0, 15.8, 1.2], [23, 0.975, 11.55, 0.7], [9.8, 0, 2.4, 1.2], [9.2, 6.8, 2.3, 1.6], [8.6, 6.8, 3.4, 0.8]]) floor(x, y, z, size, 0, 0.6);
+    wall(25.8, 1.1, 11.12, 1.4, 0); wall(9.5, 1.1, 0.11, 1.1, 0);
+    wall(10.89, 7.9, 4.1, 1.0, -Math.PI / 2);
     // ground floor + basement details
     floor(18.6, 0, 12.9, 0.8, 0, 0.7); floor(10.4, 0, 5.2, 0.6, 0, 1.4); floor(26.0, 0, 9.6, 0.5, 0, 0.1);
     floor(34.0, B, 23.0, 1.4, 1, 0.3); floor(22.0, B, 20.4, 0.9, 0, 2.4); floor(12.0, B, 20.0, 0.7, 0, 0.9);
     wall(36.0, B + 1.3, 26.89, 1.0, Math.PI, 2);
+  }
+
+  buildDecay() {
+    // Cosmetic debris is batched and never changes colliders, pickups or doorways.
+    const rnd = mulberry32(this.game.seed ^ 0xdecade), scraps = [];
+    for (const r of ROOMS) {
+      if (r.safe || r.outdoor || r.id === 'shed') continue;
+      const y = LEVELS[r.L].y;
+      for (let i = 0; i < 5; i++) {
+        const x = r.x0 + 0.4 + rnd() * (r.x1 - r.x0 - 0.8), z = r.z0 + 0.4 + rnd() * (r.z1 - r.z0 - 0.8);
+        if (roomAt(x, z, y + 0.5) !== r) continue;
+        if (this.house.colliders.some(c => !c.off && c.minY < y + 0.2 && c.maxY > y && x > c.minX - 0.2 && x < c.maxX + 0.2 && z > c.minZ - 0.2 && z < c.maxZ + 0.2)) continue;
+        if ([...this.game.items.values()].some(it => { const p = it.mesh.getWorldPosition(V()); return Math.abs(p.y - y) < 0.5 && Math.hypot(x - p.x, z - p.z) < 0.5; })) continue;
+        scraps.push([x, y + 0.016, z, rnd() * Math.PI * 2, 0.1 + rnd() * 0.25]);
+      }
+    }
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute([-0.5,-0.5,0, 0.45,-0.4,0, 0.5,0.4,0, -0.5,-0.5,0, 0.5,0.4,0, -0.2,0.5,0], 3));
+    geo.computeVertexNormals();
+    const debris = new THREE.InstancedMesh(geo, new THREE.MeshStandardMaterial({ color: 0x928673, roughness: 1, side: THREE.DoubleSide }), scraps.length);
+    debris.name = 'plaster-and-paper-debris';
+    const m = new THREE.Matrix4(), q = new THREE.Quaternion();
+    scraps.forEach(([x, y, z, angle, scale], i) => {
+      q.setFromEuler(new THREE.Euler(-Math.PI / 2, 0, angle));
+      m.compose(V(x, y, z), q, V(scale, scale * (0.6 + rnd()), 1)); debris.setMatrixAt(i, m);
+      debris.setColorAt(i, new THREE.Color().setHSL(0.12, 0.12, 0.3 + rnd() * 0.35));
+    });
+    this.group.add(debris);
+    for (const z of [26.4, 26.65]) {
+      const pipe = new THREE.Mesh(new THREE.CylinderGeometry(0.055, 0.055, 13, 8), this.house.M.metal);
+      pipe.position.set(9.5, -0.62, z); pipe.rotation.z = Math.PI / 2; this.group.add(pipe);
+    }
   }
 
   /** Bones, a bowl of something and other signs he lives here. */

@@ -54,18 +54,30 @@ for (const reverse of [false, true]) {
   });
 }
 
-test('office east-wing doorway clears player and monster in both directions', async () => {
-  const { game, house } = await world();
-  openDoors(house);
-  for (const points of [
-    [[38.5, 0, 2.25], [41.1, 0, 2.25]],
-    [[41.1, 0, 2.25], [38.5, 0, 2.25]],
-  ]) {
-    assert.equal(segmentBlockers(points[0][0], 2.25, points[1][0], 2.25, 1, house.colliders,
-      { pad: AJAN.radius, occludeOnly: false, max: 1, who: 'ajan' }), 0);
-    walkBrain(game, points[0], points[1]);
-    walkPlayer(game, points);
+test('office has a solid east wall and retains its original key-gated route', async () => {
+  const { game, house } = await world(true);
+  assert.equal(house.doors.has('d_east_g'), false);
+  assert.equal(house.doors.get('d_office').lock, 'office_key');
+  assert.equal(house.doors.get('d_office').locked, true);
+  assert.ok(house.colliders.some(c => c.minX === 39.3 && c.maxX === 39.88 && c.minZ === 0.3 && c.maxZ === 4.3));
+  for (const z of [1.8, 2.25, 2.7]) assert.ok(segmentBlockers(38.5, z, 41.1, z, 1, house.colliders,
+    { pad: AJAN.radius, occludeOnly: false, max: 1, who: 'ajan' }));
+  house.group.updateMatrixWorld(true);
+  for (const [x, dx] of [[39, 1], [41, -1]]) {
+    const ray = new THREE.Raycaster(new THREE.Vector3(x, 1.5, 2.25), new THREE.Vector3(dx, 0, 0), 0, 2);
+    assert.ok(ray.intersectObjects(house.staticMeshes, false).length, 'former doorway must be rendered as wall');
   }
+  const hall = nearestNode(house.nav, new THREE.Vector3(35, 0, 9), house.colliders);
+  const office = nearestNode(house.nav, new THREE.Vector3(38.5, 0, 2.25), house.colliders);
+  assert.equal(findPath(house.nav, hall.id, office.id, id => !house.doors.get(id)?.locked), null);
+  game.handleRequest('guest', { k: 'door', id: 'd_office' });
+  assert.deepEqual(game.events.at(-1), { k: 'need', what: 'office_key' });
+  game.placeItem('office_key', 'office_key', { pos: [35, 0.02, 9] });
+  game.handleRequest('guest', { k: 'pickup', id: 'office_key' });
+  game.handleRequest('guest', { k: 'door', id: 'd_office' });
+  house.setDoor('d_study', true);
+  assert.ok(findPath(house.nav, hall.id, office.id, id => !house.doors.get(id)?.locked));
+  walkPlayer(game, [[35.05, 0, 9], [35.05, 0, 6.2], [37.05, 0, 6.2], [37.05, 0, 3.65]]);
 });
 
 test('wall meshes close ceiling-to-floor bands from both sides', async () => {

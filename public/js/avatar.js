@@ -278,6 +278,33 @@ export class Avatar {
     const mode = st.mode || 'move';
     const mt = st.modeT || 0;
 
+    if (this.butcherTools) for (const tool of this.butcherTools) tool.visible = mode === 'butcher';
+    if (mode === 'butcher') {
+      if (!this.butcherTools) {
+        const steel = new THREE.MeshStandardMaterial({ color: 0x72756c, metalness: 0.45, roughness: 0.7 });
+        const meat = new THREE.MeshStandardMaterial({ color: 0x54251e, roughness: 0.7 });
+        const cleaver = new THREE.Group(); cleaver.name = 'butcher-cleaver';
+        const blade = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.24, 0.025), steel); blade.position.set(0, -0.17, 0);
+        const handle = new THREE.Mesh(new THREE.BoxGeometry(0.055, 0.15, 0.055), meat);
+        cleaver.add(blade, handle); cleaver.scale.setScalar(1 / this.scale); cleaver.position.x = -0.13;
+        const morsel = new THREE.Mesh(new THREE.CapsuleGeometry(0.055, 0.18, 3, 7), meat); morsel.name = 'butcher-food';
+        morsel.scale.setScalar(1 / this.scale); morsel.position.x = 0.13;
+        this.bones.foreR.add(cleaver); this.bones.foreL.add(morsel); this.butcherTools = [cleaver, morsel];
+      }
+      const eating = mt % 10 >= 6, chop = Math.max(0, Math.sin(mt * 5));
+      this._set('hips', 0, 0, 0, k);
+      this._set('thighL', -0.05, 0, 0.06, k); this._set('thighR', -0.05, 0, -0.06, k);
+      this._set('shinL', 0.05, 0, 0, k); this._set('shinR', 0.05, 0, 0, k);
+      this._set('spine', 0.2, 0, 0, k); this._set('chest', 0.18, 0, 0, k);
+      this._set('head', eating ? 0.08 + Math.sin(mt * 12) * 0.06 : 0.45, 0, 0, k);
+      this._set('upperR', -0.9, 0.2, eating ? 0.65 : 0.3 + chop * 1.1, k);
+      this._set('foreR', 0, eating ? 0.5 : 1.1, 0, k);
+      this._set('upperL', eating ? -1.5 : -0.75, -0.2, -0.6, k);
+      this._set('foreL', 0, eating ? -1.6 : -0.8, 0, k);
+      this.body.position.y = damp(this.body.position.y, -0.08, 6, dt);
+      this.body.scale.set(1, 1, 1);
+      return;
+    }
     if (mode === 'dance') {
       // dance2.fbx (retargeted) when loaded; the procedural routine otherwise
       if (this.dancePlayer) { this.body.position.y = 0; this.dancePlayer.seek(mt); this.dancePlayer.apply(); }
